@@ -11,7 +11,7 @@ export const SpeechManager = {
   
   // Timing & Silence Settings
   silenceTimer: null,
-  silenceThresholdMs: 3500, // 3.5s silence triggers auto-submission
+  silenceThresholdMs: 7500, // 7.5s silence triggers auto-submission
   
   // Acoustic & Temporal analysis metrics
   lastSpeechResultTime: 0,
@@ -41,12 +41,14 @@ export const SpeechManager = {
       this.recognition.interimResults = true;
       this.recognition.lang = "en-US";
 
-      // Bind events
       this.recognition.onstart = () => {
         this.isActive = true;
-        this.interimTranscript = "";
-        this.finalTranscript = "";
-        this.gapsHistory = [];
+        if (!this.isHotRestarting) {
+          this.interimTranscript = "";
+          this.finalTranscript = "";
+          this.gapsHistory = [];
+        }
+        this.isHotRestarting = false;
         this.lastSpeechResultTime = Date.now();
         this.resetSilenceTimer();
       };
@@ -95,8 +97,21 @@ export const SpeechManager = {
         this.isActive = false;
         this.clearSilenceTimer();
         
-        if (this.onEnd) {
-          this.onEnd(this.finalTranscript.trim());
+        // Auto-restart if premature browser termination occurred
+        if (this.shouldBeActive) {
+          console.log("Speech recognition stopped natively by browser. Auto-restarting stream...");
+          this.isHotRestarting = true;
+          try {
+            this.recognition.start();
+            this.isActive = true;
+          } catch (e) {
+            console.warn("Speech recognition auto-restart failed:", e);
+            this.isHotRestarting = false;
+          }
+        } else {
+          if (this.onEnd) {
+            this.onEnd(this.finalTranscript.trim());
+          }
         }
       };
 
@@ -107,9 +122,6 @@ export const SpeechManager = {
     }
   },
 
-  /**
-   * Starts listening to user input.
-   */
   async start(callbacks = {}) {
     if (typeof window === "undefined") {
       if (callbacks.onError) callbacks.onError("not-supported");
@@ -128,6 +140,8 @@ export const SpeechManager = {
     this.onError = callbacks.onError || null;
     this.onEnd = callbacks.onEnd || null;
     this.onAudioCaptured = callbacks.onAudioCaptured || null;
+
+    this.shouldBeActive = true;
 
     try {
       this.recognition.start();
@@ -174,10 +188,8 @@ export const SpeechManager = {
     }
   },
 
-  /**
-   * Stops listening to user input.
-   */
   stop() {
+    this.shouldBeActive = false;
     this.clearSilenceTimer();
 
     // Stop MediaRecorder
