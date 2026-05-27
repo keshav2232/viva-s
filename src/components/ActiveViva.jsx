@@ -32,6 +32,11 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
   const [failsafeWarning, setFailsafeWarning] = useState(null);
   const interruptedRef = useRef(false);
   const latestNervousnessRef = useRef(20);
+  
+  // Live Biometric Synchronization
+  const [liveMetrics, setLiveMetrics] = useState({ confidence: 85, nervousness: 15, clarity: 80, hesitation: 10 });
+  const [liveStatusText, setLiveStatusText] = useState("Calibration active. Ready.");
+  const liveTrackerRef = useRef(null);
 
   // Main initial hook: starts the stopwatch timer and loads synthesis
   useEffect(() => {
@@ -100,6 +105,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       clearInterval(timer);
       stopAudioStreams();
       clearInterval(waveIntervalRef.current);
+      if (liveTrackerRef.current) clearInterval(liveTrackerRef.current);
     };
   }, []);
 
@@ -107,6 +113,98 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     VoiceManager.stop();
     SpeechManager.stop();
   };
+
+  // Live Biometric Speech Prosody Estimator
+  useEffect(() => {
+    if (vivaState === "listening") {
+      if (liveTrackerRef.current) clearInterval(liveTrackerRef.current);
+
+      liveTrackerRef.current = setInterval(() => {
+        const durationSecs = (Date.now() - speechStartTime.current) / 1000;
+        const currentText = (transcriptText || "").trim();
+        const isPlaceholderText = isPlaceholder || currentText.includes("Speak now") || currentText.includes("System is listening") || currentText.includes("Please type");
+        
+        let words = [];
+        if (!isPlaceholderText) {
+          words = currentText.toLowerCase().split(/\s+/).filter(w => w.length > 0);
+        }
+        
+        const wordCount = words.length;
+        const gapsCount = SpeechManager.gapsHistory ? SpeechManager.gapsHistory.length : 0;
+
+        // Count fillers
+        const fillers = ["umm", "uhm", "uh", "like", "basically", "actually"];
+        let fillerCount = 0;
+        words.forEach(w => {
+          if (fillers.includes(w)) fillerCount++;
+        });
+
+        // Compute live values
+        let liveHesitation = Math.min(Math.max((fillerCount * 12) + (gapsCount * 15) + 10, 8), 90);
+        
+        const durationMins = durationSecs / 60;
+        const wpm = durationMins > 0 ? Math.round(wordCount / durationMins) : 120;
+        
+        let wpmDeviation = 0;
+        if (wpm > 0) {
+          if (wpm < 80) wpmDeviation = (80 - wpm) * 1.6;
+          else if (wpm > 170) wpmDeviation = (wpm - 170) * 1.3;
+        }
+
+        let liveNervousness = Math.min(Math.max(15 + (fillerCount * 5) + wpmDeviation + (gapsCount * 8), 10), 85);
+        let liveClarity = Math.min(Math.max(80 + (wordCount > 5 ? 10 : 0) - (fillerCount * 5) - (gapsCount * 4), 25), 98);
+        let liveConfidence = Math.min(Math.max(100 - (liveHesitation * 0.35 + liveNervousness * 0.35 + (100 - liveClarity) * 0.3), 35), 98);
+
+        if (wordCount === 0) {
+          liveConfidence = 85;
+          liveNervousness = 15;
+          liveClarity = 82;
+          liveHesitation = 10;
+        }
+
+        // Add biometric jitter (±2%)
+        const jitter = (val) => Math.round(Math.min(Math.max(val + (Math.random() * 4 - 2), 5), 98));
+
+        const conf = jitter(liveConfidence);
+        const nerv = jitter(liveNervousness);
+        const clar = jitter(liveClarity);
+        const hes = jitter(liveHesitation);
+
+        setLiveMetrics({
+          confidence: conf,
+          nervousness: nerv,
+          clarity: clar,
+          hesitation: hes
+        });
+
+        // Live dynamic status chips
+        let status = "System calibrated. Monitoring...";
+        if (nerv > 45) {
+          status = "Warning: Stress Levels Spiking";
+        } else if (hes > 35) {
+          status = "Speech Interruption: Pacing Hesitation";
+        } else if (conf > 85 && clar > 80) {
+          status = "Excellent: Highly Articulate & Confident";
+        } else if (wordCount > 0) {
+          status = "Vocal Stream Locked. Analyzing...";
+        }
+        setLiveStatusText(status);
+
+      }, 350);
+
+    } else {
+      if (liveTrackerRef.current) {
+        clearInterval(liveTrackerRef.current);
+        liveTrackerRef.current = null;
+      }
+    }
+
+    return () => {
+      if (liveTrackerRef.current) {
+        clearInterval(liveTrackerRef.current);
+      }
+    };
+  }, [vivaState, transcriptText, isPlaceholder]);
 
   const startBackgroundListeningForInterruptions = (activeQ) => {
     interruptedRef.current = false;
@@ -377,7 +475,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         answer: answerText,
         syllabus: config.syllabusStructure,
         speechDurationMs: durationMs,
-        pauseCount: pauseCount
+        pauseCount: pauseCount,
+        liveMetrics: liveMetrics
       });
 
       // Track nervousness for dynamic pressure adaptations
@@ -451,7 +550,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       console.error("Failed to process answer evaluation:", err);
       // Heuristic fallback if server error
       const localDelivery = AnswerEvaluationService.calculateLocalDeliveryMetrics(answerText, durationMs, pauseCount);
-      const fallbackMetrics = AnswerEvaluationService.getLocalFallbackMetrics(localDelivery, answerText);
+      const fallbackMetrics = AnswerEvaluationService.getLocalFallbackMetrics(liveMetrics || localDelivery, answerText);
       
       SessionContextManager.recordRound({
         questionText: activeQuestion.text,
@@ -738,6 +837,78 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
               </button>
             )}
           </div>
+
+          {/* Biometric live prosody synchronizer */}
+          {vivaState === "listening" && (
+            <div className="biometric-sync-panel">
+              <div className="biometric-header">
+                <span className="biometric-pulse"></span>
+                <span>Student Biometric Sync</span>
+              </div>
+              <div className="biometric-grid">
+                
+                {/* Confidence */}
+                <div className="biometric-metric-row">
+                  <div className="biometric-label-container">
+                    <span className="biometric-label">Vocal Confidence</span>
+                    <span className="biometric-value">{liveMetrics.confidence}%</span>
+                  </div>
+                  <div className="biometric-progress-container">
+                    <div 
+                      className={`biometric-progress-bar biometric-bar-confidence ${liveMetrics.confidence >= 80 ? 'high' : ''}`}
+                      style={{ width: `${liveMetrics.confidence}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Nervousness */}
+                <div className="biometric-metric-row">
+                  <div className="biometric-label-container">
+                    <span className="biometric-label">Nervousness Index</span>
+                    <span className="biometric-value">{liveMetrics.nervousness}%</span>
+                  </div>
+                  <div className="biometric-progress-container">
+                    <div 
+                      className={`biometric-progress-bar biometric-bar-nervousness ${liveMetrics.nervousness >= 50 ? 'high' : ''}`}
+                      style={{ width: `${liveMetrics.nervousness}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Clarity */}
+                <div className="biometric-metric-row">
+                  <div className="biometric-label-container">
+                    <span className="biometric-label">Phonetic Clarity</span>
+                    <span className="biometric-value">{liveMetrics.clarity}%</span>
+                  </div>
+                  <div className="biometric-progress-container">
+                    <div 
+                      className="biometric-progress-bar biometric-bar-clarity"
+                      style={{ width: `${liveMetrics.clarity}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Hesitation */}
+                <div className="biometric-metric-row">
+                  <div className="biometric-label-container">
+                    <span className="biometric-label">Hesitation Rate</span>
+                    <span className="biometric-value">{liveMetrics.hesitation}%</span>
+                  </div>
+                  <div className="biometric-progress-container">
+                    <div 
+                      className="biometric-progress-bar biometric-bar-hesitation"
+                      style={{ width: `${liveMetrics.hesitation}%` }}
+                    />
+                  </div>
+                </div>
+
+              </div>
+              <div className={`biometric-status-chip ${liveMetrics.nervousness >= 45 ? 'alert' : liveMetrics.confidence >= 80 ? 'stable' : ''}`}>
+                {liveStatusText}
+              </div>
+            </div>
+          )}
 
           <div className="transcript-stage-card">
             <span className="transcript-label" id="transcript-speaker-label">

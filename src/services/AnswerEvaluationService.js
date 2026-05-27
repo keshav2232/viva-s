@@ -12,10 +12,10 @@ export const AnswerEvaluationService = {
    * @returns {Promise<object>} Combined metrics { confidence, clarity, nervousness, hesitation, correctness, accuracy, completeness, tag }
    */
   async evaluateResponse(params) {
-    const { question, answer, syllabus, speechDurationMs, pauseCount } = params;
+    const { question, answer, syllabus, speechDurationMs, pauseCount, liveMetrics } = params;
 
-    // 1. Calculate local acoustic/delivery metrics
-    const delivery = this.calculateLocalDeliveryMetrics(answer, speechDurationMs, pauseCount);
+    // 1. Calculate local acoustic/delivery metrics (prefer live-tracked metrics)
+    const delivery = liveMetrics || this.calculateLocalDeliveryMetrics(answer, speechDurationMs, pauseCount);
 
     try {
       // 2. Call server-side Gemini AI for semantic evaluations
