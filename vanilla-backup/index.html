@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VivaSim — Premium AI Viva Simulator</title>
+  <!-- Main Stylesheet -->
+  <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+
+  <!-- ==========================================
+       GLOBAL APPLICATION NAVIGATION HEADER
+       ========================================== -->
+  <header id="app-header" style="display: none;">
+    <nav class="nav-container">
+      <div class="logo-wrapper" id="nav-logo">
+        <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+          <path d="M12 6v10"></path>
+          <path d="M8 8v6"></path>
+          <path d="M16 9v4"></path>
+        </svg>
+        <span class="logo-text">VivaSim</span>
+      </div>
+      <div class="nav-actions">
+        <div class="user-profile" id="user-profile-widget">
+          <span class="user-avatar" id="avatar-letters">K</span>
+          <span id="user-display-name">Keshav</span>
+        </div>
+        <button class="btn btn-text" id="btn-logout" style="font-size: 0.85rem; font-weight: 500;">Sign Out</button>
+      </div>
+    </nav>
+  </header>
+
+  <!-- ==========================================
+       MAIN SCREEN CONTENT CONTAINERS
+       ========================================== -->
+  <main>
+    <div class="content-container">
+
+      <!-- ==========================================
+           1. AUTHENTICATION / ONBOARDING SCREEN
+           ========================================== -->
+      <section id="auth-screen" class="screen active">
+        <div class="auth-container">
+          <div class="auth-header">
+            <div class="logo-wrapper">
+              <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                <path d="M12 6v10"></path>
+                <path d="M8 8v6"></path>
+                <path d="M16 9v4"></path>
+              </svg>
+              <span class="logo-text">VivaSim</span>
+            </div>
+            <h1 style="font-size: 1.8rem; font-weight: 800; margin-bottom: 4px;">Prepare for your oral exams</h1>
+            <p class="auth-subtitle">Practice with realistic academic AI examiners</p>
+          </div>
+
+          <div class="card" style="padding: var(--space-xl) var(--space-lg);">
+            <!-- Authentication tabs switcher -->
+            <div class="auth-tabs">
+              <button class="auth-tab-btn active" id="tab-login" onclick="switchAuthTab('login')">Log In</button>
+              <button class="auth-tab-btn" id="tab-signup" onclick="switchAuthTab('signup')">Sign Up</button>
+            </div>
+
+            <!-- Login / Signup forms -->
+            <form id="auth-form" onsubmit="handleAuthSubmit(event)">
+              <div class="auth-body">
+                <div class="form-group" id="signup-name-field" style="display: none;">
+                  <label class="form-label" for="auth-name">Full Name</label>
+                  <input class="form-input" type="text" id="auth-name" placeholder="Keshav">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="auth-email">Academic Email</label>
+                  <input class="form-input" type="email" id="auth-email" placeholder="keshav@university.edu" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="auth-password">Password</label>
+                  <input class="form-input" type="password" id="auth-password" placeholder="••••••••" required>
+                </div>
+              </div>
+
+              <button class="btn btn-primary" type="submit" style="width: 100%;" id="btn-auth-submit">Log In</button>
+            </form>
+
+            <div class="divider-text">or continue with</div>
+
+            <div class="social-auth">
+              <button class="btn btn-google" id="btn-google-auth">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+                </svg>
+                Google Academic ID
+              </button>
+              <button class="btn btn-guest" id="btn-guest-auth">Continue as Guest</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==========================================
+           2. DASHBOARD / HOME SCREEN
+           ========================================== -->
+      <section id="dashboard-screen" class="screen">
+        <div class="dashboard-grid">
+          <!-- Hero greeting section -->
+          <div class="hero-section">
+            <div class="greeting-section">
+              <h1 id="dashboard-greeting">Good Evening, Keshav</h1>
+              <p>Ready for your next viva? Select a subject or upload a syllabus to practice.</p>
+            </div>
+            <div class="dashboard-actions">
+              <button class="btn btn-primary" id="btn-start-viva-cta" style="padding: var(--space-md) var(--space-xl); font-size: 1.05rem;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 5v14M5 12h14"/>
+                </svg>
+                Start New Viva
+              </button>
+            </div>
+          </div>
+
+          <!-- Quick Stats Cards Grid -->
+          <div class="stats-grid">
+            <div class="card stat-card">
+              <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+              <span class="stat-label">Total Attempted</span>
+              <span class="stat-value" id="stat-total-vivas">12</span>
+              <span class="stat-sub neutral">Practice sessions complete</span>
+            </div>
+
+            <div class="card stat-card">
+              <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
+              </svg>
+              <span class="stat-label">Avg Confidence</span>
+              <span class="stat-value" id="stat-avg-confidence">84%</span>
+              <span class="stat-sub" style="color: var(--color-success);">+2.5% compared to last week</span>
+            </div>
+
+            <div class="card stat-card">
+              <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+              </svg>
+              <span class="stat-label">Strongest Subject</span>
+              <span class="stat-value" id="stat-strongest-subject" style="font-size: 1.2rem; font-weight: 700; margin-top: 4px;">Data Structures</span>
+              <span class="stat-sub" style="color: var(--color-success);">Score: 92%</span>
+            </div>
+
+            <div class="card stat-card">
+              <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
+              <span class="stat-label">Weakest Subject</span>
+              <span class="stat-value" id="stat-weakest-subject" style="font-size: 1.2rem; font-weight: 700; margin-top: 4px;">Thermodynamics</span>
+              <span class="stat-sub" style="color: var(--color-error);">Needs review: 68%</span>
+            </div>
+          </div>
+
+          <!-- Recent Viva Sessions list -->
+          <div class="sessions-container">
+            <div class="sessions-section-title">
+              <span>Recent Practice Sessions</span>
+            </div>
+            
+            <div class="sessions-list" id="dashboard-sessions-list">
+              <!-- Dynamically populated via mockData/app.js -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==========================================
+           3. START VIVA FLOW SCREEN (MULTI-STEP)
+           ========================================== -->
+      <section id="setup-screen" class="screen">
+        <div class="setup-container">
+          <!-- Step tracker indicators -->
+          <div class="setup-steps-header">
+            <div class="step-node active" id="step-node-1">
+              <div class="step-circle">1</div>
+              <span class="step-label">Source</span>
+            </div>
+            <div class="step-node" id="step-node-2">
+              <div class="step-circle">2</div>
+              <span class="step-label">Configure</span>
+            </div>
+            <div class="step-node" id="step-node-3">
+              <div class="step-circle">3</div>
+              <span class="step-label">Preview</span>
+            </div>
+          </div>
+
+          <!-- STEP 1: SELECT VIVA SOURCE -->
+          <div class="setup-step-view active" id="setup-step-1">
+            <div style="text-align: left; margin-bottom: var(--space-sm);">
+              <h2>Select Viva Source</h2>
+              <p>Provide the syllabus or topic you want the AI Examiner to focus on.</p>
+            </div>
+
+            <div class="source-selection-grid">
+              <!-- Option A: Upload Syllabus -->
+              <div class="card source-card selected" id="source-card-syllabus" onclick="selectSource('syllabus')">
+                <div class="source-card-header">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                  </svg>
+                  <h3>Upload Syllabus</h3>
+                </div>
+                <p style="font-size: 0.85rem;">Upload custom PDF syllabus, lecture notes, or paste textbook content directly.</p>
+              </div>
+
+              <!-- Option B: Topic-Based -->
+              <div class="card source-card" id="source-card-topic" onclick="selectSource('topic')">
+                <div class="source-card-header">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                  </svg>
+                  <h3>Topic-Based</h3>
+                </div>
+                <p style="font-size: 0.85rem;">Enter a single subject or chapter domain to generate an examination automatically.</p>
+              </div>
+            </div>
+
+            <!-- Dynamic input areas depending on active source -->
+            <div id="source-details-syllabus" class="source-details active">
+              <div class="form-group">
+                <label class="form-label">Upload Syllabus PDF / Notes</label>
+                <div class="upload-zone" id="syllabus-drag-drop" onclick="simulateFileUpload()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                  </svg>
+                  <p class="form-label" style="margin-bottom: 2px;" id="upload-status-text">Drag & drop syllabus file here or click to browse</p>
+                  <p style="font-size: 0.75rem; color: var(--text-muted);">Supports PDF, DOCX, or TXT up to 10MB</p>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="syllabus-text">Or Paste Syllabus Text / Notes</label>
+                <textarea class="form-input" id="syllabus-text" rows="5" placeholder="Paste structural notes, course outcomes, or textbook table of contents..." style="resize: vertical; min-height: 100px; font-size: 0.9rem;"></textarea>
+              </div>
+            </div>
+
+            <div id="source-details-topic" class="source-details">
+              <div class="form-group">
+                <label class="form-label" for="topic-input">Enter Viva Subject / Chapter</label>
+                <input class="form-input" type="text" id="topic-input" placeholder="e.g. Thermodynamics, Data Structures, Machine Design">
+              </div>
+
+              <div>
+                <label class="form-label">Suggested Academic Subjects</label>
+                <div class="suggestion-pills">
+                  <span class="suggestion-pill" onclick="fillSubject('Thermodynamics')">Thermodynamics</span>
+                  <span class="suggestion-pill" onclick="fillSubject('Data Structures')">Data Structures</span>
+                  <span class="suggestion-pill" onclick="fillSubject('Machine Design')">Machine Design</span>
+                  <span class="suggestion-pill" onclick="fillSubject('Operating Systems')">Operating Systems</span>
+                  <span class="suggestion-pill" onclick="fillSubject('Computer Networks')">Computer Networks</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Footer navigation buttons -->
+            <div class="flow-nav-buttons">
+              <button class="btn btn-secondary" onclick="navigateToDashboard()">Cancel</button>
+              <button class="btn btn-primary" onclick="proceedToStep(2)">
+                Next: Configuration
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                  <polyline points="12 5 19 12 12 19"></polyline>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- STEP 2: VIVA CONFIGURATION -->
+          <div class="setup-step-view" id="setup-step-2">
+            <div style="text-align: left; margin-bottom: var(--space-sm);">
+              <h2>Configure Examination Parameters</h2>
+              <p>Adjust the time duration and the pedagogical personality of your examiner.</p>
+            </div>
+
+            <!-- Duration Selection pills -->
+            <div class="duration-selector">
+              <label class="form-label">Examination Duration</label>
+              <div class="duration-pills-row">
+                <button class="btn-pill active" id="duration-5" onclick="selectDuration(5)">5 Minutes</button>
+                <button class="btn-pill" id="duration-10" onclick="selectDuration(10)">10 Minutes</button>
+                <button class="btn-pill" id="duration-15" onclick="selectDuration(15)">15 Minutes</button>
+                <button class="btn-pill" id="duration-20" onclick="selectDuration(20)">20 Minutes</button>
+                <button class="btn-pill" id="duration-custom" onclick="toggleCustomDuration()">Custom...</button>
+              </div>
+
+              <!-- Hidden Custom input -->
+              <div class="custom-duration-input-wrapper" id="custom-duration-wrapper">
+                <input class="form-input" type="number" id="custom-duration-val" min="1" max="60" placeholder="15">
+                <span class="form-label">Minutes</span>
+              </div>
+            </div>
+
+            <!-- Examiner Personality Cards -->
+            <div class="form-group" style="margin-top: var(--space-md);">
+              <label class="form-label" style="margin-bottom: var(--space-xs);">Examiner Personality</label>
+              <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: var(--space-md);">Select who will evaluate you. Each persona carries distinct grading traits and oral behaviors.</p>
+              
+              <div class="personality-grid">
+                <!-- Friendly Professor -->
+                <div class="card personality-card selected" id="personality-friendly" onclick="selectPersonality('friendly')">
+                  <div class="personality-name">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 2a4 4 0 0 0-4 4v2a4 4 0 0 0 8 0V6a4 4 0 0 0-4-4z"></path>
+                      <path d="M18 21a6 6 0 0 0-12 0"></path>
+                      <circle cx="12" cy="10" r="1" fill="currentColor"></circle>
+                    </svg>
+                    Friendly Professor
+                  </div>
+                  <span class="personality-desc">Encouraging, patient, gives conceptual hints, and values general understanding.</span>
+                  <div class="personality-attributes">
+                    <span class="attribute-tag friendly">Patient</span>
+                    <span class="attribute-tag friendly">Hints Included</span>
+                  </div>
+                </div>
+
+                <!-- Strict Professor -->
+                <div class="card personality-card" id="personality-strict" onclick="selectPersonality('strict')">
+                  <div class="personality-name">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 2a4 4 0 0 0-4 4v2a4 4 0 0 0 8 0V6a4 4 0 0 0-4-4z"></path>
+                      <path d="M18 21a6 6 0 0 0-12 0"></path>
+                      <line x1="8" y1="11" x2="16" y2="11"></line>
+                    </svg>
+                    Strict Professor
+                  </div>
+                  <span class="personality-desc">Professional, interrupts long rambles, demands precise terminology and formulas.</span>
+                  <div class="personality-attributes">
+                    <span class="attribute-tag strict">Precise</span>
+                    <span class="attribute-tag strict">No Hints</span>
+                  </div>
+                </div>
+
+                <!-- Brutal External Examiner -->
+                <div class="card personality-card" id="personality-brutal" onclick="selectPersonality('brutal')">
+                  <div class="personality-name">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 2a4 4 0 0 0-4 4v2a4 4 0 0 0 8 0V6a4 4 0 0 0-4-4z"></path>
+                      <path d="M18 21a6 6 0 0 0-12 0"></path>
+                      <polygon points="12 4 10 8 14 8"></polygon>
+                    </svg>
+                    Brutal External
+                  </div>
+                  <span class="personality-desc">High pressure, tests confidence under stress with rapid-fire questions and tricky follow-ups.</span>
+                  <div class="personality-attributes">
+                    <span class="attribute-tag intimidating">Intense</span>
+                    <span class="attribute-tag intimidating">Rapid-Fire</span>
+                  </div>
+                </div>
+
+                <!-- Viva Terror -->
+                <div class="card personality-card" id="personality-terror" onclick="selectPersonality('terror')">
+                  <div class="personality-name">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    </svg>
+                    Viva Terror
+                  </div>
+                  <span class="personality-desc">Extremely intimidating, points out logical fallacies instantly, cross-questions deeply.</span>
+                  <div class="personality-attributes">
+                    <span class="attribute-tag intimidating">Elite Stress</span>
+                    <span class="attribute-tag intimidating">Absolute Mastery</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Footer navigation buttons -->
+            <div class="flow-nav-buttons">
+              <button class="btn btn-secondary" onclick="proceedToStep(1)">Back</button>
+              <button class="btn btn-primary" onclick="proceedToStep(3)">
+                Next: Preview Screen
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                  <polyline points="12 5 19 12 12 19"></polyline>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- STEP 3: VIVA PREVIEW SCREEN -->
+          <div class="setup-step-view" id="setup-step-3">
+            <div style="text-align: left; margin-bottom: var(--space-sm);">
+              <h2>Ready to Begin</h2>
+              <p>Review your exam configuration. Ensure your microphone is plugged in and working.</p>
+            </div>
+
+            <div class="card preview-summary-card">
+              <div style="text-align: left;">
+                <h3 id="preview-subject-title" style="font-size: 1.4rem; color: var(--accent-primary); margin-bottom: 2px;">Thermodynamics Practice</h3>
+                <p id="preview-source-sub">Source: Default syllabus template loaded</p>
+              </div>
+
+              <!-- Parameters grid -->
+              <div class="preview-grid">
+                <div class="preview-item">
+                  <span class="preview-label">Examiner Persona</span>
+                  <div class="preview-personality-details">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="preview-personality-icon">
+                      <!-- Dynamically replaced -->
+                    </svg>
+                    <span class="preview-value" id="preview-personality-name">Friendly Professor</span>
+                  </div>
+                </div>
+
+                <div class="preview-item">
+                  <span class="preview-label">Session Duration</span>
+                  <span class="preview-value" id="preview-duration-text">10 Minutes</span>
+                </div>
+
+                <div class="preview-item">
+                  <span class="preview-label">Est. Questions</span>
+                  <span class="preview-value" id="preview-questions-count">5 - 8 Questions</span>
+                </div>
+
+                <div class="preview-item">
+                  <span class="preview-label">Grading Standard</span>
+                  <span class="preview-value" id="preview-grading-std">Standard University Core</span>
+                </div>
+              </div>
+
+              <!-- Interactive checklist -->
+              <div class="preview-checklist" style="text-align: left;">
+                <div class="checklist-item">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                  <span>Microphone permission calibrated</span>
+                </div>
+                <div class="checklist-item">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                  <span>Voice detection optimized for academic terms</span>
+                </div>
+                <div class="checklist-item">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                  <span>Pedagogical rubric configured for this subject</span>
+                </div>
+              </div>
+
+              <button class="btn btn-primary" id="btn-begin-viva" style="width: 100%; padding: var(--space-md); font-size: 1.1rem; margin-top: var(--space-md);">
+                Begin Viva
+              </button>
+            </div>
+
+            <!-- Footer navigation buttons -->
+            <div class="flow-nav-buttons">
+              <button class="btn btn-secondary" onclick="proceedToStep(2)">Back</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==========================================
+           4. ACTIVE VIVA SCREEN
+           ========================================== -->
+      <section id="active-viva-screen" class="screen">
+        <div class="active-viva-layout">
+          <!-- Top bar with topic and timer -->
+          <div class="viva-header-bar">
+            <span class="viva-topic-badge" id="active-viva-topic-badge">Thermodynamics</span>
+            <div class="viva-timer-box">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+              <span id="active-viva-timer">05:00</span>
+            </div>
+          </div>
+
+          <!-- Middle Stage: Examiner Avatar and Audio Waves -->
+          <div class="examiner-stage speaking" id="viva-examiner-stage">
+            <div class="examiner-avatar-box">
+              <div class="examiner-avatar-bg"></div>
+              <svg class="examiner-avatar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2a4 4 0 0 0-4 4v2a4 4 0 0 0 8 0V6a4 4 0 0 0-4-4z"></path>
+                <path d="M18 21a6 6 0 0 0-12 0"></path>
+              </svg>
+            </div>
+
+            <!-- Dynamic text status indicating current active step -->
+            <div class="examiner-status-tag" id="examiner-status">
+              <span class="status-pulse-dot"></span>
+              <span id="examiner-status-text">Professor is speaking...</span>
+            </div>
+
+            <!-- Animated audio bars -->
+            <div class="waveform-container" id="viva-waveform">
+              <div class="waveform-bar" style="height: 12px;"></div>
+              <div class="waveform-bar" style="height: 24px;"></div>
+              <div class="waveform-bar" style="height: 8px;"></div>
+              <div class="waveform-bar" style="height: 18px;"></div>
+              <div class="waveform-bar" style="height: 32px;"></div>
+              <div class="waveform-bar" style="height: 14px;"></div>
+              <div class="waveform-bar" style="height: 20px;"></div>
+              <div class="waveform-bar" style="height: 8px;"></div>
+              <div class="waveform-bar" style="height: 28px;"></div>
+              <div class="waveform-bar" style="height: 16px;"></div>
+              <div class="waveform-bar" style="height: 10px;"></div>
+            </div>
+
+            <!-- Speech input triggers & indicators -->
+            <div class="microphone-box">
+              <button class="btn-mic" id="btn-microphone" disabled>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                  <line x1="12" y1="19" x2="12" y2="23"></line>
+                  <line x1="8" y1="23" x2="16" y2="23"></line>
+                </svg>
+              </button>
+              <span class="mic-subtext" id="btn-microphone-sub">Microphone inactive while examiner speaks</span>
+            </div>
+
+            <!-- Transcript box simulating real-time audio interpretation -->
+            <div class="transcript-stage-card">
+              <span class="transcript-label" id="transcript-speaker-label">Real-Time Transcription</span>
+              <div class="transcript-text" id="viva-transcript-text">
+                <span class="transcript-placeholder">Waiting to transcribe your response...</span>
+              </div>
+              
+              <!-- Keyboard Fallback Input (Visible only in fallback mode) -->
+              <div id="viva-keyboard-fallback" style="display: none; margin-top: var(--space-md); border-top: 1px solid var(--border-color); padding-top: var(--space-sm);">
+                <label class="form-label" for="viva-fallback-input" style="font-size: 0.75rem;">Type your answer below and press Enter or Submit:</label>
+                <textarea class="form-input" id="viva-fallback-input" rows="2" placeholder="Type your answer here..." style="font-size: 0.9rem; resize: none; margin-top: 4px;"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom: Official Question presentation card -->
+          <div class="viva-question-card" id="viva-question-container">
+            <span class="viva-question-number" id="viva-question-num-tag">Question 1 of 5</span>
+            <div class="viva-question-content" id="viva-question-content-text">
+              "Can you explain the second law of thermodynamics?"
+            </div>
+            
+            <div class="viva-card-controls">
+              <!-- Allow user to skip speaker typing if testing via buttons, or end exam early -->
+              <button class="btn btn-secondary" id="btn-skip-sim" style="font-size: 0.85rem; padding: 8px 16px; display: none;">Skip Speaking</button>
+              <button class="btn btn-secondary" id="btn-end-viva-early" style="font-size: 0.85rem; padding: 8px 16px; color: var(--color-error); border-color: var(--color-error-bg);">End Exam</button>
+              <button class="btn btn-primary" id="btn-next-question" style="font-size: 0.85rem; padding: 8px 20px;" disabled>Submit Answer</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==========================================
+           5. RESULTS / DIAGNOSTICS SCREEN
+           ========================================== -->
+      <section id="results-screen" class="screen">
+        <div class="results-container">
+          <!-- Top Results Bar Header -->
+          <div class="results-header-section">
+            <div class="results-title-group">
+              <span class="results-subject-tag" id="results-topic-badge">Thermodynamics</span>
+              <h1 style="margin-top: 4px; margin-bottom: 0;">Evaluation Summary</h1>
+              <p>Detailed performance index compiled by academic AI agent.</p>
+            </div>
+            <div>
+              <button class="btn btn-primary" id="btn-practice-again">Practice Again</button>
+              <button class="btn btn-secondary" id="btn-results-to-dashboard" style="margin-left: var(--space-sm);">Dashboard</button>
+            </div>
+          </div>
+
+          <!-- Master grid layout -->
+          <div class="results-grid">
+            
+            <!-- Left panel: Radial Score and Emotional Sliders -->
+            <div class="performance-left-panel">
+              <!-- Radial Core score card -->
+              <div class="card radial-score-card">
+                <div class="radial-svg-wrapper">
+                  <svg viewBox="0 0 120 120" style="width: 100%; height: 100%;">
+                    <circle class="radial-svg-circle-bg" cx="60" cy="60" r="50" />
+                    <!-- Circle fill, dash-array is circumference: 2*pi*r = 314.16 -->
+                    <circle class="radial-svg-circle-fill" id="results-radial-stroke" cx="60" cy="60" r="50" stroke-dasharray="314.16" stroke-dashoffset="314.16" />
+                  </svg>
+                  <div class="radial-score-value" id="results-percentage-val">82%</div>
+                </div>
+                <span class="radial-score-label" id="results-grade-label">First Class Honor</span>
+                <span class="radial-score-desc" id="results-evaluation-verdict">Demonstrated solid core comprehension with minor terminological gaps under strict stress parameters.</span>
+              </div>
+
+              <!-- Emotional Breakdown indicators -->
+              <div class="card emotion-card">
+                <span class="emotion-card-title">Acoustic & Delivery Metres</span>
+                <div class="emotion-rows">
+                  
+                  <!-- Confidence -->
+                  <div class="emotion-item confidence">
+                    <div class="emotion-header">
+                      <span class="emotion-label">Confidence</span>
+                      <span class="emotion-percent" id="results-confidence-pct">88%</span>
+                    </div>
+                    <div class="emotion-bar-track">
+                      <div class="emotion-bar-fill" id="results-confidence-bar"></div>
+                    </div>
+                  </div>
+
+                  <!-- Clarity -->
+                  <div class="emotion-item clarity">
+                    <div class="emotion-header">
+                      <span class="emotion-label">Academic Clarity</span>
+                      <span class="emotion-percent" id="results-clarity-pct">82%</span>
+                    </div>
+                    <div class="emotion-bar-track">
+                      <div class="emotion-bar-fill" id="results-clarity-bar"></div>
+                    </div>
+                  </div>
+
+                  <!-- Nervousness -->
+                  <div class="emotion-item nervousness">
+                    <div class="emotion-header">
+                      <span class="emotion-label">Nervousness</span>
+                      <span class="emotion-percent" id="results-nervousness-pct">20%</span>
+                    </div>
+                    <div class="emotion-bar-track">
+                      <div class="emotion-bar-fill" id="results-nervousness-bar"></div>
+                    </div>
+                  </div>
+
+                  <!-- Hesitation -->
+                  <div class="emotion-item hesitation">
+                    <div class="emotion-header">
+                      <span class="emotion-label">Hesitation & Pauses</span>
+                      <span class="emotion-percent" id="results-hesitation-pct">15%</span>
+                    </div>
+                    <div class="emotion-bar-track">
+                      <div class="emotion-bar-fill" id="results-hesitation-bar"></div>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            <!-- Right panel: Strengths, Weaknesses, revision, Graph -->
+            <div class="feedback-right-panel">
+              <!-- Split Strengths and Weaknesses -->
+              <div class="revision-card-layout">
+                <div class="card feedback-subcard">
+                  <span class="feedback-subcard-title strengths-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                    Conceptual Strengths
+                  </span>
+                  <ul class="feedback-bullet-list strengths-list" id="results-strengths-list">
+                    <li>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                      <span>Strong articulation of the Second Law and entropy rise in isolated systems.</span>
+                    </li>
+                    <li>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                      <span>Accurate mathematical representation of Carnot Efficiency ratios.</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div class="card feedback-subcard">
+                  <span class="feedback-subcard-title weak-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                    Vulnerable Areas
+                  </span>
+                  <ul class="feedback-bullet-list weak-list" id="results-weak-list">
+                    <li>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="16" x2="12" y2="12"></line>
+                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                      </svg>
+                      <span>Slight hesitation when defining Clapeyron phase boundary slopes.</span>
+                    </li>
+                    <li>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="16" x2="12" y2="12"></line>
+                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                      </svg>
+                      <span>Confused physical boundaries in open vs closed enthalpy definitions.</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <!-- Suggested revision topics tags -->
+              <div class="card suggested-revision-card">
+                <h3 style="font-size: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: var(--space-sm); margin-bottom: var(--space-xs);">Recommended Revision Topics</h3>
+                <div class="revision-pills-row" id="results-revision-pills">
+                  <span class="revision-pill-tag">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+                    Carnot efficiency parameters
+                  </span>
+                  <span class="revision-pill-tag">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+                    Clausius inequality calculations
+                  </span>
+                  <span class="revision-pill-tag">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+                    Clapeyron equation graphs
+                  </span>
+                </div>
+              </div>
+
+              <!-- SVGs Confidence Timeline Graph -->
+              <div class="card timeline-card">
+                <h3 style="font-size: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: var(--space-xs); margin-bottom: 0;">Session Confidence Trend</h3>
+                <p style="font-size: 0.8rem; margin-bottom: var(--space-sm);">Evaluation of vocal confidence and cognitive hesitation on a question-by-question basis.</p>
+                <div class="graph-canvas-box">
+                  <div class="graph-tooltip-box">
+                    <span></span>
+                    <strong id="graph-tooltip-content">Q1: 85% Confidence</strong>
+                  </div>
+                  <!-- Vector Graph -->
+                  <svg class="graph-svg" id="results-timeline-svg" viewBox="0 0 500 160" preserveAspectRatio="none">
+                    <!-- Horizontal reference lines -->
+                    <line x1="0" y1="40" x2="500" y2="40" stroke="#E6E5E0" stroke-width="1" stroke-dasharray="4" />
+                    <line x1="0" y1="80" x2="500" y2="80" stroke="#E6E5E0" stroke-width="1" stroke-dasharray="4" />
+                    <line x1="0" y1="120" x2="500" y2="120" stroke="#E6E5E0" stroke-width="1" stroke-dasharray="4" />
+
+                    <!-- Axis label overlay (represented visually in container, SVG labels absolute) -->
+                    <!-- Polyline / Path for confidence line, will be drawn dynamically -->
+                    <path class="graph-line-path" id="graph-trend-path" d="M 50 100 L 150 70 L 250 110 L 350 50 L 450 60" />
+                    
+                    <!-- Dynamic points -->
+                    <circle class="graph-point" id="graph-pt-0" cx="50" cy="100" r="4.5" onmouseover="showGraphTooltip(0)" />
+                    <circle class="graph-point" id="graph-pt-1" cx="150" cy="70" r="4.5" onmouseover="showGraphTooltip(1)" />
+                    <circle class="graph-point" id="graph-pt-2" cx="250" cy="110" r="4.5" onmouseover="showGraphTooltip(2)" />
+                    <circle class="graph-point" id="graph-pt-3" cx="350" cy="50" r="4.5" onmouseover="showGraphTooltip(3)" />
+                    <circle class="graph-point" id="graph-pt-4" cx="450" cy="60" r="4.5" onmouseover="showGraphTooltip(4)" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- ==========================================
+       FOOTER SECTION
+       ========================================== -->
+  <footer style="border-top: 1px solid var(--border-color); padding: var(--space-lg) 0; font-size: 0.8rem; color: var(--text-muted); text-align: center; background-color: var(--bg-card);">
+    <p>© 2026 VivaSim. Engineered as a high-fidelity academic prep tool.</p>
+  </footer>
+
+  <!-- ==========================================
+       APPLICATION JAVASCRIPT FILES
+       ========================================== -->
+  <script src="js/mockData.js"></script>
+  <script src="js/voiceManager.js"></script>
+  <script src="js/speechManager.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
