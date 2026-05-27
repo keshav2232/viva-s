@@ -22,6 +22,16 @@ export const SpeechManager = {
   onSilenceDetected: null,
   onError: null,
   onEnd: null,
+  onAudioCaptured: null,
+  onVolumeChange: null,
+  
+  // Audio Context Nodes
+  audioCtx: null,
+  audioAnalyser: null,
+  volumeInterval: null,
+  lastError: null,
+  isHotRestarting: false,
+  shouldBeActive: false,
 
   /**
    * Initializes the browser Speech Recognition Engine. Safe for SSR.
@@ -43,6 +53,7 @@ export const SpeechManager = {
 
       this.recognition.onstart = () => {
         this.isActive = true;
+        this.lastError = null;
         if (!this.isHotRestarting) {
           this.interimTranscript = "";
           this.finalTranscript = "";
@@ -86,6 +97,7 @@ export const SpeechManager = {
 
       this.recognition.onerror = (event) => {
         console.error("Speech Recognition Error:", event.error);
+        this.lastError = event.error;
         this.clearSilenceTimer();
         
         if (this.onError) {
@@ -97,17 +109,28 @@ export const SpeechManager = {
         this.isActive = false;
         this.clearSilenceTimer();
         
-        // Auto-restart if premature browser termination occurred
-        if (this.shouldBeActive) {
-          console.log("Speech recognition stopped natively by browser. Auto-restarting stream...");
+        // Auto-restart if premature browser termination occurred (exclude fatal permission blocks)
+        const isFatalError = ["not-allowed", "service-not-allowed", "language-not-supported"].includes(this.lastError);
+        if (this.shouldBeActive && !isFatalError) {
+          console.log("Speech recognition stopped natively by browser. Scheduling auto-restart...");
           this.isHotRestarting = true;
-          try {
-            this.recognition.start();
-            this.isActive = true;
-          } catch (e) {
-            console.warn("Speech recognition auto-restart failed:", e);
-            this.isHotRestarting = false;
+          
+          if (this.volumeInterval) {
+            clearInterval(this.volumeInterval);
+            this.volumeInterval = null;
           }
+
+          setTimeout(() => {
+            if (!this.shouldBeActive) return;
+            try {
+              this.recognition.start();
+              this.isActive = true;
+              console.log("Speech recognition successfully auto-restarted.");
+            } catch (e) {
+              console.warn("Speech recognition auto-restart failed:", e);
+              this.isHotRestarting = false;
+            }
+          }, 150);
         } else {
           if (this.onEnd) {
             this.onEnd(this.finalTranscript.trim());
@@ -140,8 +163,10 @@ export const SpeechManager = {
     this.onError = callbacks.onError || null;
     this.onEnd = callbacks.onEnd || null;
     this.onAudioCaptured = callbacks.onAudioCaptured || null;
+    this.onVolumeChange = callbacks.onVolumeChange || null;
 
     this.shouldBeActive = true;
+    this.lastError = null;
 
     try {
       this.recognition.start();
@@ -153,6 +178,41 @@ export const SpeechManager = {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             this.mediaStream = stream;
             
+            // Web Audio Analyzer for Volume Level tracking
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (AudioContextClass) {
+              try {
+                const audioCtx = new AudioContextClass();
+                const source = audioCtx.createMediaStreamSource(stream);
+                const analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 32;
+                source.connect(analyser);
+                
+                this.audioCtx = audioCtx;
+                this.audioAnalyser = analyser;
+                
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+                
+                this.volumeInterval = setInterval(() => {
+                  if (!this.isActive) return;
+                  analyser.getByteFrequencyData(dataArray);
+                  let sum = 0;
+                  for (let i = 0; i < bufferLength; i++) {
+                    sum += dataArray[i];
+                  }
+                  const average = sum / bufferLength;
+                  const pct = Math.min(Math.round((average / 150) * 100), 100);
+                  
+                  if (this.onVolumeChange) {
+                    this.onVolumeChange(pct);
+                  }
+                }, 80);
+              } catch (ctxErr) {
+                console.warn("Could not initialize AudioContext volume visualizer:", ctxErr);
+              }
+            }
+
             this.audioChunks = [];
             const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
             this.mediaRecorder = recorder;
@@ -191,6 +251,22 @@ export const SpeechManager = {
   stop() {
     this.shouldBeActive = false;
     this.clearSilenceTimer();
+
+    // Clean up Web Audio Analyser
+    if (this.volumeInterval) {
+      clearInterval(this.volumeInterval);
+      this.volumeInterval = null;
+    }
+    if (this.audioCtx) {
+      try {
+        if (this.audioCtx.state !== "closed") {
+          this.audioCtx.close();
+        }
+      } catch (err) {
+        console.warn("Error closing AudioContext:", err);
+      }
+      this.audioCtx = null;
+    }
 
     // Stop MediaRecorder
     if (this.mediaRecorder && this.mediaRecorder.state !== "inactive") {

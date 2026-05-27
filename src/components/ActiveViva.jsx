@@ -406,9 +406,16 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         } else {
           setTranscriptText(final + (interim ? ` ${interim}` : ""));
           setIsPlaceholder(false);
-          // ripple waveform
-          triggerSpeechWavePulse();
         }
+      },
+      onVolumeChange: (volPct) => {
+        const bars = document.querySelectorAll("#viva-waveform .waveform-bar");
+        bars.forEach((bar, index) => {
+          const multiplier = 0.35 + (index % 3 === 0 ? 0.55 : index % 3 === 1 ? 0.85 : 0.35);
+          const rawHeight = Math.round(volPct * 0.45 * multiplier);
+          const barHeight = Math.min(Math.max(rawHeight, 4), 38);
+          bar.style.height = `${barHeight}px`;
+        });
       },
       onSilenceDetected: (finalTranscriptText) => {
         // Hands-free auto submit
@@ -726,21 +733,15 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
 
   const startListeningWaveAnimations = () => {
     clearInterval(waveIntervalRef.current);
-    waveIntervalRef.current = setInterval(() => {
-      const bars = document.querySelectorAll("#viva-waveform .waveform-bar");
-      bars.forEach(bar => {
-        const height = Math.floor(Math.random() * 12) + 4;
-        bar.style.height = `${height}px`;
-      });
-    }, 250);
+    // Initialize bars at baseline flat level (4px)
+    const bars = document.querySelectorAll("#viva-waveform .waveform-bar");
+    bars.forEach(bar => {
+      bar.style.height = "4px";
+    });
   };
 
   const triggerSpeechWavePulse = () => {
-    const bars = document.querySelectorAll("#viva-waveform .waveform-bar");
-    bars.forEach(bar => {
-      const height = Math.floor(Math.random() * 32) + 12;
-      bar.style.height = `${height}px`;
-    });
+    // Pulse animation superseded by live volume physics
   };
 
   return (
