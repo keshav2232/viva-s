@@ -221,10 +221,96 @@ export const ADAPTIVE_VIVAS = {
 export const DUMMY_SYLLABUS = `
 Course Code: ME-302
 Subject: Advanced Applied Thermodynamics
-
-Course Outcomes & Exam Coverage:
+Live Exam Coverage:
 1. Laws of Thermodynamics: First law energy balance, Second law limitations, entropy generation, exergy analysis, Clausius inequality.
 2. Thermodynamic Cycles: Carnot cycle limitations, Rankine vapor cycle, reheating and regeneration, Brayton gas turbine cycle.
 3. Bearings & Fluid Cycles: Phase diagrams, Clapeyron phase boundaries, Maxwell relations, enthalpy transformations in open and closed boundaries.
 4. Combustion & Gases: Ideal and real gas behavior, compressibility factors, combustion stoichiometry and enthalpy of formation.
 `;
+
+/**
+ * Generates deterministically unique initial sessions and matching stats
+ * based on a hash of the user's email, uid, or name.
+ */
+export function generateUniqueInitialData(uid, email, name) {
+  const seedStr = email || uid || "scholar";
+  let hash = 0;
+  for (let i = 0; i < seedStr.length; i++) {
+    hash = seedStr.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  hash = Math.abs(hash);
+
+  // 1. Assign deterministic academic streams based on user email hash
+  const streams = [
+    ["Data Structures", "Algorithms", "Operating Systems", "Computer Networks"],
+    ["Thermodynamics", "Machine Design", "Fluid Mechanics", "Heat Transfer"],
+    ["Linear Circuits", "Digital Systems", "Signals & Networks", "Microcontrollers"],
+    ["Machine Learning", "Computer Vision", "Natural Language", "Robotics"]
+  ];
+  
+  const streamIdx = hash % streams.length;
+  const subjects = streams[streamIdx];
+
+  // 2. Generate 3 to 4 high-fidelity sessions
+  const examiners = ["Strict Professor", "Friendly Professor", "Brutal External", "Viva Terror"];
+  const dates = [
+    "May 26, 2026", "May 22, 2026", "May 18, 2026", "May 14, 2026",
+    "May 10, 2026", "May 06, 2026", "May 02, 2026", "Apr 28, 2026"
+  ];
+  
+  const numSessions = 3 + (hash % 2); // 3 or 4 sessions
+  const initialSessions = [];
+
+  for (let i = 0; i < numSessions; i++) {
+    const subject = subjects[i % subjects.length];
+    const duration = 10 + ((hash + i * 5) % 3) * 5; // 10, 15, or 20 minutes
+    const examiner = examiners[(hash + i) % examiners.length];
+    
+    // Deterministic grades between 68% and 94%
+    const score = 68 + ((hash + i * 13) % 27); 
+    const date = dates[(hash + i) % dates.length];
+    const gradeClass = score >= 80 ? "high" : (score >= 65 ? "med" : "low");
+
+    initialSessions.push({
+      id: `session_init_${uid}_${i}`,
+      subject,
+      duration,
+      personality: examiner,
+      score,
+      date,
+      gradeClass,
+      createdAt: new Date(new Date(date).getTime()).toISOString()
+    });
+  }
+
+  // 3. Calculate stats corresponding to these unique sessions
+  const totalVivas = initialSessions.length;
+  const avgConfidence = Math.round(
+    initialSessions.reduce((acc, s) => acc + s.score, 0) / totalVivas
+  );
+
+  let strongest = initialSessions[0].subject;
+  let weakest = initialSessions[0].subject;
+  let highestScore = initialSessions[0].score;
+  let lowestScore = initialSessions[0].score;
+
+  initialSessions.forEach(s => {
+    if (s.score > highestScore) {
+      highestScore = s.score;
+      strongest = s.subject;
+    }
+    if (s.score < lowestScore) {
+      lowestScore = s.score;
+      weakest = s.subject;
+    }
+  });
+
+  const stats = {
+    totalVivas,
+    avgConfidence,
+    strongestSubject: strongest,
+    weakestSubject: weakest
+  };
+
+  return { initialSessions, stats };
+}

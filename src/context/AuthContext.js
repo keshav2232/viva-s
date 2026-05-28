@@ -21,7 +21,7 @@ import {
   writeBatch
 } from "firebase/firestore";
 import { auth, db, googleProvider, isFirebaseConfigured } from "@/services/firebase";
-import { INITIAL_STATS, EMPTY_STATS } from "@/utils/mockData";
+import { INITIAL_STATS, EMPTY_STATS, generateUniqueInitialData } from "@/utils/mockData";
 
 const AuthContext = createContext({
   user: null,
@@ -94,13 +94,36 @@ export function AuthProvider({ children }) {
       const q = query(sessionsRef, orderBy("createdAt", "desc"));
       const sessionsSnap = await getDocs(q);
       
-      const loadedSessions = [];
+      let loadedSessions = [];
       sessionsSnap.forEach((docSnap) => {
         loadedSessions.push({
           id: docSnap.id,
           ...docSnap.data()
         });
       });
+      
+      // Self-Healing & Seeding: If the user has 0 sessions in the database, we automatically seed their account
+      // with a deterministically unique and realistic practice history based on their email or profile hash.
+      if (loadedSessions.length === 0) {
+        try {
+          const { initialSessions, stats: seededStats } = generateUniqueInitialData(uid, auth.currentUser?.email || "", displayName);
+          
+          // Write seeded sessions and stats atomic batch to Cloud Firestore
+          const batch = writeBatch(db);
+          initialSessions.forEach(session => {
+            const docRef = doc(sessionsRef, session.id);
+            batch.set(docRef, session);
+          });
+          
+          const statsRef = doc(db, "users", uid, "stats", "dashboard");
+          batch.set(statsRef, seededStats);
+          
+          await batch.commit();
+          loadedSessions = initialSessions;
+        } catch (seedErr) {
+          console.error("Failed seeding unique initial data to Firestore:", seedErr);
+        }
+      }
       
       setSessions(loadedSessions);
 
