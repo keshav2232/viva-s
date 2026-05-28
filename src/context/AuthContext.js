@@ -27,7 +27,7 @@ const AuthContext = createContext({
   user: null,
   loading: true,
   isConfigured: false,
-  stats: INITIAL_STATS,
+  stats: EMPTY_STATS,
   sessions: [],
   setSessions: () => {},
   setStats: () => {},
@@ -44,7 +44,7 @@ export const useAuth = () => useContext(AuthContext);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState(INITIAL_STATS);
+  const [stats, setStats] = useState(EMPTY_STATS);
   const [sessions, setSessions] = useState([]);
 
   // Check if Firebase is fully initialized and operational
