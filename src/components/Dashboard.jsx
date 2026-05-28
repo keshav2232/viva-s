@@ -134,7 +134,9 @@ export default function Dashboard({ userName, stats, sessions, onStartNewViva, p
             </svg>
             <span className="stat-label">Avg Confidence</span>
             <span className="stat-value" id="stat-avg-confidence">{stats.avgConfidence}%</span>
-            <span className="stat-sub" style={{ color: "var(--color-success)" }}>+2.5% compared to last week</span>
+            <span className="stat-sub" style={{ color: stats.totalVivas > 0 ? "var(--color-success)" : "var(--text-muted)" }}>
+              {stats.totalVivas > 0 ? "Overall confidence score" : "No practice sessions recorded"}
+            </span>
           </div>
 
           <div className="card stat-card">
@@ -144,9 +146,11 @@ export default function Dashboard({ userName, stats, sessions, onStartNewViva, p
             </svg>
             <span className="stat-label">Strongest Subject</span>
             <span className="stat-value" id="stat-strongest-subject" style={{ fontSize: "1.2rem", fontWeight: "700", marginTop: "4px" }}>
-              {stats.strongestSubject}
+              {stats.strongestSubject || "None yet"}
             </span>
-            <span className="stat-sub" style={{ color: "var(--color-success)" }}>Score: 92%</span>
+            <span className="stat-sub" style={{ color: stats.totalVivas > 0 ? "var(--color-success)" : "var(--text-muted)" }}>
+              {stats.totalVivas > 0 ? "Highest-performing topic" : "Start a viva to analyze strength"}
+            </span>
           </div>
 
           <div className="card stat-card">
@@ -157,9 +161,11 @@ export default function Dashboard({ userName, stats, sessions, onStartNewViva, p
             </svg>
             <span className="stat-label">Weakest Subject</span>
             <span className="stat-value" id="stat-weakest-subject" style={{ fontSize: "1.2rem", fontWeight: "700", marginTop: "4px" }}>
-              {stats.weakestSubject}
+              {stats.weakestSubject || "None yet"}
             </span>
-            <span className="stat-sub" style={{ color: "var(--color-error)" }}>Needs review: 68%</span>
+            <span className="stat-sub" style={{ color: stats.totalVivas > 0 ? "var(--color-error)" : "var(--text-muted)" }}>
+              {stats.totalVivas > 0 ? "Recommended focus area" : "Practice needed to detect weaknesses"}
+            </span>
           </div>
         </div>
 
@@ -169,39 +175,62 @@ export default function Dashboard({ userName, stats, sessions, onStartNewViva, p
           </div>
           
           <div className="sessions-list" id="dashboard-sessions-list">
-            {sessions.map((sess) => (
-              <div 
-                className="card session-card" 
-                key={sess.id}
-                onClick={() => onViewReport && onViewReport(sess)}
-                style={{ cursor: "pointer", transition: "var(--transition-smooth)" }}
-                title="Click to reopen detailed evaluation report"
-              >
-                <div className="session-info">
-                  <span className="session-subject">{sess.subject}</span>
-                  <div className="session-meta-row">
-                    <div className="session-meta-item">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: "14px", height: "14px" }}>
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <polyline points="12 6 12 12 16 14"></polyline>
-                      </svg>
-                      <span>{sess.duration} mins</span>
-                    </div>
-                    <div className="session-meta-item">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: "14px", height: "14px" }}>
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                        <circle cx="12" cy="7" r="4"></circle>
-                      </svg>
-                      <span>{sess.personality}</span>
+            {sessions && sessions.length > 0 ? (
+              sessions.map((sess) => (
+                <div 
+                  className="card session-card" 
+                  key={sess.id}
+                  onClick={() => onViewReport && onViewReport(sess)}
+                  style={{ cursor: "pointer", transition: "var(--transition-smooth)" }}
+                  title="Click to reopen detailed evaluation report"
+                >
+                  <div className="session-info">
+                    <span className="session-subject">{sess.subject}</span>
+                    <div className="session-meta-row">
+                      <div className="session-meta-item">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: "14px", height: "14px" }}>
+                          <circle cx="12" cy="12" r="10"></circle>
+                          <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                        <span>{sess.duration} mins</span>
+                      </div>
+                      <div className="session-meta-item">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: "14px", height: "14px" }}>
+                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                          <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                        <span>{sess.personality}</span>
+                      </div>
                     </div>
                   </div>
+                  <div className="session-grade">
+                    <span className="session-date">{sess.date}</span>
+                    <span className={`grade-badge ${sess.gradeClass || "high"}`}>{sess.score}%</span>
+                  </div>
                 </div>
-                <div className="session-grade">
-                  <span className="session-date">{sess.date}</span>
-                  <span className={`grade-badge ${sess.gradeClass || "high"}`}>{sess.score}%</span>
-                </div>
+              ))
+            ) : (
+              <div className="card" style={{ 
+                textAlign: "center", 
+                padding: "48px 24px", 
+                backgroundColor: "var(--bg-card)",
+                border: "1px solid var(--border-color)",
+                borderRadius: "var(--radius-md)",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--text-secondary)"
+              }}>
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: "12px", color: "var(--text-muted)" }}>
+                  <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                </svg>
+                <h4 style={{ fontWeight: "600", fontSize: "1.05rem", color: "var(--text-primary)", marginBottom: "4px" }}>No Practice Sessions Yet</h4>
+                <p style={{ fontSize: "0.88rem", maxWidth: "340px", color: "var(--text-secondary)", margin: "0 auto" }}>
+                  Start your first interactive AI viva exam using the button above to begin compiling your personalized study metrics!
+                </p>
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>

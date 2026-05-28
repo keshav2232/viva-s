@@ -12,6 +12,13 @@ export const INITIAL_STATS = {
   weakestSubject: "Thermodynamics"
 };
 
+export const EMPTY_STATS = {
+  totalVivas: 0,
+  avgConfidence: 0,
+  strongestSubject: "None yet",
+  weakestSubject: "None yet"
+};
+
 export const DEFAULT_SESSIONS = [
   {
     id: "session_101",

@@ -263,6 +263,14 @@ export default function Home() {
     let strongest = activeStats.strongestSubject;
     let weakest = activeStats.weakestSubject;
 
+    // Safe fallbacks to initialize from the first session taken
+    if (!strongest || strongest === "None yet" || strongest === "None") {
+      strongest = summary.subjectName;
+    }
+    if (!weakest || weakest === "None yet" || weakest === "None") {
+      weakest = summary.subjectName;
+    }
+
     if (finalScore > 86) strongest = summary.subjectName;
     if (finalScore < 72) weakest = summary.subjectName;
 

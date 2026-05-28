@@ -21,7 +21,7 @@ import {
   writeBatch
 } from "firebase/firestore";
 import { auth, db, googleProvider, isFirebaseConfigured } from "@/services/firebase";
-import { INITIAL_STATS } from "@/utils/mockData";
+import { INITIAL_STATS, EMPTY_STATS } from "@/utils/mockData";
 
 const AuthContext = createContext({
   user: null,
@@ -95,9 +95,9 @@ export function AuthProvider({ children }) {
       if (statsSnap.exists()) {
         setStats(statsSnap.data());
       } else {
-        // Initialize with default template
-        await setDoc(statsRef, INITIAL_STATS);
-        setStats(INITIAL_STATS);
+        // Initialize with empty academic template for new cloud user
+        await setDoc(statsRef, EMPTY_STATS);
+        setStats(EMPTY_STATS);
       }
 
       // 3. Fetch user sessions sorted by timestamp/date
@@ -136,10 +136,10 @@ export function AuthProvider({ children }) {
       createdAt: new Date().toISOString()
     });
 
-    await setDoc(doc(db, "users", firebaseUser.uid, "stats", "dashboard"), INITIAL_STATS);
+    await setDoc(doc(db, "users", firebaseUser.uid, "stats", "dashboard"), EMPTY_STATS);
     
     setUser({ ...firebaseUser, displayName: fullName });
-    setStats(INITIAL_STATS);
+    setStats(EMPTY_STATS);
     setSessions([]);
   };
 
