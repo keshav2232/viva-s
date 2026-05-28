@@ -27,9 +27,24 @@ export default function Header({ userName, onNavigate, onLogout }) {
             </span>
             <span id="user-display-name">{userName || "Student"}</span>
           </div>
-          {/* <button className="btn btn-text" id="btn-logout" onClick={onLogout} style={{ fontSize: "0.85rem", fontWeight: "500" }}>
+          <button 
+            className="btn btn-text btn-logout-hover" 
+            id="btn-logout" 
+            onClick={onLogout} 
+            style={{ 
+              fontSize: "0.85rem", 
+              fontWeight: "600", 
+              color: "rgba(248, 113, 113, 0.8)", 
+              background: "rgba(248, 113, 113, 0.06)", 
+              border: "1px solid rgba(248, 113, 113, 0.15)",
+              padding: "6px 12px",
+              borderRadius: "8px",
+              cursor: "pointer",
+              transition: "all 0.2s ease"
+            }}
+          >
             Sign Out
-          </button> */}
+          </button>
         </div>
       </nav>
     </header>
