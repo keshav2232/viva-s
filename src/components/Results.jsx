@@ -9,6 +9,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
   const [playingReplayIndex, setPlayingReplayIndex] = useState(null);
   const [pastSessionsAvg, setPastSessionsAvg] = useState(null);
   const [scoreOffset, setScoreOffset] = useState(314.16);
+  const [activeRightTab, setActiveRightTab] = useState("timeline"); // "timeline" | "fluency"
 
   const {
     endedEarly,
@@ -66,6 +67,82 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     const standardDev = Math.sqrt(differences / totalRounds);
     consistency = Math.round(Math.max(100 - (standardDev * 2.2), 58));
   }
+
+  // Lexical Speech Diagnostics Calculations
+  const fillerCounts = { um: 0, ah: 0, like: 0, basically: 0, actually: 0, "you know": 0 };
+  let totalWordsCount = 0;
+  let totalFillerCount = 0;
+
+  answerTranscripts.forEach(text => {
+    const cleanText = (text || "").toLowerCase().replace(/[^\w\s']/g, " ");
+    const words = cleanText.split(/\s+/).filter(w => w.length > 0);
+    totalWordsCount += words.length;
+
+    words.forEach(w => {
+      if (w === "um" || w === "umm") {
+        fillerCounts["um"]++;
+        totalFillerCount++;
+      } else if (w === "ah" || w === "ahh" || w === "uh" || w === "uhm") {
+        fillerCounts["ah"]++;
+        totalFillerCount++;
+      } else if (w === "like") {
+        fillerCounts["like"]++;
+        totalFillerCount++;
+      } else if (w === "basically") {
+        fillerCounts["basically"]++;
+        totalFillerCount++;
+      } else if (w === "actually") {
+        fillerCounts["actually"]++;
+        totalFillerCount++;
+      }
+    });
+
+    let youKnowIndex = cleanText.indexOf("you know");
+    while (youKnowIndex !== -1) {
+      fillerCounts["you know"]++;
+      totalFillerCount++;
+      youKnowIndex = cleanText.indexOf("you know", youKnowIndex + 8);
+    }
+  });
+
+  const fillerConcentration = totalWordsCount > 0 
+    ? ((totalFillerCount / totalWordsCount) * 100).toFixed(1)
+    : 0;
+
+  let avgWpm = 120;
+  if (detectedEmotions.length > 0) {
+    let wpmSum = 0;
+    detectedEmotions.forEach((emo, idx) => {
+      const answer = answerTranscripts[idx] || "";
+      const wordCount = answer.split(/\s+/).filter(w => w.length > 0).length;
+      const wpmVal = emo.wpm || Math.round(wordCount / 0.4); // assume 24s answers as fallback
+      wpmSum += wpmVal;
+    });
+    avgWpm = Math.round(wpmSum / totalRounds);
+  }
+
+  let pacingCategory = "Optimal Professional";
+  let pacingColor = "var(--color-success)";
+  let pacingBg = "var(--color-success-bg)";
+  if (avgWpm < 90) {
+    pacingCategory = "Hesitant & Slow";
+    pacingColor = "hsl(0, 60%, 42%)";
+    pacingBg = "hsl(0, 50%, 93%)";
+  } else if (avgWpm < 110) {
+    pacingCategory = "Deliberate & Measured";
+    pacingColor = "hsl(38, 85%, 45%)";
+    pacingBg = "hsl(38, 70%, 93%)";
+  } else if (avgWpm > 170) {
+    pacingCategory = "Rushed / Nervous Spike";
+    pacingColor = "hsl(0, 60%, 42%)";
+    pacingBg = "hsl(0, 50%, 93%)";
+  } else if (avgWpm > 150) {
+    pacingCategory = "Accelerated Pacing";
+    pacingColor = "hsl(38, 85%, 45%)";
+    pacingBg = "hsl(38, 70%, 93%)";
+  }
+
+  const needleAngle = Math.min(Math.max((avgWpm / 240) * 180 - 90, -90), 90);
   
   let overallScore = Math.round(
     (subjectUnderstanding * 0.35) + 
@@ -257,6 +334,166 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
   // 8. Custom Print Dialog PDF triggers
   const handlePrintReport = () => {
     window.print();
+  };
+
+  // Fluency & Speech diagnostics dashboard view renderer
+  const renderFluencyDiagnostics = () => {
+    const averageHesitation = detectedEmotions.length > 0
+      ? Math.round(detectedEmotions.reduce((acc, emo) => acc + (emo.hesitation || 15), 0) / totalRounds)
+      : 15;
+    
+    let fluencyBase = 100;
+    const fillerRatio = parseFloat(fillerConcentration);
+    fluencyBase -= (fillerRatio * 4);
+    
+    if (avgWpm < 90 || avgWpm > 170) {
+      fluencyBase -= 25;
+    } else if (avgWpm < 110 || avgWpm > 150) {
+      fluencyBase -= 10;
+    }
+    
+    const fluencyScore = Math.min(Math.max(Math.round(fluencyBase), 45), 99);
+    
+    let fluencyGrade = "C";
+    if (fluencyScore >= 95) fluencyGrade = "A+";
+    else if (fluencyScore >= 88) fluencyGrade = "A";
+    else if (fluencyScore >= 80) fluencyGrade = "B+";
+    else if (fluencyScore >= 70) fluencyGrade = "B";
+    else if (fluencyScore >= 55) fluencyGrade = "C+";
+    
+    let pauseDensityDesc = "Moderate (Measured Pacing)";
+    if (averageHesitation < 15) {
+      pauseDensityDesc = "Sparse (Highly Articulate)";
+    } else if (averageHesitation > 30) {
+      pauseDensityDesc = "Dense (Frequent Vocal Pauses)";
+    }
+
+    const getFillerColor = (count) => {
+      if (count === 0) return "hsl(145, 70%, 45%)";
+      if (count <= 2) return "hsl(145, 70%, 45%)";
+      if (count <= 5) return "hsl(38, 85%, 48%)";
+      return "hsl(0, 75%, 50%)";
+    };
+
+    const maxFillerVal = Math.max(...Object.values(fillerCounts), 4);
+
+    return (
+      <div className="fluency-diagnostics-box" style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
+        
+        {/* ROW 1: Letter Grade and Speedometer Gauge */}
+        <div className="card" style={{ padding: "var(--space-lg)", textAlign: "left" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-md)" }}>
+            <div>
+              <h3 style={{ fontSize: "1.05rem", fontWeight: "700", margin: 0 }}>Vocal Speedometer & Grade</h3>
+              <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", margin: "2px 0 0 0" }}>Analysis of verbal velocity and structural clarity.</p>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div style={{ textAlign: "right" }}>
+                <span style={{ fontSize: "0.7rem", fontWeight: "600", textTransform: "uppercase", color: "var(--text-secondary)" }}>Fluency Grade</span>
+                <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontWeight: "500" }}>Score: {fluencyScore}/100</div>
+              </div>
+              <div className="letter-grade-circle">{fluencyGrade}</div>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: "var(--space-lg)" }}>
+            {/* Speedometer SVG */}
+            <div style={{ width: "200px", display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <svg width="200" height="110" viewBox="0 0 200 110" className="speedometer-svg">
+                <defs>
+                  <linearGradient id="speed-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="hsl(0, 60%, 42%)" />
+                    <stop offset="25%" stopColor="hsl(38, 85%, 45%)" />
+                    <stop offset="50%" stopColor="var(--color-success)" />
+                    <stop offset="75%" stopColor="hsl(38, 85%, 45%)" />
+                    <stop offset="100%" stopColor="hsl(0, 60%, 42%)" />
+                  </linearGradient>
+                </defs>
+                <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="var(--bg-primary)" strokeWidth="12" strokeLinecap="round" />
+                <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#speed-grad)" strokeWidth="12" strokeLinecap="round" opacity="0.85" />
+                
+                <line x1="20" y1="100" x2="30" y2="100" stroke="var(--border-color)" strokeWidth="2" />
+                <line x1="100" y1="20" x2="100" y2="30" stroke="var(--border-color)" strokeWidth="2" />
+                <line x1="180" y1="100" x2="170" y2="100" stroke="var(--border-color)" strokeWidth="2" />
+
+                <g transform="translate(100, 100)">
+                  <line x1="0" y1="0" x2="0" y2="-72" stroke="var(--accent-primary)" strokeWidth="3.5" strokeLinecap="round" style={{ transform: `rotate(${needleAngle}deg)`, transformOrigin: "0% 0%", transition: "transform 1.5s cubic-bezier(0.25, 0.8, 0.25, 1)" }} />
+                  <circle cx="0" cy="0" r="7" fill="var(--accent-primary)" />
+                  <circle cx="0" cy="0" r="3.5" fill="var(--bg-card)" />
+                </g>
+                <text x="25" y="108" textAnchor="middle" fontSize="8px" fontWeight="600" fill="var(--text-muted)">0 WPM</text>
+                <text x="100" y="15" textAnchor="middle" fontSize="8px" fontWeight="600" fill="var(--text-muted)">120</text>
+                <text x="175" y="108" textAnchor="middle" fontSize="8px" fontWeight="600" fill="var(--text-muted)">240+</text>
+              </svg>
+              <div style={{ marginTop: "4px", textAlign: "center" }}>
+                <span style={{ fontSize: "0.85rem", fontWeight: "700", color: pacingColor, backgroundColor: pacingBg, padding: "2px 8px", borderRadius: "var(--radius-full)" }}>
+                  {avgWpm} WPM ({pacingCategory})
+                </span>
+              </div>
+            </div>
+
+            {/* Scorecard Detailed Grid */}
+            <div style={{ flex: 1, minWidth: "180px", display: "flex", flexDirection: "column", gap: "8px" }}>
+              <div className="fluency-metric-card" style={{ padding: "8px 12px" }}>
+                <span className="fluency-metric-title">Articulation Clarity</span>
+                <span className="fluency-metric-value">{clarityOfComm}%</span>
+                <span className="fluency-metric-desc">High phonetic structure stability.</span>
+              </div>
+              <div className="fluency-metric-card" style={{ padding: "8px 12px" }}>
+                <span className="fluency-metric-title">Pause Density</span>
+                <span className="fluency-metric-value">{averageHesitation}%</span>
+                <span className="fluency-metric-desc">{pauseDensityDesc}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ROW 2: Horizontal Filler Words Bar Chart */}
+        <div className="card" style={{ padding: "var(--space-lg)", textAlign: "left" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-md)" }}>
+            <div>
+              <h3 style={{ fontSize: "1.05rem", fontWeight: "700", margin: 0 }}>Lexical Filler Distribution</h3>
+              <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", margin: "2px 0 0 0" }}>Real-time occurrence of lexical crutch phrases.</p>
+            </div>
+            <div style={{ fontSize: "0.85rem", fontWeight: "700", color: parseFloat(fillerConcentration) > 5 ? "var(--color-warning)" : "var(--color-success)" }}>
+              Concentration Ratio: {fillerConcentration}%
+            </div>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            {Object.entries(fillerCounts).map(([word, count]) => {
+              const fillPercent = Math.min((count / maxFillerVal) * 100, 100);
+              const barColor = getFillerColor(count);
+              return (
+                <div key={word} className="filler-bar-container" style={{ margin: 0 }}>
+                  <div className="filler-bar-header">
+                    <span className="filler-bar-label">"{word}"</span>
+                    <span className="filler-bar-count">
+                      {count} {count === 1 ? "occurrence" : "occurrences"}
+                    </span>
+                  </div>
+                  <div className="filler-bar-track">
+                    <div 
+                      className="filler-bar-fill" 
+                      style={{ 
+                        width: `${fillPercent}%`, 
+                        backgroundColor: barColor 
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p style={{ margin: "10px 0 0 0", fontSize: "0.75rem", color: "var(--text-secondary)", lineHeight: "1.4" }}>
+            {parseFloat(fillerConcentration) > 5
+              ? "Tip: Try taking a deliberate 1-second pause when you feel the urge to say a filler word. Silence is more professional."
+              : "Excellent work! Your speech contains very few filler words, creating a highly polished academic impression."}
+          </p>
+        </div>
+
+      </div>
+    );
   };
 
   // Graph math
@@ -598,8 +835,33 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
           {/* RIGHT PANEL: Emotion Timelines, Professor Mode Replay, Recommends */}
           <div className="feedback-right-panel" style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
             
+            {/* TOGGLE TABS */}
+            <div className="no-print" style={{ display: "flex", gap: "8px", borderBottom: "1px solid var(--border-color)", paddingBottom: "12px", marginBottom: "4px" }}>
+              <button 
+                className={`btn ${activeRightTab === "timeline" ? "btn-primary" : "btn-secondary"}`} 
+                onClick={() => setActiveRightTab("timeline")}
+                style={{ padding: "8px 16px", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "6px", flex: 1, border: "1px solid var(--border-color)" }}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ width: "15px", height: "15px" }}>
+                  <path d="M3 3v18h18M18.7 8l-5.1 5.2-2.8-2.7L7 14.3" />
+                </svg>
+                Emotion Timeline
+              </button>
+              <button 
+                className={`btn ${activeRightTab === "fluency" ? "btn-primary" : "btn-secondary"}`} 
+                onClick={() => setActiveRightTab("fluency")}
+                style={{ padding: "8px 16px", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "6px", flex: 1, border: "1px solid var(--border-color)" }}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ width: "15px", height: "15px" }}>
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M12 6v6l4 2"/>
+                </svg>
+                Speech & Fluency
+              </button>
+            </div>
+
             {/* TIMELINE PROGRESSION CHART */}
-            <div className="card timeline-card" style={{ padding: "var(--space-lg)", textAlign: "left" }}>
+            <div className={`card timeline-card ${activeRightTab !== "timeline" ? "screen-hidden" : ""}`} style={{ padding: "var(--space-lg)", textAlign: "left" }}>
               <h3 style={{ fontSize: "1.05rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-xs)", marginBottom: "0" }}>
                 Emotion Timeline
               </h3>
@@ -639,6 +901,11 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                   {getTimelineCommentary(activeTimelineIndex)}
                 </p>
               </div>
+            </div>
+
+            {/* SPEECH & FLUENCY DIAGNOSTICS */}
+            <div className={activeRightTab !== "fluency" ? "screen-hidden" : ""}>
+              {renderFluencyDiagnostics()}
             </div>
 
             {/* PROFESSOR MODE REPLAY */}

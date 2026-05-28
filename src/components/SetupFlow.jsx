@@ -5,6 +5,7 @@ import { EXAMINER_PERSONALITIES } from "@/utils/mockData";
 import { PDFExtractionService } from "@/services/PDFExtractionService";
 import { SyllabusParserService } from "@/services/SyllabusParserService";
 import { VoiceManager } from "@/services/voiceManager";
+import ExaminerAvatar from "@/components/ExaminerAvatar";
 
 export default function SetupFlow({ onCancel, onBeginViva }) {
   const [currentStep, setCurrentStep] = useState(1);
@@ -35,6 +36,11 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
   // Hackathon differentiator toggles
   const [isLastMinute, setIsLastMinute] = useState(false);
   const [isMockExternal, setIsMockExternal] = useState(false);
+
+  // Target Drill & Mind Map States
+  const [selectedSubtopic, setSelectedSubtopic] = useState(null);
+  const [previewMode, setPreviewMode] = useState("map"); // "map" | "list"
+  const [hoveredSubtopic, setHoveredSubtopic] = useState(null);
 
   // Load PDF.js CDN library on mount so it's ready
   useEffect(() => {
@@ -99,12 +105,23 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
           return;
         }
         
-        // Parse syllabus text into structured units
-        const parsedTree = SyllabusParserService.parseSyllabus(
-          syllabusText || "Standard Syllabus context loaded.",
-          "Custom Syllabus Practice"
-        );
-        setSyllabusStructure(parsedTree);
+        // Expand the custom syllabus text into a structured tree using Gemini!
+        setIsExpandingTopic(true);
+        try {
+          const parsedTree = await SyllabusParserService.parseSyllabusRemote(
+            syllabusText.trim()
+          );
+          setSyllabusStructure(parsedTree);
+        } catch (e) {
+          console.warn("Syllabus remote parsing error, falling back to local heuristic:", e);
+          const parsedTree = SyllabusParserService.parseSyllabus(
+            syllabusText || "Standard Syllabus context loaded.",
+            "Custom Syllabus Practice"
+          );
+          setSyllabusStructure(parsedTree);
+        } finally {
+          setIsExpandingTopic(false);
+        }
       }
     }
     setCurrentStep(nextStep);
@@ -187,8 +204,94 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
       duration: isLastMinute ? 5 : getActiveDuration(),
       personality: isMockExternal ? "terror" : personality, // Force high stress terror examiner if mock external is on!
       isLastMinute,
-      isMockExternal
+      isMockExternal,
+      isTargetDrill: !!selectedSubtopic,
+      targetSubtopic: selectedSubtopic ? selectedSubtopic.name : null
     });
+  };
+
+  const getMindMapNodes = () => {
+    if (!syllabusStructure) return { nodes: [], links: [] };
+
+    const nodes = [];
+    const links = [];
+
+    // 1. Subject Node
+    const subjectX = 75;
+    const subjectY = 170;
+    nodes.push({
+      id: "subject",
+      type: "subject",
+      name: syllabusStructure.topic,
+      x: subjectX,
+      y: subjectY
+    });
+
+    const totalUnits = syllabusStructure.units.length; // usually 3
+    syllabusStructure.units.forEach((u, uIdx) => {
+      // 2. Unit Node
+      const unitX = 250;
+      const unitY = totalUnits === 3 
+        ? [65, 170, 275][uIdx] 
+        : (uIdx + 1) * (340 / (totalUnits + 1));
+        
+      const unitId = `unit_${uIdx}`;
+      
+      nodes.push({
+        id: unitId,
+        type: "unit",
+        name: u.name,
+        x: unitX,
+        y: unitY,
+        unitIndex: uIdx
+      });
+
+      links.push({
+        source: "subject",
+        target: unitId,
+        x1: subjectX + 68, // offset from center node edge
+        y1: subjectY,
+        x2: unitX - 70,
+        y2: unitY
+      });
+
+      // 3. Subtopics
+      const totalTopics = u.topics.length;
+      u.topics.forEach((t, tIdx) => {
+        const topicX = 470;
+        
+        // Spacing calculations
+        let topicY = unitY;
+        if (totalTopics > 0) {
+          const delta = 35; // vertical gap between topics
+          const startY = unitY - ((totalTopics - 1) * delta) / 2;
+          topicY = startY + tIdx * delta;
+        }
+
+        const topicId = `topic_${uIdx}_${tIdx}`;
+        
+        nodes.push({
+          id: topicId,
+          type: "subtopic",
+          name: t,
+          x: topicX,
+          y: topicY,
+          unitIndex: uIdx,
+          topicIndex: tIdx
+        });
+
+        links.push({
+          source: unitId,
+          target: topicId,
+          x1: unitX + 70,
+          y1: unitY,
+          x2: topicX - 75,
+          y2: topicY
+        });
+      });
+    });
+
+    return { nodes, links };
   };
 
   return (
@@ -503,10 +606,33 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                 backgroundColor: "var(--bg-primary)",
                 textAlign: "left",
                 display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center"
+                gap: "var(--space-md)",
+                alignItems: "center",
+                flexDirection: "row",
+                width: "100%"
               }}>
-                <div style={{ flex: 1, marginRight: "var(--space-md)" }}>
+                {/* Visual Avatar Frame */}
+                <div style={{
+                  width: "64px",
+                  height: "64px",
+                  borderRadius: "var(--radius-full)",
+                  overflow: "hidden",
+                  flexShrink: 0,
+                  boxShadow: "var(--shadow-sm)",
+                  border: "1px solid var(--border-color)",
+                  backgroundColor: "var(--bg-card)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}>
+                  <ExaminerAvatar 
+                    personality={personality} 
+                    vivaState={isPlayingSample ? "speaking" : "default"} 
+                  />
+                </div>
+
+                {/* Profile text */}
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <span style={{ fontSize: "0.75rem", fontWeight: "600", textTransform: "uppercase", color: "var(--text-secondary)", letterSpacing: "0.05em" }}>
                     Active Examiner Profile
                   </span>
@@ -516,13 +642,15 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                      personality === "brutal" ? "Dr. Adam Vance" :
                      "Professor Harry Thorne"}
                   </h4>
-                  <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+                  <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary)", lineHeight: 1.4 }}>
                     {personality === "friendly" ? "A highly supportive educator known for conceptual guiding, patient pauses, and constructive evaluations." :
                      personality === "strict" ? "An exacting formal academic focusing on flawless precision, mathematical derivations, and technical accuracy." :
                      personality === "brutal" ? "An external industry reviewer focused on skepticism, pressure loading, and testing boundaries." :
                      "A legendary exam terror designed to simulate high-stress viva environments with sudden logical challenges."}
                   </p>
                 </div>
+
+                {/* Sample voice button */}
                 <button 
                   type="button"
                   className="btn btn-secondary" 
@@ -535,7 +663,8 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                     alignItems: "center",
                     gap: "6px",
                     cursor: "pointer",
-                    whiteSpace: "nowrap"
+                    whiteSpace: "nowrap",
+                    flexShrink: 0
                   }}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -568,61 +697,284 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
               <p>Verify the structured course syllabus mapped dynamically by the intelligence engine.</p>
             </div>
 
-            <div className="card preview-summary-card">
-              <div style={{ textAlign: "left" }}>
-                <h3 style={{ fontSize: "1.4rem", color: "var(--accent-primary)", marginBottom: "2px" }}>
-                  {syllabusStructure ? syllabusStructure.topic : "Custom Examination"} Mapped Outline
-                </h3>
-                <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
-                  Syllabus Units extracted successfully:
-                </p>
+            <div className="card preview-summary-card" style={{ padding: "var(--space-md) var(--space-lg)" }}>
+              {/* Header inside Preview */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", paddingBottom: "12px", marginBottom: "16px" }}>
+                <div style={{ textAlign: "left" }}>
+                  <h3 style={{ fontSize: "1.25rem", color: "var(--accent-primary)", margin: 0, fontWeight: "700" }}>
+                    {syllabusStructure ? syllabusStructure.topic : "Custom Examination"} Mapped Outline
+                  </h3>
+                  <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", margin: "2px 0 0 0" }}>
+                    Select a subtopic leaf node to launch a highly focused Custom Target Drill.
+                  </p>
+                </div>
+                
+                {/* View Toggles */}
+                <div className="no-print" style={{ display: "flex", gap: "6px", backgroundColor: "var(--bg-primary)", padding: "4px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-color)" }}>
+                  <button 
+                    type="button"
+                    className={`btn ${previewMode === "map" ? "btn-primary" : "btn-secondary"}`}
+                    onClick={() => setPreviewMode("map")}
+                    style={{ padding: "6px 12px", fontSize: "0.75rem", borderRadius: "var(--radius-xs)" }}
+                  >
+                    Mind Map
+                  </button>
+                  <button 
+                    type="button"
+                    className={`btn ${previewMode === "list" ? "btn-primary" : "btn-secondary"}`}
+                    onClick={() => setPreviewMode("list")}
+                    style={{ padding: "6px 12px", fontSize: "0.75rem", borderRadius: "var(--radius-xs)" }}
+                  >
+                    Outline List
+                  </button>
+                </div>
               </div>
 
-              {/* Dynamic Units Accordion view */}
-              <div className="preview-grid" style={{ gridTemplateColumns: "1fr", gap: "var(--space-md)", textAlign: "left", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-md)" }}>
-                {syllabusStructure && syllabusStructure.units.map((u, idx) => (
-                  <div key={idx} style={{ padding: "var(--space-sm) var(--space-md)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                    <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{u.name}</strong>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "6px" }}>
-                      {u.topics.map((t, tid) => (
-                        <span key={tid} style={{ fontSize: "0.75rem", padding: "2px 8px", backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-full)" }}>{t}</span>
-                      ))}
+              {previewMode === "map" ? (
+                /* INTERACTIVE MIND MAP SVG */
+                <div className="mindmap-container-canvas" style={{ position: "relative", overflowX: "auto", border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", backgroundColor: "var(--bg-primary)", padding: "10px 0" }}>
+                  <svg width="640" height="340" viewBox="0 0 640 340" style={{ display: "block", margin: "0 auto" }}>
+                    {/* SVG Filters for glowing drop-shadows */}
+                    <defs>
+                      <filter id="gold-glow" x="-20%" y="-20%" width="140%" height="140%">
+                        <feGaussianBlur stdDeviation="5" result="blur" />
+                        <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                      </filter>
+                    </defs>
+                    
+                    {/* CONNECTOR PATHS */}
+                    {getMindMapNodes().links.map((link, idx) => {
+                      const isHoveredOrSelected = 
+                        (hoveredSubtopic && (link.target === hoveredSubtopic || link.source === hoveredSubtopic)) ||
+                        (selectedSubtopic && (link.target === `topic_${selectedSubtopic.unitIndex}_${selectedSubtopic.topicIndex}` || link.source === `topic_${selectedSubtopic.unitIndex}_${selectedSubtopic.topicIndex}`));
+                      
+                      return (
+                        <path
+                          key={`link_${idx}`}
+                          d={`M ${link.x1} ${link.y1} C ${(link.x1 + link.x2) / 2} ${link.y1}, ${(link.x1 + link.x2) / 2} ${link.y2}, ${link.x2} ${link.y2}`}
+                          fill="none"
+                          stroke={isHoveredOrSelected ? "var(--color-warning)" : "var(--border-color)"}
+                          strokeWidth={isHoveredOrSelected ? "2.5" : "1.25"}
+                          strokeDasharray={isHoveredOrSelected ? "none" : "3,3"}
+                          style={{ transition: "stroke 0.25s, stroke-width 0.25s" }}
+                        />
+                      );
+                    })}
+
+                    {/* NODE PILLS */}
+                    {getMindMapNodes().nodes.map((node) => {
+                      const isSelected = selectedSubtopic && node.type === "subtopic" && selectedSubtopic.unitIndex === node.unitIndex && selectedSubtopic.topicIndex === node.topicIndex;
+                      
+                      let width = 140;
+                      let height = 46;
+                      if (node.type === "subject") {
+                        width = 135;
+                        height = 54;
+                      } else if (node.type === "subtopic") {
+                        width = 150;
+                        height = 32;
+                      }
+
+                      return (
+                        <foreignObject
+                          key={node.id}
+                          x={node.x - width / 2}
+                          y={node.y - height / 2}
+                          width={width}
+                          height={height}
+                        >
+                          <div
+                            onClick={() => {
+                              if (node.type === "subtopic") {
+                                if (isSelected) {
+                                  setSelectedSubtopic(null);
+                                } else {
+                                  setSelectedSubtopic({
+                                    unitIndex: node.unitIndex,
+                                    topicIndex: node.topicIndex,
+                                    name: node.name
+                                  });
+                                }
+                              }
+                            }}
+                            onMouseEnter={() => {
+                              if (node.type === "subtopic") {
+                                setHoveredSubtopic(node.id);
+                              }
+                            }}
+                            onMouseLeave={() => {
+                              setHoveredSubtopic(null);
+                            }}
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              textAlign: "center",
+                              padding: "4px 8px",
+                              fontSize: node.type === "subject" ? "0.775rem" : "0.725rem",
+                              fontWeight: node.type === "subject" ? "800" : "600",
+                              lineHeight: "1.2",
+                              borderRadius: "var(--radius-sm)",
+                              cursor: node.type === "subtopic" ? "pointer" : "default",
+                              transition: "var(--transition-smooth)",
+                              
+                              // Backgrounds & borders
+                              backgroundColor: node.type === "subject" 
+                                ? "var(--accent-primary)" 
+                                : node.type === "unit" 
+                                  ? "var(--bg-card)" 
+                                  : isSelected 
+                                    ? "var(--color-warning-bg)" 
+                                    : "var(--bg-card)",
+                              color: node.type === "subject" 
+                                ? "white" 
+                                : node.type === "unit" 
+                                  ? "var(--accent-primary)" 
+                                  : isSelected 
+                                    ? "var(--color-warning)" 
+                                    : "var(--text-primary)",
+                              border: node.type === "subject"
+                                ? "1px solid var(--accent-primary)"
+                                : node.type === "unit"
+                                  ? "1.5px solid var(--accent-primary)"
+                                  : isSelected
+                                    ? "2px solid var(--color-warning)"
+                                    : "1px solid var(--border-color)",
+                              boxShadow: isSelected
+                                ? "0 0 10px rgba(161, 107, 21, 0.35)"
+                                : "var(--shadow-subtle)",
+                              userSelect: "none"
+                            }}
+                            className={node.type === "subtopic" ? "mindmap-interactive-subtopic" : ""}
+                          >
+                            {node.type === "unit" ? (
+                              <div style={{ fontSize: "0.68rem" }}>
+                                <strong>Unit #{node.unitIndex + 1}</strong>
+                                <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "120px" }}>{node.name.replace(/^unit\s*\d+\s*:\s*/i, "")}</div>
+                              </div>
+                            ) : (
+                              node.name
+                            )}
+                          </div>
+                        </foreignObject>
+                      );
+                    })}
+                  </svg>
+                </div>
+              ) : (
+                /* ACCORDION OUTLINE LIST FALLBACK */
+                <div className="preview-grid" style={{ gridTemplateColumns: "1fr", gap: "var(--space-md)", textAlign: "left", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-md)" }}>
+                  {syllabusStructure && syllabusStructure.units.map((u, idx) => (
+                    <div key={idx} style={{ padding: "var(--space-sm) var(--space-md)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
+                      <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{u.name}</strong>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "6px" }}>
+                        {u.topics.map((t, tid) => {
+                          const isSel = selectedSubtopic && selectedSubtopic.unitIndex === idx && selectedSubtopic.topicIndex === tid;
+                          return (
+                            <span 
+                              key={tid} 
+                              onClick={() => {
+                                if (isSel) setSelectedSubtopic(null);
+                                else setSelectedSubtopic({ unitIndex: idx, topicIndex: tid, name: t });
+                              }}
+                              style={{ 
+                                fontSize: "0.75rem", 
+                                padding: "4px 10px", 
+                                backgroundColor: isSel ? "var(--color-warning-bg)" : "var(--bg-card)", 
+                                border: isSel ? "2.5px solid var(--color-warning)" : "1px solid var(--border-color)", 
+                                color: isSel ? "var(--color-warning)" : "var(--text-primary)",
+                                borderRadius: "var(--radius-full)",
+                                cursor: "pointer",
+                                transition: "var(--transition-smooth)",
+                                fontWeight: isSel ? "700" : "500"
+                              }}
+                            >
+                              {t}
+                            </span>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              )}
+
+              {/* TARGET DRILL NOTIFICATION AND DETAILS */}
+              <div style={{ marginTop: "12px", padding: "10px 14px", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)", border: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ textAlign: "left" }}>
+                  {selectedSubtopic ? (
+                    <>
+                      <div style={{ fontSize: "0.85rem", fontWeight: "700", color: "var(--color-warning)", display: "flex", alignItems: "center", gap: "4px" }}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ width: "16px", height: "16px" }}>
+                          <circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24M14.83 9.17l4.24-4.24M14.83 14.83l4.24 4.24M9.17 14.83l-4.24 4.24"/>
+                        </svg>
+                        Focus Target Drill Engaged
+                      </div>
+                      <p style={{ margin: "2px 0 0 0", fontSize: "0.775rem", color: "var(--text-secondary)" }}>
+                        Practice session will center strictly on <strong>"{selectedSubtopic.name}"</strong> (Unit #{selectedSubtopic.unitIndex + 1}).
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ fontSize: "0.85rem", fontWeight: "700", color: "var(--color-success)", display: "flex", alignItems: "center", gap: "4px" }}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ width: "16px", height: "16px" }}>
+                          <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>
+                        </svg>
+                        Comprehensive Oral Mode
+                      </div>
+                      <p style={{ margin: "2px 0 0 0", fontSize: "0.775rem", color: "var(--text-secondary)" }}>
+                        Questions will cover all topics mapped throughout the curriculum syllabus.
+                      </p>
+                    </>
+                  )}
+                </div>
+                {selectedSubtopic && (
+                  <button 
+                    type="button" 
+                    className="btn-text" 
+                    onClick={() => setSelectedSubtopic(null)}
+                    style={{ fontSize: "0.75rem", color: "var(--color-error)", cursor: "pointer", border: "none", background: "none", fontWeight: "600" }}
+                  >
+                    Clear Focus
+                  </button>
+                )}
               </div>
 
-              <div className="preview-grid" style={{ marginTop: "var(--space-xs)" }}>
-                <div className="preview-item">
-                  <span className="preview-label">Examiner Persona</span>
-                  <div className="preview-personality-details">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: "20px", height: "20px", color: "var(--accent-primary)" }} dangerouslySetInnerHTML={{ __html: EXAMINER_PERSONALITIES[personality].icon }} />
-                    <span className="preview-value">{EXAMINER_PERSONALITIES[personality].name}</span>
+              {/* STATS PREVIEW GRID */}
+              <div className="preview-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "10px", marginTop: "12px", borderTop: "1px solid var(--border-color)", paddingTop: "12px" }}>
+                <div className="preview-item" style={{ padding: "6px" }}>
+                  <span className="preview-label">Examiner</span>
+                  <div className="preview-personality-details" style={{ justifyContent: "center", gap: "4px" }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: "14px", height: "14px" }} dangerouslySetInnerHTML={{ __html: EXAMINER_PERSONALITIES[personality].icon }} />
+                    <span className="preview-value" style={{ fontSize: "0.8rem" }}>{EXAMINER_PERSONALITIES[personality].name}</span>
                   </div>
                 </div>
 
-                <div className="preview-item">
-                  <span className="preview-label">Session Duration</span>
-                  <span className="preview-value">{getActiveDuration()} Minutes</span>
+                <div className="preview-item" style={{ padding: "6px" }}>
+                  <span className="preview-label">Duration</span>
+                  <span className="preview-value" style={{ fontSize: "0.8rem" }}>{selectedSubtopic ? "5 Mins (Speed)" : `${getActiveDuration()} Mins`}</span>
                 </div>
 
-                <div className="preview-item">
-                  <span className="preview-label">Exam Questions</span>
-                  <span className="preview-value">4 Branching Stages</span>
+                <div className="preview-item" style={{ padding: "6px" }}>
+                  <span className="preview-label">Scope</span>
+                  <span className="preview-value" style={{ fontSize: "0.8rem" }}>{selectedSubtopic ? "1 Concept" : "3 Units"}</span>
                 </div>
 
-                <div className="preview-item">
-                  <span className="preview-label">Anti-Hallucination</span>
-                  <span className="preview-value" style={{ color: "var(--color-success)" }}>100% Enforced</span>
+                <div className="preview-item" style={{ padding: "6px" }}>
+                  <span className="preview-label">Pedagogical Guard</span>
+                  <span className="preview-value" style={{ fontSize: "0.8rem", color: "var(--color-success)" }}>Active</span>
                 </div>
               </div>
 
               <button 
+                type="button"
                 className="btn btn-primary" 
                 onClick={handleStartExam}
-                style={{ width: "100%", padding: "var(--space-md)", fontSize: "1.1rem", marginTop: "var(--space-md)" }}
+                style={{ width: "100%", padding: "12px", fontSize: "1.05rem", marginTop: "16px", background: selectedSubtopic ? "linear-gradient(135deg, var(--color-warning), hsl(38, 85%, 35%))" : "var(--accent-primary)" }}
               >
-                Begin Viva
+                {selectedSubtopic ? `Begin Target Drill: ${selectedSubtopic.name}` : "Begin Mapped Viva"}
               </button>
             </div>
 

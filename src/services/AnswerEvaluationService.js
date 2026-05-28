@@ -48,6 +48,8 @@ export const AnswerEvaluationService = {
         clarity: finalClarity,
         nervousness: delivery.nervousness,
         hesitation: delivery.hesitation,
+        wpm: delivery.wpm || 120,
+        fillerCount: delivery.fillerCount || 0,
         
         // Gemini grading outputs
         correctness: semanticGrading.correctness,
@@ -108,7 +110,9 @@ export const AnswerEvaluationService = {
       confidence: confidenceScore,
       clarity: clarityScore,
       nervousness: nervousnessScore,
-      hesitation: hesitationScore
+      hesitation: hesitationScore,
+      wpm: wpm,
+      fillerCount: fillerCount
     };
   },
 
@@ -127,6 +131,8 @@ export const AnswerEvaluationService = {
       clarity: delivery.clarity,
       nervousness: delivery.nervousness,
       hesitation: delivery.hesitation,
+      wpm: delivery.wpm || 120,
+      fillerCount: delivery.fillerCount || 0,
       correctness: isShort ? 55 : 82,
       accuracy: isShort ? 50 : 80,
       completeness: isShort ? 45 : 78,

@@ -12,7 +12,7 @@ export const QuestionGraphEngine = {
    * @returns {Promise<object>} The next question node { text, speech, topic, difficulty }
    */
   async generateNextQuestion(params) {
-    const { syllabus, personality, duration, askedList, answersList, lastEvaluationTag, currentTopic, nervousness } = params;
+    const { syllabus, personality, duration, askedList, answersList, lastEvaluationTag, currentTopic, nervousness, isTargetDrill, targetSubtopic } = params;
 
     try {
       const response = await fetch("/api/viva", {
@@ -27,7 +27,9 @@ export const QuestionGraphEngine = {
           history: answersList,
           lastTag: lastEvaluationTag,
           activeTopic: currentTopic,
-          nervousness: nervousness || 0
+          nervousness: nervousness || 0,
+          isTargetDrill,
+          targetSubtopic
         })
       });
 

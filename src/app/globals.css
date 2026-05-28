@@ -2697,3 +2697,335 @@ p {
     padding: 32px 24px;
   }
 }
+
+/* ==========================================
+   🎭 PREMIUM DYNAMIC EXAMINER AVATAR ANIMATIONS
+   ========================================== */
+.examiner-avatar {
+  width: 100%;
+  height: 100%;
+  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Base animations */
+.avatar-eye {
+  animation: avatarBlink 4s infinite ease-in-out;
+  transform-origin: center;
+}
+
+.avatar-eye-l {
+  animation-delay: 0.2s;
+}
+
+.avatar-eye-r {
+  animation-delay: 0.25s;
+}
+
+/* Mouth talking animation when examiner is actively speaking */
+.examiner-avatar.mood-speaking .avatar-mouth {
+  animation: avatarTalk 0.18s infinite alternate ease-in-out;
+  transform-origin: 50px 65px;
+}
+
+/* Nodding approvingly (e.g. eval-pleased) */
+.examiner-avatar.mood-pleased.mood-nod {
+  animation: avatarNod 1.2s ease-in-out;
+  transform-origin: bottom center;
+}
+
+/* Shaking head sternly (e.g. eval-stern / bluffing) */
+.examiner-avatar.mood-stern.mood-shake {
+  animation: avatarShake 1.2s ease-in-out;
+  transform-origin: bottom center;
+}
+
+/* Gentle floating-thinking idle animation */
+.examiner-avatar.mood-thinking {
+  animation: avatarFloatThink 2.5s infinite ease-in-out;
+  transform-origin: center;
+}
+
+/* Eye blink animation keyframes */
+@keyframes avatarBlink {
+  0%, 95%, 100% {
+    transform: scaleY(1);
+  }
+  97.5% {
+    transform: scaleY(0.05);
+  }
+}
+
+/* Voice lipsync talking keyframes */
+@keyframes avatarTalk {
+  0% {
+    transform: scaleY(0.7) scaleX(0.96) translate3d(0, 1px, 0);
+  }
+  100% {
+    transform: scaleY(1.4) scaleX(1.04) translate3d(0, -1px, 0);
+  }
+}
+
+/* Stern academic approval nod keyframes */
+@keyframes avatarNod {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  25% {
+    transform: translate3d(0, 5px, 0) rotate(0.8deg);
+  }
+  50% {
+    transform: translate3d(0, -1.5px, 0) rotate(-0.4deg);
+  }
+  75% {
+    transform: translate3d(0, 3px, 0) rotate(0.4deg);
+  }
+}
+
+/* Intimidating disappointment headshake keyframes */
+@keyframes avatarShake {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  20%, 60% {
+    transform: translate3d(-4px, 0, 0) rotate(-1.5deg);
+  }
+  40%, 80% {
+    transform: translate3d(4px, 0, 0) rotate(1.5deg);
+  }
+}
+
+/* Floating academic contemplation keyframes */
+@keyframes avatarFloatThink {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1) rotate(0deg);
+  }
+  50% {
+    transform: translate3d(0, -2.5px, 0) scale(0.98) rotate(0.5deg);
+  }
+}
+
+/* Reduced Motion Mode overrides */
+.examiner-avatar.reduced-motion,
+.examiner-avatar.reduced-motion * {
+  animation: none !important;
+  transition: none !important;
+  transform: none !important;
+}
+
+/* ==========================================
+   ADVANCED SPEECH & FLUENCY DIAGNOSTICS
+   ========================================== */
+.speedometer-svg {
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.03));
+}
+
+.filler-bar-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-sm);
+  text-align: left;
+}
+
+.filler-bar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.filler-bar-label {
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: capitalize;
+}
+
+.filler-bar-count {
+  font-size: 0.775rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.filler-bar-track {
+  height: 8px;
+  background-color: var(--bg-primary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  position: relative;
+}
+
+.filler-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 1s cubic-bezier(0.25, 0.8, 0.25, 1);
+  position: relative;
+}
+
+/* Shine transition overlay on bars */
+.filler-bar-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.25) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: barShine 3s infinite linear;
+}
+
+@keyframes barShine {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Fluency Scorecard Grid */
+.fluency-scorecard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+  margin-top: var(--space-md);
+}
+
+.fluency-metric-card {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  background-color: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  transition: var(--transition-smooth);
+}
+
+.fluency-metric-card:hover {
+  border-color: var(--border-focus);
+  background-color: var(--bg-card);
+  transform: translateY(-2px);
+}
+
+.fluency-metric-title {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.fluency-metric-value {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+}
+
+.fluency-metric-desc {
+  font-size: 0.725rem;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+/* Letter Grade Display */
+.letter-grade-circle {
+  width: 50px;
+  height: 50px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 1.5rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--accent-primary), hsl(215, 35%, 26%));
+  color: white;
+  box-shadow: 0 4px 10px rgba(31, 42, 56, 0.15);
+  margin-left: auto;
+}
+
+/* Print mode visible sheets overlay */
+@media screen {
+  .screen-hidden {
+    display: none !important;
+  }
+}
+
+@media print {
+  .screen-hidden {
+    display: block !important;
+    margin-top: var(--space-lg) !important;
+    page-break-before: always !important;
+  }
+}
+
+/* ==========================================
+   INTERACTIVE MIND MAP & FOCUS DRILL SYSTEM
+   ========================================== */
+.mindmap-container-canvas {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) transparent;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.03);
+  transition: var(--transition-smooth);
+}
+
+.mindmap-container-canvas::-webkit-scrollbar {
+  height: 4px;
+}
+
+.mindmap-interactive-subtopic {
+  position: relative;
+  overflow: hidden;
+  will-change: transform, box-shadow;
+}
+
+/* Pulsing effect for selected focus drill subtopics */
+.mindmap-interactive-subtopic[style*="rgba(161, 107, 21"],
+.mindmap-interactive-subtopic[style*="var(--color-warning)"] {
+  animation: goldPulse 2s infinite ease-in-out;
+}
+
+@keyframes goldPulse {
+  0% {
+    box-shadow: 0 0 6px rgba(161, 107, 21, 0.2), inset 0 0 0 0.5px rgba(161, 107, 21, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 14px rgba(161, 107, 21, 0.55), inset 0 0 0 1px rgba(161, 107, 21, 0.2);
+    transform: translateY(-1px) scale(1.02);
+  }
+  100% {
+    box-shadow: 0 0 6px rgba(161, 107, 21, 0.2), inset 0 0 0 0.5px rgba(161, 107, 21, 0.1);
+  }
+}
+
+/* Micro-animations and hover transitions for subtopics */
+.mindmap-interactive-subtopic:hover {
+  transform: translateY(-2px) scale(1.035) !important;
+  box-shadow: 0 6px 16px rgba(27, 28, 30, 0.06), 0 2px 4px rgba(27, 28, 30, 0.02) !important;
+  background-color: var(--accent-light) !important;
+  color: var(--accent-primary) !important;
+  border-color: var(--border-focus) !important;
+}
+
+/* Glowing connections anim */
+svg path[stroke="var(--color-warning)"] {
+  animation: marchingAnts 25s linear infinite;
+  stroke-dasharray: 6,3;
+}
+
+@keyframes marchingAnts {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -360;
+  }
+}
+

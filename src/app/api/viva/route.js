@@ -46,6 +46,8 @@ export async function POST(req) {
     switch(action) {
       case "expand-topic":
         return await handleExpandTopic(payload.topic, apiKey);
+      case "parse-syllabus":
+        return await handleParseSyllabus(payload.text, apiKey);
       case "generate-question":
         return await handleGenerateQuestion(payload, apiKey);
       case "evaluate-answer":
@@ -82,10 +84,33 @@ async function handleExpandTopic(topic, apiKey) {
 }
 
 // ==========================================
+// 1.5. PARSE CUSTOM SYLLABUS TEXT WITH GEMINI
+// ==========================================
+async function handleParseSyllabus(rawText, apiKey) {
+  const prompt = `Act as an academic curriculum specialist. Analyze the following raw course syllabus, lecture notes, or subject outlines, and extract a structured course topic and exactly 3 logical Units. Each Unit must have a clean name (e.g. "Unit 1: Process Scheduling"), and exactly 3 or 4 precise, highly concise technical subtopics directly mentioned or relevant to that unit's scope in the text.
+  
+  Raw Syllabus Text:
+  """
+  ${rawText.substring(0, 6000)}
+  """
+  
+  Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown blocks:
+  {
+    "topic": "Overall Subject Name (e.g. Operating Systems)",
+    "units": [
+      { "name": "Unit name", "topics": ["subtopic 1", "subtopic 2", "subtopic 3"] }
+    ]
+  }`;
+
+  const responseJson = await callGeminiAPI(prompt, apiKey);
+  return NextResponse.json(responseJson);
+}
+
+// ==========================================
 // 2. GENERATE QUESTION & REMARKS (ADAPTIVE BRANCHING)
 // ==========================================
 async function handleGenerateQuestion(payload, apiKey) {
-  const { syllabus, personality, duration, asked, history, lastTag, activeTopic, nervousness } = payload;
+  const { syllabus, personality, duration, asked, history, lastTag, activeTopic, nervousness, isTargetDrill, targetSubtopic } = payload;
   
   // Format history for the prompt
   const conversationContext = history && history.length > 0
@@ -110,7 +135,7 @@ async function handleGenerateQuestion(payload, apiKey) {
       }
       break;
     case "brutal":
-      personaPrompt = "Brutal External Examiner: High pressure, skeptical. You question their claims and challenge their confidence. If they answered strongly, ask a tricky conceptual twist (e.g. 'Are you sure? What if we change...'). If weak, point out their error sharply.";
+      personaPrompt = "Brutal Examiner: High pressure, skeptical. You question their claims and challenge their confidence. If they answered strongly, ask a tricky conceptual twist (e.g. 'Are you sure? What if we change...'). If weak, point out their error sharply.";
       if (studentNervousness > 70) {
         personaPrompt += " Note: The student is highly nervous. Become even more probing and challenge them further to see if they break under academic pressure.";
       }
@@ -123,7 +148,18 @@ async function handleGenerateQuestion(payload, apiKey) {
       break;
   }
 
+  let targetDrillPrompt = "";
+  if (isTargetDrill && targetSubtopic) {
+    targetDrillPrompt = `
+  
+  🎯 TARGET DRILL ENFORCED FOCUS:
+  - This is a highly focused Custom Target Drill centering strictly on the subtopic concept: "${targetSubtopic}".
+  - You MUST formulate this question and all subsequent questions in this exam strictly centered on the concept, equations, physical trade-offs, boundaries, or real-world failures of "${targetSubtopic}".
+  - DO NOT ask questions about other unrelated units or subtopics. Maintain 100% conceptual concentration on "${targetSubtopic}".`;
+  }
+
   const prompt = `Act as a college professor conducting a dynamic oral examination (viva).
+  ${targetDrillPrompt}
   
   Examiner Personality: ${personaPrompt}
   Syllabus Focus Context: ${JSON.stringify(syllabus)}
@@ -330,7 +366,7 @@ function handleOfflineFallback(payload) {
   }
   
   if (action === "generate-question") {
-    const { syllabus, personality, asked, history, lastTag } = payload;
+    const { syllabus, personality, asked, history, lastTag, isTargetDrill, targetSubtopic } = payload;
     
     // Extract all topics from the syllabus structure
     let allTopics = [];
@@ -362,7 +398,7 @@ function handleOfflineFallback(payload) {
       ? unasked[Math.floor(Math.random() * unasked.length)]
       : allTopics[Math.floor(Math.random() * allTopics.length)];
     
-    const activeSubtopic = selected.topicName;
+    const activeSubtopic = (isTargetDrill && targetSubtopic) ? targetSubtopic : selected.topicName;
 
     // Compile dynamic question templates based on personality
     const questionTemplates = {

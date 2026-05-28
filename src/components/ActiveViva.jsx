@@ -7,6 +7,7 @@ import { EXAMINER_PERSONALITIES } from "@/utils/mockData";
 import { QuestionGraphEngine } from "@/services/QuestionGraphEngine";
 import { AnswerEvaluationService } from "@/services/AnswerEvaluationService";
 import { SessionContextManager } from "@/services/SessionContextManager";
+import ExaminerAvatar from "@/components/ExaminerAvatar";
 
 export default function ActiveViva({ config, activeUser, onFinishViva }) {
   // State machine variables
@@ -22,6 +23,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
   const [activeQuestion, setActiveQuestion] = useState(null);
   const [transcriptText, setTranscriptText] = useState("Waiting to transcribe your response...");
   const [isPlaceholder, setIsPlaceholder] = useState(true);
+  const [lastEvalRecord, setLastEvalRecord] = useState(null);
 
   // Fallback and Input values
   const [fallbackMode, setFallbackMode] = useState(false);
@@ -278,19 +280,30 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         answersList: [],
         lastEvaluationTag: null,
         currentTopic: "",
-        nervousness: 20
+        nervousness: 20,
+        isTargetDrill: config.isTargetDrill || false,
+        targetSubtopic: config.targetSubtopic || null
       });
       
       setActiveQuestion(firstQuestion);
       
       // Dynamic intro speech: combine dynamic introductory greetings based on personality and user name
-      let greeting = `Good evening, ${activeUser}. Welcome to your oral examination on ${config.topic}. `;
+      let greeting = config.isTargetDrill 
+        ? `Good evening, ${activeUser}. Welcome to your dynamic target drill on ${config.targetSubtopic}. `
+        : `Good evening, ${activeUser}. Welcome to your oral examination on ${config.topic}. `;
+        
       if (config.personality === "terror") {
-        greeting = `Sit down, ${activeUser}. Let us begin the examination on ${config.topic}. I expect absolute precision. `;
+        greeting = config.isTargetDrill 
+          ? `Sit down, ${activeUser}. We will begin your high-pressure board drill on ${config.targetSubtopic} now. `
+          : `Sit down, ${activeUser}. Let us begin the examination on ${config.topic}. I expect absolute precision. `;
       } else if (config.personality === "strict") {
-        greeting = `Good evening, ${activeUser}. We will now begin your viva on ${config.topic}. Answer concisely. `;
+        greeting = config.isTargetDrill 
+          ? `Good evening, ${activeUser}. We will now begin a focused review on ${config.targetSubtopic}. `
+          : `Good evening, ${activeUser}. We will now begin your viva on ${config.topic}. Answer concisely. `;
       } else if (config.personality === "brutal") {
-        greeting = `Alright, ${activeUser}. Let's see how well you actually know ${config.topic}. `;
+        greeting = config.isTargetDrill 
+          ? `Alright, ${activeUser}. Let's see if you actually understand the limits of ${config.targetSubtopic}. `
+          : `Alright, ${activeUser}. Let's see how well you actually know ${config.topic}. `;
       }
       
       const fullSpeech = greeting + (firstQuestion.speech || firstQuestion.text);
@@ -431,7 +444,9 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
           setFallbackMode(true);
           triggerKeyboardFallback();
         } else if (err === "no-speech") {
-          triggerSilenceNudge();
+          // Ignore native browser no-speech timeouts. SpeechManager will automatically hot-restart
+          // in the background, preserving any text that the student has already spoken.
+          console.log("SpeechManager: Ignored 'no-speech' timeout to protect student pacing.");
         }
       }
     });
@@ -443,18 +458,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     setStatusText("Keyboard Fallback Active");
     setTranscriptText("Please type your detailed explanation inside the box below.");
     setIsPlaceholder(true);
-  };
-
-  const triggerSilenceNudge = () => {
-    const phrase = "I am listening. Please share your thoughts in your own words, or let me know if you want me to skip ahead.";
-    setVisualState("speaking");
-    setStatusText("Professor is prompting...");
-    
-    VoiceManager.speak(phrase, config.personality, null, () => {
-      setVisualState("listening");
-      setStatusText("Listening to your answer...");
-      SpeechManager.start(); // restart mic
-    });
   };
 
   const processResponse = async (answerText) => {
@@ -508,50 +511,101 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         });
       }
 
-      // Progress to next question or end
-      const qIndex = currentQuestionIndex + 1;
-      if (qIndex >= 4) {
-        setTimeout(() => {
-          handleFinish(false);
-        }, 1200);
-        return;
-      }
-
-      setCurrentQuestionIndex(qIndex);
-      setVivaState("generating");
-      setVisualState("analyzing");
-      setStatusText("Formulating next question...");
-
-      const nextQuestion = await QuestionGraphEngine.generateNextQuestion({
-        syllabus: config.syllabusStructure,
-        personality: config.personality,
-        duration: config.duration,
-        askedList: SessionContextManager.askedQuestions,
-        answersList: SessionContextManager.answerTranscripts,
-        lastEvaluationTag: resultMetrics.tag,
-        currentTopic: activeQuestion.topic,
-        nervousness: latestNervousnessRef.current
+      // Save visual reaction state
+      setLastEvalRecord({
+        correctness: resultMetrics.correctness,
+        tag: resultMetrics.tag
       });
 
-      setActiveQuestion(nextQuestion);
-      // Preload next question speech!
-      VoiceManager.preload(nextQuestion.speech, config.personality);
+      // Update status text based on reaction
+      let reactionText = "Professor is noting your response...";
+      if (resultMetrics.correctness >= 75) {
+        reactionText = `${EXAMINER_PERSONALITIES[config.personality].name} is pleased with your answer.`;
+      } else if (resultMetrics.correctness < 55 || resultMetrics.tag === "Bluffing" || resultMetrics.tag === "Incorrect") {
+        reactionText = `${EXAMINER_PERSONALITIES[config.personality].name} looks skeptical.`;
+      }
+      setStatusText(reactionText);
 
-      setVivaState("speaking");
-      VoiceManager.speak(nextQuestion.speech, config.personality,
-        () => {
-          setVisualState("speaking");
-          setStatusText("Professor is speaking...");
-          startWaveAnimations();
-          if (config.personality !== "friendly") {
-            startBackgroundListeningForInterruptions(nextQuestion);
-          }
-        },
-        () => {
-          if (interruptedRef.current) return;
-          startListeningMode();
+      // Delay transition to let user register visual reaction
+      setTimeout(async () => {
+        // Clear evaluation reaction so face resets
+        setLastEvalRecord(null);
+
+        // Progress to next question or end
+        const qIndex = currentQuestionIndex + 1;
+        if (qIndex >= 4) {
+          handleFinish(false);
+          return;
         }
-      );
+
+        setCurrentQuestionIndex(qIndex);
+        setVivaState("generating");
+        setVisualState("analyzing");
+        setStatusText("Formulating next question...");
+
+        try {
+          const nextQuestion = await QuestionGraphEngine.generateNextQuestion({
+            syllabus: config.syllabusStructure,
+            personality: config.personality,
+            duration: config.duration,
+            askedList: SessionContextManager.askedQuestions,
+            answersList: SessionContextManager.answerTranscripts,
+            lastEvaluationTag: resultMetrics.tag,
+            currentTopic: activeQuestion.topic,
+            nervousness: latestNervousnessRef.current,
+            isTargetDrill: config.isTargetDrill || false,
+            targetSubtopic: config.targetSubtopic || null
+          });
+
+          setActiveQuestion(nextQuestion);
+          // Preload next question speech!
+          VoiceManager.preload(nextQuestion.speech, config.personality);
+
+          setVivaState("speaking");
+          VoiceManager.speak(nextQuestion.speech, config.personality,
+            () => {
+              setVisualState("speaking");
+              setStatusText("Professor is speaking...");
+              startWaveAnimations();
+              if (config.personality !== "friendly") {
+                startBackgroundListeningForInterruptions(nextQuestion);
+              }
+            },
+            () => {
+              if (interruptedRef.current) return;
+              startListeningMode();
+            }
+          );
+        } catch (nextErr) {
+          console.error("Failed to generate next question in delayed block:", nextErr);
+          // Catch and handle fallback inside delayed try
+          const qIdx = currentQuestionIndex + 1;
+          setCurrentQuestionIndex(qIdx);
+          setVivaState("generating");
+          setVisualState("analyzing");
+          setStatusText("Formulating next question...");
+
+          const nextQuestion = QuestionGraphEngine.getRuleBasedOfflineFallback(qIdx + 1, config.personality, activeQuestion.topic);
+          setActiveQuestion(nextQuestion);
+          VoiceManager.preload(nextQuestion.speech, config.personality);
+
+          setVivaState("speaking");
+          VoiceManager.speak(nextQuestion.speech, config.personality,
+            () => {
+              setVisualState("speaking");
+              setStatusText("Professor is speaking...");
+              startWaveAnimations();
+              if (config.personality !== "friendly") {
+                startBackgroundListeningForInterruptions(nextQuestion);
+              }
+            },
+            () => {
+              if (interruptedRef.current) return;
+              startListeningMode();
+            }
+          );
+        }
+      }, 3200);
 
     } catch (err) {
       console.error("Failed to process answer evaluation:", err);
@@ -574,39 +628,58 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         metrics: fallbackMetrics
       });
 
-      const qIndex = currentQuestionIndex + 1;
-      if (qIndex >= 4) {
-        setTimeout(() => {
-          handleFinish(false);
-        }, 1200);
-        return;
+      // Save visual reaction state
+      setLastEvalRecord({
+        correctness: fallbackMetrics.correctness,
+        tag: fallbackMetrics.tag
+      });
+
+      // Update status text based on reaction
+      let reactionText = "Professor is noting your response...";
+      if (fallbackMetrics.correctness >= 75) {
+        reactionText = `${EXAMINER_PERSONALITIES[config.personality].name} is pleased with your answer.`;
+      } else if (fallbackMetrics.correctness < 55 || fallbackMetrics.tag === "Bluffing" || fallbackMetrics.tag === "Incorrect") {
+        reactionText = `${EXAMINER_PERSONALITIES[config.personality].name} looks skeptical.`;
       }
+      setStatusText(reactionText);
 
-      setCurrentQuestionIndex(qIndex);
-      setVivaState("generating");
-      setVisualState("analyzing");
-      setStatusText("Formulating next question...");
+      // Delay transition to let user register visual reaction
+      setTimeout(() => {
+        // Clear evaluation reaction so face resets
+        setLastEvalRecord(null);
 
-      const nextQuestion = QuestionGraphEngine.getRuleBasedOfflineFallback(qIndex + 1, config.personality, activeQuestion.topic);
-      setActiveQuestion(nextQuestion);
-      // Preload next question speech!
-      VoiceManager.preload(nextQuestion.speech, config.personality);
-
-      setVivaState("speaking");
-      VoiceManager.speak(nextQuestion.speech, config.personality,
-        () => {
-          setVisualState("speaking");
-          setStatusText("Professor is speaking...");
-          startWaveAnimations();
-          if (config.personality !== "friendly") {
-            startBackgroundListeningForInterruptions(nextQuestion);
-          }
-        },
-        () => {
-          if (interruptedRef.current) return;
-          startListeningMode();
+        const qIndex = currentQuestionIndex + 1;
+        if (qIndex >= 4) {
+          handleFinish(false);
+          return;
         }
-      );
+
+        setCurrentQuestionIndex(qIndex);
+        setVivaState("generating");
+        setVisualState("analyzing");
+        setStatusText("Formulating next question...");
+
+        const nextQuestion = QuestionGraphEngine.getRuleBasedOfflineFallback(qIndex + 1, config.personality, activeQuestion.topic);
+        setActiveQuestion(nextQuestion);
+        // Preload next question speech!
+        VoiceManager.preload(nextQuestion.speech, config.personality);
+
+        setVivaState("speaking");
+        VoiceManager.speak(nextQuestion.speech, config.personality,
+          () => {
+            setVisualState("speaking");
+            setStatusText("Professor is speaking...");
+            startWaveAnimations();
+            if (config.personality !== "friendly") {
+              startBackgroundListeningForInterruptions(nextQuestion);
+            }
+          },
+          () => {
+            if (interruptedRef.current) return;
+            startListeningMode();
+          }
+        );
+      }, 3200);
     }
   };
 
@@ -774,8 +847,27 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       <div className="active-viva-layout">
         
         {/* Top Header details */}
-        <div className="viva-header-bar">
-          <span className="viva-topic-badge" id="active-viva-topic-badge">{config.topic}</span>
+        <div className="viva-header-bar" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+            <span className="viva-topic-badge" id="active-viva-topic-badge">{config.topic}</span>
+            {config.isTargetDrill && (
+              <span className="viva-topic-badge target-drill-active-badge" style={{
+                backgroundColor: "var(--color-warning-bg)",
+                color: "var(--color-warning)",
+                border: "1px solid var(--color-warning)",
+                boxShadow: "0 0 8px rgba(161, 107, 21, 0.25)",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                fontWeight: "700"
+              }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ width: "12px", height: "12px" }}>
+                  <circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24M14.83 9.17l4.24-4.24M14.83 14.83l4.24 4.24M9.17 14.83l-4.24 4.24"/>
+                </svg>
+                Focus Drill: {config.targetSubtopic}
+              </span>
+            )}
+          </div>
           <div className="viva-timer-box">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10"></circle>
@@ -788,8 +880,12 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         {/* Middle Stage */}
         <div className={`examiner-stage ${visualState}`} id="viva-examiner-stage">
           <div className="examiner-avatar-box">
-            <div className="examiner-avatar-bg"></div>
-            <svg className="examiner-avatar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{ __html: EXAMINER_PERSONALITIES[config.personality].icon }} />
+            <ExaminerAvatar 
+              personality={config.personality}
+              vivaState={vivaState}
+              liveMetrics={liveMetrics}
+              lastEvaluation={lastEvalRecord}
+            />
           </div>
 
           <div className="examiner-status-tag" id="examiner-status">

@@ -27,6 +27,15 @@ export const SyllabusParserService = {
   parseSyllabus(rawText, fallbackTopic = "Thermodynamics") {
     const cleaned = this.cleanRawText(rawText);
     
+    // Attempt to derive a clean topic name from first line if fallbackTopic is generic
+    let derivedTopic = fallbackTopic;
+    if (fallbackTopic === "Custom Syllabus Practice" && cleaned) {
+      const firstLine = cleaned.split("\n")[0].replace(/[#*_-]/g, "").trim();
+      if (firstLine && firstLine.length > 3 && firstLine.length < 60) {
+        derivedTopic = firstLine;
+      }
+    }
+
     // Heuristic regex to locate Units / Modules
     const unitRegex = /(?:unit|module|chapter|section)\s*\d+[:.-]?\s*([^\n]+)/gi;
     const units = [];
@@ -60,11 +69,11 @@ export const SyllabusParserService = {
 
     // Default heuristics if document parsing finds no explicit units
     if (units.length === 0) {
-      return this.getDefaultHierarchy(fallbackTopic);
+      return this.getDefaultHierarchy(derivedTopic);
     }
 
     return {
-      topic: fallbackTopic,
+      topic: derivedTopic,
       units: units
     };
   },
@@ -92,6 +101,26 @@ export const SyllabusParserService = {
       console.warn("Topic expansion endpoint error, falling back to static schema:", e);
       return this.getDefaultHierarchy(topicString);
     }
+  },
+
+  /**
+   * Requests the server-side Gemini API route to parse raw syllabus text using LLM.
+   * @param {string} rawText - Cleaned text.
+   * @returns {Promise<object>} Structured units tree.
+   */
+  async parseSyllabusRemote(rawText) {
+    const response = await fetch("/api/viva", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "parse-syllabus",
+        text: rawText
+      })
+    });
+
+    if (!response.ok) throw new Error("API syllabus parsing failed");
+    const data = await response.json();
+    return data;
   },
 
   /**
