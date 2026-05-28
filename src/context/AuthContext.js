@@ -89,18 +89,7 @@ export function AuthProvider({ children }) {
         });
       }
 
-      // 2. Fetch or initialize User Stats
-      const statsRef = doc(db, "users", uid, "stats", "dashboard");
-      const statsSnap = await getDoc(statsRef);
-      if (statsSnap.exists()) {
-        setStats(statsSnap.data());
-      } else {
-        // Initialize with empty academic template for new cloud user
-        await setDoc(statsRef, EMPTY_STATS);
-        setStats(EMPTY_STATS);
-      }
-
-      // 3. Fetch user sessions sorted by timestamp/date
+      // 2. Fetch user sessions sorted by timestamp/date
       const sessionsRef = collection(db, "users", uid, "vivas");
       const q = query(sessionsRef, orderBy("createdAt", "desc"));
       const sessionsSnap = await getDocs(q);
@@ -114,6 +103,50 @@ export function AuthProvider({ children }) {
       });
       
       setSessions(loadedSessions);
+
+      // 3. Fetch or initialize User Stats with Self-Healing Reconciliation
+      const statsRef = doc(db, "users", uid, "stats", "dashboard");
+      const statsSnap = await getDoc(statsRef);
+      
+      let reconciledStats = EMPTY_STATS;
+      
+      if (statsSnap.exists()) {
+        const dbStats = statsSnap.data();
+        
+        // Self-Healing Trigger: If a user has 0 actual sessions but has legacy mock stats in their database
+        // (totalVivas > 0, typical of accounts created before our clean-slate update), we auto-reconcile to EMPTY_STATS.
+        if (loadedSessions.length === 0 && dbStats.totalVivas > 0) {
+          reconciledStats = EMPTY_STATS;
+          await setDoc(statsRef, EMPTY_STATS); // Cleanse Firestore legacy record in background
+        } else {
+          reconciledStats = dbStats;
+        }
+      } else {
+        // Initialize with empty template (or calculated from existing sessions if database was partially out of sync)
+        if (loadedSessions.length > 0) {
+          const totalVivas = loadedSessions.length;
+          const avgConfidence = Math.round(
+            loadedSessions.reduce((acc, s) => acc + (s.score || 0), 0) / totalVivas
+          );
+          let strongest = loadedSessions[0]?.subject || "None yet";
+          let weakest = loadedSessions[0]?.subject || "None yet";
+          loadedSessions.forEach(s => {
+            if ((s.score || 0) > 86) strongest = s.subject;
+            if ((s.score || 0) < 72) weakest = s.subject;
+          });
+          reconciledStats = {
+            totalVivas,
+            avgConfidence,
+            strongestSubject: strongest,
+            weakestSubject: weakest
+          };
+        } else {
+          reconciledStats = EMPTY_STATS;
+        }
+        await setDoc(statsRef, reconciledStats);
+      }
+
+      setStats(reconciledStats);
     } catch (err) {
       console.error("Error loading user cloud database data:", err);
     }
