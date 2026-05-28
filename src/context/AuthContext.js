@@ -57,12 +57,11 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setLoading(true);
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
         setUser(firebaseUser);
-        // Load stats and sessions from Firestore for this user
-        await loadUserData(firebaseUser.uid, firebaseUser.displayName);
+        // Load stats and sessions from Firestore in the background (non-blocking)
+        loadUserData(firebaseUser.uid, firebaseUser.displayName);
       } else {
         setUser(null);
         setSessions([]);
