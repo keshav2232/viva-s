@@ -115,7 +115,7 @@ export default function AuthScreen({ onLoginSuccess }) {
                 fontSize: "2.25rem", 
                 fontWeight: "900", 
                 letterSpacing: "-0.5px", 
-                background: "linear-gradient(135deg, #ffffff 0%, #a5b4fc 100%)", 
+                background: "linear-gradient(135deg, var(--accent-primary, #1f2a38) 0%, #6366f1 100%)", 
                 WebkitBackgroundClip: "text", 
                 WebkitTextFillColor: "transparent" 
               }}
@@ -123,10 +123,10 @@ export default function AuthScreen({ onLoginSuccess }) {
               VivaSim
             </span>
           </div>
-          <h1 style={{ fontSize: "1.75rem", fontWeight: "800", marginBottom: "6px", color: "#ffffff", letterSpacing: "-0.02em" }}>
+          <h1 style={{ fontSize: "1.75rem", fontWeight: "800", marginBottom: "6px", color: "var(--text-primary, #1e293b)", letterSpacing: "-0.02em" }}>
             {authMode === "login" ? "Welcome Back, Scholar" : "Begin Academic Journey"}
           </h1>
-          <p className="auth-subtitle" style={{ color: "#94a3b8", fontSize: "0.95rem" }}>
+          <p className="auth-subtitle" style={{ color: "var(--text-secondary, #475569)", fontSize: "0.95rem" }}>
             {authMode === "login" ? "Sign in to access your dashboard & sync exam history" : "Create an account to track metric cards & practice with AI"}
           </p>
         </div>
