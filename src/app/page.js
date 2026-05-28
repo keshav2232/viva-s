@@ -330,21 +330,33 @@ export default function Home() {
   // SKELETON LOADER SCREEN (Visible when Firebase is loading auth state)
   if (authLoading) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", justifyContent: "center", alignItems: "center", background: "var(--bg-app, #0f172a)", color: "#fff" }}>
+      <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", justifyContent: "center", alignItems: "center", background: "var(--bg-primary, #FAF9F6)" }}>
         <div style={{ textAlign: "center", animation: "pulse 2s infinite ease-in-out" }}>
           {/* Logo Icon Spinner */}
-          <div style={{ display: "flex", justifyContent: "center", gap: "10px", alignItems: "center", marginBottom: "20px" }}>
-            <svg className="animate-spin" style={{ width: "46px", height: "46px", color: "var(--primary-color, #6366f1)" }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <div style={{ display: "flex", justifyContent: "center", gap: "12px", alignItems: "center", marginBottom: "20px" }}>
+            <svg className="animate-spin" style={{ width: "46px", height: "46px", color: "#6366f1" }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" style={{ opacity: 0.15 }}></circle>
               <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
-            <span className="logo-text" style={{ fontSize: "2.25rem", fontWeight: "900", letterSpacing: "-0.5px" }}>VivaSim</span>
+            <span 
+              className="logo-text" 
+              style={{ 
+                fontSize: "2.25rem", 
+                fontWeight: "900", 
+                letterSpacing: "-0.5px", 
+                background: "linear-gradient(135deg, var(--accent-primary, #1f2a38) 0%, #6366f1 100%)", 
+                WebkitBackgroundClip: "text", 
+                WebkitTextFillColor: "transparent" 
+              }}
+            >
+              VivaSim
+            </span>
           </div>
-          <p style={{ color: "var(--text-muted, #94a3b8)", fontSize: "0.95rem", fontWeight: "600", letterSpacing: "1px", textTransform: "uppercase" }}>
+          <p style={{ color: "var(--text-secondary, #475569)", fontSize: "0.85rem", fontWeight: "700", letterSpacing: "1px", textTransform: "uppercase", marginBottom: "8px" }}>
             Securing academic tunnel... Verifying profile
           </p>
-          <div style={{ width: "180px", height: "3px", background: "rgba(255,255,255,0.06)", borderRadius: "10px", margin: "16px auto 0", overflow: "hidden", position: "relative" }}>
-            <div style={{ position: "absolute", height: "100%", width: "40%", background: "var(--primary-gradient, linear-gradient(90deg, #6366f1, #4f46e5))", borderRadius: "10px", animation: "loadingBar 1.5s infinite ease" }}></div>
+          <div style={{ width: "180px", height: "4px", background: "rgba(31, 42, 56, 0.08)", borderRadius: "10px", margin: "16px auto 0", overflow: "hidden", position: "relative" }}>
+            <div style={{ position: "absolute", height: "100%", width: "40%", background: "linear-gradient(90deg, #6366f1, #4f46e5)", borderRadius: "10px", animation: "loadingBar 1.5s infinite ease" }}></div>
           </div>
         </div>
       </div>
