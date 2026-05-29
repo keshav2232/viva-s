@@ -55,7 +55,8 @@ export const AnswerEvaluationService = {
         correctness: semanticGrading.correctness,
         accuracy: semanticGrading.accuracy,
         completeness: semanticGrading.completeness,
-        tag: semanticGrading.tag
+        tag: semanticGrading.tag,
+        correctAnswer: semanticGrading.correctAnswer
       };
 
     } catch (e) {

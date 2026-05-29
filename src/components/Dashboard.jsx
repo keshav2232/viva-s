@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 
-export default function Dashboard({ userName, stats, sessions, onStartNewViva, pausedSession, onClearPausedSession, onResumePausedSession }) {
+export default function Dashboard({ userName, stats, sessions, onStartNewViva, pausedSession, onClearPausedSession, onResumePausedSession, onViewReport }) {
   const [salutation, setSalutation] = useState("Good Evening");
 
   useEffect(() => {
