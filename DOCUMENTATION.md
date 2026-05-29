@@ -57,7 +57,7 @@ VivaSim solves a critical gap in academic preparation — students rarely get to
 | **PDF.js** | 3.4.120 | Client-side PDF syllabus text extraction (loaded via CDN) |
 | **Web Speech API** | Browser native | Speech recognition (STT) fallback |
 | **Web Audio API** | Browser native | Real-time microphone volume visualization |
-| **MediaRecorder API** | Browser native | Audio blob capture for Hume AI prosody |
+| **MediaRecorder API** | Browser native | Audio blob capture (used for local duration-based prosody estimation) |
 
 ---
 
@@ -360,9 +360,10 @@ After starting, a `getUserMedia` stream is connected to a `Web Audio API` `Analy
 
 ### MediaRecorder (Audio Blob)
 
-Simultaneously records audio as WebM blob for Hume AI emotion analysis:
+Simultaneously records audio as a WebM blob:
 - `MediaRecorder` with `mimeType: "audio/webm"` collects chunks
 - On stop: blob assembled, `onAudioCaptured(blob)` fires → `handleHumeEmotionAnalysis()`
+- The blob is sent to `/api/viva` with `action: "analyze-hume-emotion"`, but **no external Hume API call is made** — see the Hume AI note below
 
 ### Error Handling
 - `not-allowed` / `service-not-allowed` / `not-supported`: activates keyboard fallback
@@ -608,6 +609,24 @@ Single `POST` endpoint handling 5 action types:
 **Output metrics**: `{ correctness, completeness, accuracy, clarity, tag }` (all 0–100)
 
 **Tags**: `Strong | Weak | Partially Correct | Bluffing | Incomplete | Confused`
+
+### Action 4b: `analyze-hume-emotion`
+
+> **Note: This is a local stub, not a real Hume AI call.**
+
+The original intent was to use Hume AI's Expression Measurement API to analyse vocal prosody from the recorded audio blob. However, Hume's REST API is strictly **batch/job-queue based** (asynchronous) and not suitable for real-time mid-viva use without halting the flow.
+
+The current implementation instead runs a **local acoustic estimator**:
+1. Estimates recording duration from base64 audio blob size: `length × 0.75 / 16000` bytes → seconds
+2. Computes baseline nervousness/confidence/clarity/hesitation from duration heuristics
+3. Adds ±4% random jitter to simulate realistic biometric variance
+4. Returns these numbers — **no network request to Hume is made**
+
+Real prosody data is already well-covered by two other systems:
+- **`AnswerEvaluationService.calculateLocalDeliveryMetrics()`** — lexical analysis of filler words, WPM, pause counts from transcript text
+- **Live biometric tracker in `ActiveViva.jsx`** — 350ms polling of `SpeechManager.gapsHistory` and real-time filler detection
+
+---
 
 ### Action 5: `synthesize-speech`
 
