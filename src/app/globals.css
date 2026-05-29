@@ -3816,4 +3816,153 @@ svg path[stroke="var(--color-warning)"] {
 
 
 
+/* ==========================================
+   ACADEMIC DESIGN SYSTEM - AESTHETIC BACKGROUNDS
+   ========================================== */
+
+/* Technical Blueprint Coordinate Grid Background on Body */
+body {
+  position: relative;
+  overflow-x: hidden;
+  background-color: var(--bg-primary);
+  /* Two linear gradients to form a beautiful, crisp hairline blueprint graph paper */
+  background-image: 
+    linear-gradient(rgba(31, 42, 56, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(31, 42, 56, 0.015) 1px, transparent 1px);
+  background-size: 20px 20px, 20px 20px;
+}
+
+/* Base Wrapper for Background Canvas Elements */
+.bg-decor-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* Orbiting Glowing Telemetry Orbs */
+.bg-decor-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.16;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+.decor-orb-1 {
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, hsl(38, 85%, 45%) 0%, transparent 70%);
+  top: -10%;
+  right: -5%;
+  animation: orbitOrb1 32s infinite ease-in-out alternate;
+}
+
+.decor-orb-2 {
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, hsl(215, 30%, 18%) 0%, transparent 70%);
+  bottom: -15%;
+  left: -10%;
+  animation: orbitOrb2 40s infinite ease-in-out alternate;
+}
+
+.decor-orb-3 {
+  width: 450px;
+  height: 450px;
+  background: radial-gradient(circle, hsl(142, 60%, 30%) 0%, transparent 70%);
+  top: 40%;
+  left: 30%;
+  animation: orbitOrb3 36s infinite ease-in-out alternate;
+}
+
+@keyframes orbitOrb1 {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-80px, 60px) scale(1.1); }
+  100% { transform: translate(40px, -40px) scale(0.95); }
+}
+
+@keyframes orbitOrb2 {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(60px, -80px) scale(0.9); }
+  100% { transform: translate(-40px, 40px) scale(1.15); }
+}
+
+@keyframes orbitOrb3 {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-50px, -50px) scale(1.1); }
+  100% { transform: translate(60px, 50px) scale(0.9); }
+}
+
+/* Floating Academic Watermarks (Drifting SVGs) */
+.bg-academic-watermark {
+  position: absolute;
+  color: hsla(215, 32%, 18%, 0.022);
+  pointer-events: none;
+  transition: opacity 0.5s ease;
+  animation: floatWatermark 25s infinite ease-in-out alternate;
+}
+
+@keyframes floatWatermark {
+  0% { transform: translateY(0) rotate(0deg); }
+  100% { transform: translateY(-15px) rotate(3deg); }
+}
+
+.watermark-bell {
+  top: 15%;
+  left: 2%;
+  width: 260px;
+  height: auto;
+}
+
+.watermark-grid {
+  bottom: 20%;
+  right: 2%;
+  width: 320px;
+  height: auto;
+  animation-duration: 35s;
+}
+
+.watermark-circle {
+  top: 45%;
+  right: 5%;
+  width: 240px;
+  height: auto;
+  animation-duration: 28s;
+}
+
+/* Glassmorphism Card Enhancement */
+.card {
+  background: rgba(255, 255, 255, 0.72) !important;
+  backdrop-filter: blur(20px) saturate(130%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(130%) !important;
+  border: 1px solid rgba(227, 226, 220, 0.6) !important;
+  box-shadow: 
+    0 4px 16px rgba(31, 42, 56, 0.02),
+    0 16px 40px rgba(31, 42, 56, 0.02) !important;
+  z-index: 1;
+}
+
+.card:hover {
+  background: rgba(255, 255, 255, 0.82) !important;
+  border-color: hsla(215, 32%, 18%, 0.15) !important;
+  box-shadow: 
+    0 8px 24px rgba(31, 42, 56, 0.03),
+    0 24px 64px rgba(31, 42, 56, 0.04) !important;
+}
+
+/* Main screen and content elements alignment above background z-index */
+main, header, footer {
+  position: relative;
+  z-index: 1;
+}
+
+
+
+
 

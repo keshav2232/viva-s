@@ -155,6 +155,44 @@ export default function AuthScreen({ onLoginSuccess }) {
 
   return (
     <div className="landing-portal-wrapper">
+      {/* Aesthetic Academic Background Canvas */}
+      <div className="bg-decor-canvas">
+        <div className="bg-decor-orb decor-orb-1"></div>
+        <div className="bg-decor-orb decor-orb-2"></div>
+        <div className="bg-decor-orb decor-orb-3"></div>
+        
+        {/* Normal Distribution Curve (Telemetry Curve) */}
+        <svg className="bg-academic-watermark watermark-bell" viewBox="0 0 100 50" fill="none" stroke="currentColor" strokeWidth="0.5">
+          <path d="M5 45 L25 45 Q40 45 50 10 Q60 45 75 45 L95 45" />
+          <line x1="50" y1="10" x2="50" y2="45" strokeDasharray="1 2" />
+          <line x1="5" y1="45" x2="95" y2="45" />
+          <text x="48" y="7" fontSize="4" fill="currentColor">μ</text>
+          <text x="62" y="38" fontSize="4.5" fill="currentColor">σ</text>
+        </svg>
+
+        {/* Grid Cartesian Coordinate Plane (Computational Graph) */}
+        <svg className="bg-academic-watermark watermark-grid" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="0.3">
+          <line x1="10" y1="50" x2="90" y2="50" strokeWidth="0.8" />
+          <line x1="50" y1="10" x2="50" y2="90" strokeWidth="0.8" />
+          <circle cx="50" cy="50" r="30" strokeDasharray="2 2" />
+          <path d="M 20 80 Q 50 50 80 20" strokeWidth="0.6" strokeDasharray="1 1" />
+          <path d="M 20 20 Q 50 50 80 80" strokeWidth="0.6" />
+          <text x="88" y="47" fontSize="5" fill="currentColor">x</text>
+          <text x="52" y="14" fontSize="5" fill="currentColor">y</text>
+        </svg>
+
+        {/* Vector Circle Coordinate System (Kinematics Plane) */}
+        <svg className="bg-academic-watermark watermark-circle" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="0.4">
+          <circle cx="50" cy="50" r="40" />
+          <circle cx="50" cy="50" r="2" fill="currentColor" />
+          <line x1="50" y1="50" x2="78" y2="22" />
+          <line x1="50" y1="50" x2="50" y2="10" strokeDasharray="1 2" />
+          <line x1="10" y1="50" x2="90" y2="50" strokeDasharray="1 2" />
+          <path d="M 60 50 A 10 10 0 0 0 57 43" strokeWidth="0.6" />
+          <text x="62" y="46" fontSize="5" fill="currentColor">θ</text>
+          <text x="75" y="20" fontSize="5" fill="currentColor">r</text>
+        </svg>
+      </div>
       {/* 📖 INTERACTIVE LANDING PAGE BROCHURE VIEW */}
       <div className={`landing-view-container ${screenMode === "auth" ? "landing-hidden" : ""}`}>
         
