@@ -595,7 +595,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
               </div>
 
               {/* Premium Examiner Preview Card */}
-              <div className="card" style={{
+              <div className="card examiner-preview-card" style={{
                 marginTop: "var(--space-md)",
                 padding: "var(--space-md) var(--space-lg)",
                 borderLeft: `4px solid ${
@@ -605,10 +605,6 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                 }`,
                 backgroundColor: "var(--bg-primary)",
                 textAlign: "left",
-                display: "flex",
-                gap: "var(--space-md)",
-                alignItems: "center",
-                flexDirection: "row",
                 width: "100%"
               }}>
                 {/* Visual Avatar Frame */}

@@ -4311,6 +4311,37 @@ main, header, footer {
   }
 }
 
+/* ==========================================
+   EXAMINER PREVIEW CARD LAYOUT
+   ========================================== */
+.examiner-preview-card {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: var(--space-md) !important;
+}
+
+@media (max-width: 680px) {
+  .examiner-preview-card {
+    flex-direction: column !important;
+    align-items: center !important;
+    text-align: center !important;
+    padding: var(--space-md) !important;
+    gap: var(--space-sm) !important;
+  }
+
+  .examiner-preview-card div {
+    text-align: center !important;
+  }
+
+  .examiner-preview-card button {
+    width: 100% !important;
+    justify-content: center !important;
+    margin-top: var(--space-xs) !important;
+  }
+}
+
+
 
 
 
