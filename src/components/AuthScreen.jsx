@@ -4,8 +4,17 @@ import React, { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import Image from "next/image";
 
-// Interactive Syllabus Guides for Hero Explorer
+// Interactive Syllabus & Competency Guides for Hero Explorer
 const syllabusGuides = {
+  backendEngineer: {
+    title: "Software Engineer (Backend)",
+    code: "Role Focus",
+    difficulty: "High",
+    examiner: "Structured EM (Strict)",
+    topics: ["Microservices Partitioning", "Cache Invalidation Rules", "Distributed Saga Patterns", "Database Replication Latency"],
+    prompt: "Let's discuss scaling. When implementing write-through caching to handle a 10x read traffic spike, how do you handle cache invalidation while maintaining transactional database integrity?",
+    tone: "strict"
+  },
   dataStructures: {
     title: "Data Structures & Algorithms",
     code: "CS-201",
@@ -15,6 +24,15 @@ const syllabusGuides = {
     prompt: "Let us discuss AVL Trees. When a double-rotation is required during insertion, what exact imbalance criteria are you correcting? Explain the balance factor equations mathematically.",
     tone: "strict"
   },
+  productManager: {
+    title: "Product Manager",
+    code: "Role Focus",
+    difficulty: "High",
+    examiner: "Warm Recruiter (Friendly)",
+    topics: ["MVP Scope Definition", "A/B Testing Significance", "Funnel Drop-off Diagnostics", "Retention Loop Design"],
+    prompt: "How do you evaluate and prioritize features for a product when resources are limited? What frameworks do you use to balance speed-to-market against product quality?",
+    tone: "friendly"
+  },
   thermo: {
     title: "Engineering Thermodynamics",
     code: "ME-302",
@@ -23,55 +41,46 @@ const syllabusGuides = {
     topics: ["Clausius Statement", "Entropy Boundaries", "Carnot Cycles", "Rankine efficiency"],
     prompt: "Welcome! Let's think about the second law of thermodynamics. Under what physical constraints is it impossible to transfer heat from a cooler body to a warmer body? Take your time.",
     tone: "friendly"
-  },
-  mechanics: {
-    title: "Quantum Mechanics",
-    code: "PH-401",
-    difficulty: "Extreme",
-    examiner: "Prof. Thorne (Terror)",
-    topics: ["Schrödinger wave mechanics", "Uncertainty relations", "Hermitian operators", "Infinite potential wells"],
-    prompt: "State the mathematical derivation of the Heisenberg Uncertainty principle. Under what exact conditions do two operators commute? Silence is not an acceptable answer.",
-    tone: "terror"
   }
 };
 
-// AI Examiner Bulletin Faculty Directory
+// AI Examiner & Interviewer Bulletin Faculty Directory
 const examinersBulletin = [
   {
     name: "Dr. George",
-    role: "Friendly Professor",
-    personality: "Friendly",
-    toughness: "Low",
+    role: "Friendly Professor / Warm Recruiter",
+    personality: "Friendly & Encouraging",
+    toughness: "Low Stress",
     toughnessClass: "low",
-    quote: "Take your time. Let's think about the fundamentals together.",
-    desc: "Focuses on steady encouragement, conceptual scaffolding, and foundational understanding. Perfect for early-stage preparation."
+    quote: "Take your time. Let's think about the foundational concepts and warm up together.",
+    desc: "Focuses on steady encouragement, conceptual scaffolding, and basic role requirements. Ideal for early-stage preparation."
   },
   {
     name: "Dr. Daniel",
-    role: "Strict Professor",
+    role: "Strict Professor / Structured EM",
     personality: "Rigor & Precision",
-    toughness: "Medium",
+    toughness: "Moderate Stress",
     toughnessClass: "med",
-    quote: "Correct, but incomplete. State the mathematical boundary conditions immediately.",
-    desc: "Requires absolute precision, strict adherence to definitions, and rapid responses. Emphasizes theoretical proof."
+    quote: "Correct, but state the precise mathematical boundaries and trade-offs immediately.",
+    desc: "Demands precise definitions, clear engineering trade-offs, and rapid, structured answers. Emphasizes strict execution rigor."
   },
   {
     name: "Dr. Adam",
-    role: "Brutal External",
-    personality: "Practical Trade-offs",
-    toughness: "High",
+    role: "Brutal External / Bar Raiser EM",
+    personality: "STAR & Design Trade-offs",
+    toughness: "High Stress",
     toughnessClass: "high",
-    quote: "In the real world, hesitation costs millions. State the engineering limit.",
-    desc: "An industry veteran who targets bluffing instantly. Zero tolerance for textbook memorization; expects deep practical analysis."
+    quote: "In production, hesitation costs millions. State the exact architectural constraints.",
+    desc: "Detects bluffing instantly. Zero tolerance for general buzzwords; expects concrete STAR examples and deep practical analysis."
   },
   {
     name: "Prof. Thorne",
-    role: "Viva Terror",
-    personality: "Legendary Pressure",
-    toughness: "Extreme",
+    role: "Viva Terror / Director Bar Raiser",
+    personality: "High-Pressure Drilling",
+    toughness: "Maximum Stress",
     toughnessClass: "extreme",
-    quote: "Do not attempt to bluff me with buzzwords! State the exact proof!",
-    desc: "Expects flawless mastery under extreme psychological and intellectual pressure. Unpredictable questions, rapid drills."
+    quote: "Do not attempt to hide behind textbooks. Prove your first-principle logic!",
+    desc: "Evaluates how you handle extreme intellectual pressure, logical edge cases, and high-concurrency architecture failures under rapid-fire constraints."
   }
 ];
 
@@ -89,7 +98,7 @@ export default function AuthScreen({ onLoginSuccess }) {
 
   // New State variables for landing page and explorer interactivity
   const [screenMode, setScreenMode] = useState("landing"); // "landing" | "auth"
-  const [selectedSyllabus, setSelectedSyllabus] = useState("dataStructures"); // "dataStructures" | "thermo" | "mechanics"
+  const [selectedSyllabus, setSelectedSyllabus] = useState("backendEngineer"); // "backendEngineer" | "dataStructures" | "productManager" | "thermo"
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -150,7 +159,7 @@ export default function AuthScreen({ onLoginSuccess }) {
 
   const handleGuestSubmit = () => {
     if (onLoginSuccess) {
-      onLoginSuccess("Guest Student");
+      onLoginSuccess("Guest Candidate");
     }
   };
 
@@ -208,13 +217,13 @@ export default function AuthScreen({ onLoginSuccess }) {
               </svg>
             </div>
             <div className="logo-brand">
-              <span className="logo-brand-title">VivaSim</span>
-              <span className="logo-brand-subtitle">AI Oral Examiner</span>
+              <span className="logo-brand-title">PrepSim</span>
+              <span className="logo-brand-subtitle">AI Interview & Viva Prep</span>
             </div>
           </div>
           <nav className="landing-nav">
-            <a href="#syllabus" className="nav-item-link">Syllabi Modules</a>
-            <a href="#examiners" className="nav-item-link">Faculty directory</a>
+            <a href="#presets" className="nav-item-link">Practice Presets</a>
+            <a href="#examiners" className="nav-item-link">Evaluation Panel</a>
             <a href="#methodology" className="nav-item-link">Methodology</a>
           </nav>
           <button type="button" className="btn-landing-cta" onClick={() => setScreenMode("auth")}>
@@ -226,31 +235,31 @@ export default function AuthScreen({ onLoginSuccess }) {
         <section className="landing-hero-section">
           <div className="landing-hero-grid">
             <div className="hero-left-info">
-              <span className="hero-badge">Next-Gen Academic Prep</span>
+              <span className="hero-badge">Dual-Mode Simulation Portal</span>
               <h1 className="hero-heading">
-                Master Your Oral Exams Under <span className="highlight">Realistic AI Pressure.</span>
+                Master Your Vivas & Technical Interviews Under <span className="highlight">Realistic AI Pressure.</span>
               </h1>
               <div className="hero-divider-line"></div>
               <p className="hero-subtext">
-                The world&apos;s first interactive simulator combining cognitive semantic evaluation with voice-enabled emotional telemetry. Upload your syllabus, face realistic examiner profiles, and obtain actionable stress analytics.
+                The world&apos;s first interactive simulator combining cognitive semantic evaluation with voice-enabled emotional telemetry. Prepare for academic oral exams or professional engineering panels under realistic AI pressure with custom analytics.
               </p>
               <div className="hero-action-buttons">
                 <button type="button" className="btn-hero-primary" onClick={() => setScreenMode("auth")}>
                   Access Simulator Portal
                 </button>
-                <a href="#syllabus" className="btn-hero-secondary">
-                  Explore Syllabus Guides
+                <a href="#presets" className="btn-hero-secondary">
+                  Explore Practice Presets
                 </a>
               </div>
             </div>
 
-            {/* Interactive Syllabus Explorer */}
-            <div className="hero-right-explorer" id="syllabus">
+            {/* Interactive Syllabus & Role Explorer */}
+            <div className="hero-right-explorer" id="presets">
               <div className="syllabus-explorer-box">
                 <div className="explorer-header">
-                  <span className="explorer-badge">Interactive Module</span>
-                  <h3 className="explorer-title">Syllabus Prompt Explorer</h3>
-                  <p className="explorer-desc">Click a syllabus module to view sample questions generated by different examiner personalities.</p>
+                  <span className="explorer-badge">Interactive Presets</span>
+                  <h3 className="explorer-title">Practice Presets Explorer</h3>
+                  <p className="explorer-desc">Click a course or job preset to explore sample questions generated by different evaluation personas.</p>
                 </div>
                 
                 <div className="syllabus-selector-grid">
@@ -270,13 +279,13 @@ export default function AuthScreen({ onLoginSuccess }) {
                   <div className="syllabus-meta-row">
                     <span className="syllabus-code">{syllabusGuides[selectedSyllabus].code}</span>
                     <span className="syllabus-difficulty" data-diff={syllabusGuides[selectedSyllabus].difficulty}>
-                      Diff: {syllabusGuides[selectedSyllabus].difficulty}
+                      Level: {syllabusGuides[selectedSyllabus].difficulty}
                     </span>
                   </div>
                   <h4 className="syllabus-subject-title">{syllabusGuides[selectedSyllabus].title}</h4>
                   
                   <div className="syllabus-topics-list">
-                    <span className="topics-label">Key Exam Topics Covered:</span>
+                    <span className="topics-label">Key Focus Areas Covered:</span>
                     <div className="topics-grid">
                       {syllabusGuides[selectedSyllabus].topics.map((topic, i) => (
                         <span key={i} className="topic-tag">• {topic}</span>
@@ -294,14 +303,14 @@ export default function AuthScreen({ onLoginSuccess }) {
           </div>
         </section>
 
-        {/* AI Examiner Faculty directory Bulletin Section */}
+        {/* AI Examiner & Interviewer Panel directory Section */}
         <section className="landing-faculty-section" id="examiners">
           <div className="section-header-centered">
-            <span className="section-badge">Academic Directory</span>
-            <h2 className="section-title">The AI Examiner Faculty</h2>
+            <span className="section-badge">Evaluation Directory</span>
+            <h2 className="section-title">The AI Examiners & Recruiters</h2>
             <div className="section-divider-mini"></div>
             <p className="section-desc">
-              Our simulators feature distinct, dynamically reacting examiner profiles designed to replicate different university examiner temperaments.
+              Our panel features distinct, dynamically reacting examiner profiles designed to replicate both university examiners and corporate bar raisers.
             </p>
           </div>
 
@@ -325,14 +334,14 @@ export default function AuthScreen({ onLoginSuccess }) {
           </div>
         </section>
 
-        {/* Methodology & Biometrics Diagnostics overview */}
+        {/* Methodology & Performance Diagnostics overview */}
         <section className="landing-methodology-section" id="methodology">
           <div className="section-header-centered">
             <span className="section-badge">Our Methodology</span>
-            <h2 className="section-title">High-Fidelity Speech & Biometric Diagnostics</h2>
+            <h2 className="section-title">High-Fidelity Speech & Performance Diagnostics</h2>
             <div className="section-divider-mini"></div>
             <p className="section-desc">
-              We track and analyze complex auditory and linguistic indicators in real-time, giving you comprehensive insights into your academic performance.
+              We track and analyze complex auditory, linguistic, and structural indicators in real-time, giving you deep insights into your readiness.
             </p>
           </div>
 
@@ -359,7 +368,7 @@ export default function AuthScreen({ onLoginSuccess }) {
               </div>
               <h3 className="methodology-card-title">Gemini Semantic Evaluation</h3>
               <p className="methodology-card-desc">
-                Advanced language models analyze the academic completeness, semantic correctness, and spot bluffing or hollow buzzword answers.
+                Advanced language models analyze core academic completeness or technical trade-offs, spotting bluffing or hollow buzzword answers.
               </p>
             </div>
 
@@ -373,7 +382,7 @@ export default function AuthScreen({ onLoginSuccess }) {
               </div>
               <h3 className="methodology-card-title">Performance Insights</h3>
               <p className="methodology-card-desc">
-                Provides a comprehensive aggregate breakdown, concept weakness tracking, confidence timeline charts, and actionable mock grading.
+                Provides a comprehensive aggregate breakdown, concept and competency gap analysis, confidence timeline graphs, and roadmaps.
               </p>
             </div>
           </div>
@@ -381,7 +390,7 @@ export default function AuthScreen({ onLoginSuccess }) {
           <div className="methodology-bottom-cta">
             <h3 className="m-cta-title">Ready to face the panel?</h3>
             <button type="button" className="btn-landing-cta-large" onClick={() => setScreenMode("auth")}>
-              Enter Simulation Portal
+              Enter Portal
             </button>
           </div>
         </section>
@@ -395,7 +404,7 @@ export default function AuthScreen({ onLoginSuccess }) {
               <path d="M6 9.5V14a6 6 0 0 0 12 0V9.5"/>
             </svg>
             <span className="copyright-text">
-              © 2026 VivaSim. Engineered as a high-fidelity academic prep tool.
+              © 2026 PrepSim. Engineered as a high-fidelity mock prep simulator.
             </span>
           </div>
         </footer>
@@ -419,8 +428,8 @@ export default function AuthScreen({ onLoginSuccess }) {
                   </svg>
                 </div>
                 <div className="logo-brand">
-                  <span className="logo-brand-title">VivaSim</span>
-                  <span className="logo-brand-subtitle">AI Viva Simulator</span>
+                  <span className="logo-brand-title">PrepSim</span>
+                  <span className="logo-brand-subtitle">AI Interview & Viva Prep</span>
                 </div>
               </div>
 
@@ -433,7 +442,7 @@ export default function AuthScreen({ onLoginSuccess }) {
                 </h1>
                 <div className="sidebar-divider"></div>
                 <p className="sidebar-desc">
-                  The most realistic AI viva experience to help you prepare with confidence.
+                  The most realistic AI simulation panel to help you prepare for vivas and job interviews.
                 </p>
               </div>
 
@@ -458,11 +467,11 @@ export default function AuthScreen({ onLoginSuccess }) {
               {/* Top Nav link switch */}
               <div className="auth-top-nav">
                 <span className="landing-back-link" onClick={() => { setScreenMode("landing"); setErrorMessage(""); }}>
-                  ← Read Course Guide
+                  ← Read Practice Presets
                 </span>
                 <span style={{ margin: "0 10px", color: "#cbd5e1" }}>|</span>
                 {authMode === "login" ? (
-                  <>New to VivaSim? <span className="auth-nav-link" onClick={() => { setAuthMode("signup"); setErrorMessage(""); }}>Create account</span></>
+                  <>New to PrepSim? <span className="auth-nav-link" onClick={() => { setAuthMode("signup"); setErrorMessage(""); }}>Create account</span></>
                 ) : (
                   <>Already have an account? <span className="auth-nav-link" onClick={() => { setAuthMode("login"); setErrorMessage(""); }}>Sign in</span></>
                 )}
@@ -475,7 +484,7 @@ export default function AuthScreen({ onLoginSuccess }) {
                 </h2>
                 <div className="card-divider-mini"></div>
                 <p className="card-subtitle-custom">
-                  {authMode === "login" ? "Sign in to continue to VivaSim" : "Register to continue to VivaSim"}
+                  {authMode === "login" ? "Sign in to continue to PrepSim" : "Register to continue to PrepSim"}
                 </p>
 
                 {/* Error alerts banner */}
@@ -606,7 +615,7 @@ export default function AuthScreen({ onLoginSuccess }) {
                       />
                       <span>Remember me</span>
                     </label>
-                    <a href="#forgot" className="forgot-link-custom" onClick={(e) => { e.preventDefault(); alert("Password reset workflow is being initialized. Check your academic inbox shortly."); }}>
+                    <a href="#forgot" className="forgot-link-custom" onClick={(e) => { e.preventDefault(); alert("Password reset workflow is being initialized. Check your inbox shortly."); }}>
                       Forgot password?
                     </a>
                   </div>
@@ -626,7 +635,7 @@ export default function AuthScreen({ onLoginSuccess }) {
                         <span>Authenticating...</span>
                       </>
                     ) : (
-                      <span>Sign in</span>
+                      <span>{authMode === "login" ? "Sign in" : "Create Account"}</span>
                     )}
                   </button>
                 </form>
@@ -667,8 +676,8 @@ export default function AuthScreen({ onLoginSuccess }) {
                   </svg>
                 </div>
                 <div className="feature-text">
-                  <span className="feature-title">Subject-specific questions</span>
-                  <span className="feature-desc">Questions generated from your syllabus and important topics.</span>
+                  <span className="feature-title">Subject & Role Presets</span>
+                  <span className="feature-desc">Questions generated from your syllabus uploads or predefined corporate profiles.</span>
                 </div>
               </div>
 
@@ -682,8 +691,8 @@ export default function AuthScreen({ onLoginSuccess }) {
                   </svg>
                 </div>
                 <div className="feature-text">
-                  <span className="feature-title">Performance insights</span>
-                  <span className="feature-desc">Detailed feedback to help you identify and improve.</span>
+                  <span className="feature-title">Biometric & Speech Insights</span>
+                  <span className="feature-desc">Detailed feedback on confidence levels, pacing, clarity, and structural gaps.</span>
                 </div>
               </div>
 
@@ -696,8 +705,8 @@ export default function AuthScreen({ onLoginSuccess }) {
                   </svg>
                 </div>
                 <div className="feature-text">
-                  <span className="feature-title">Realistic viva experience</span>
-                  <span className="feature-desc">Al examiners adapt based on your responses and confidence.</span>
+                  <span className="feature-title">Interactive Panels</span>
+                  <span className="feature-desc">AI evaluators dynamically adapt questions based on your response quality.</span>
                 </div>
               </div>
 
@@ -711,7 +720,7 @@ export default function AuthScreen({ onLoginSuccess }) {
                 <path d="M6 9.5V14a6 6 0 0 0 12 0V9.5"/>
               </svg>
               <span className="copyright-text">
-                © 2024 VivaSim. All rights reserved.
+                © 2026 PrepSim. All rights reserved.
               </span>
             </div>
           </footer>

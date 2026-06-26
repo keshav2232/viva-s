@@ -215,6 +215,132 @@ export const ADAPTIVE_VIVAS = {
         speech: "You brought up spur gears. Explain the primary failure modes of gear teeth and how the Lewis equation models bending stress at the tooth root."
       }
     }
+  },
+  "Software Engineer (Backend)": {
+    intro: {
+      text: "Can you explain the key architectural differences between Microservices and Monoliths, and what trade-offs you consider when dividing system domains?",
+      speech: "Welcome. Let's begin the mock interview. Can you explain the key architectural differences between Microservices and Monoliths, and what trade-offs you consider when dividing system domains?"
+    },
+    branches: {
+      advanced: {
+        text: "Excellent. Let's discuss scaling. How do you implement database replication and write-through caching to handle 10x read traffic spikes while maintaining transactional data consistency?",
+        speech: "Excellent. Let's discuss scaling. How do you implement database replication and write-through caching to handle 10x read traffic spikes while maintaining transactional data consistency?"
+      },
+      supportive: {
+        text: "No worries, let's look at the basics. In simple terms, when you type a URL into a web browser, how does the client communicate with the server to retrieve a page, and what is the role of an IP address?",
+        speech: "No worries, let's look at the basics. In simple terms, when you type a URL into a web browser, how does the client communicate with the server to retrieve a page, and what is the role of an IP address?"
+      },
+      foundational: {
+        text: "Let's review core concepts. Can you explain the difference between a relational database and a non-relational database, and when you would select one over the other?",
+        speech: "Let's review core concepts. Can you explain the difference between a relational database and a non-relational database, and when you would select one over the other?"
+      },
+      analytical: {
+        text: "Good. Let's analyze concurrency. What is the difference between multithreading and asynchronous execution, and how do you prevent thread deadlocks in a high-concurrency system?",
+        speech: "Good. Let's analyze concurrency. What is the difference between multithreading and asynchronous execution, and how do you prevent thread deadlocks in a high-concurrency system?"
+      }
+    },
+    keywords: {
+      "cache": {
+        text: "You mentioned caching. How do you handle cache invalidation, and what is the difference between write-through and cache-aside strategies?",
+        speech: "You mentioned caching. How do you handle cache invalidation, and what is the difference between write-through and cache-aside strategies?"
+      },
+      "database": {
+        text: "You referred to databases. Can you explain SQL indexing, how it speeds up query execution, and what overhead it introduces on insert operations?",
+        speech: "You referred to databases. Can you explain SQL indexing, how it speeds up query execution, and what overhead it introduces on insert operations?"
+      },
+      "microservice": {
+        text: "You brought up microservices. How do you handle distributed transactions, and what is the role of the Saga pattern or 2-Phase Commit?",
+        speech: "You brought up microservices. How do you handle distributed transactions, and what is the role of the Saga pattern or 2-Phase Commit?"
+      },
+      "queue": {
+        text: "You mentioned message queues. How do you ensure message delivery guarantees (at-least-once, exactly-once) in a system like Kafka or RabbitMQ?",
+        speech: "You mentioned message queues. How do you ensure message delivery guarantees (at-least-once, exactly-once) in a system like Kafka or RabbitMQ?"
+      }
+    }
+  },
+  "Product Manager": {
+    intro: {
+      text: "How do you evaluate and prioritize features for a product when resources are limited, and what frameworks do you use?",
+      speech: "Welcome. Let's begin the mock interview. How do you evaluate and prioritize features for a product when resources are limited, and what frameworks do you use?"
+    },
+    branches: {
+      advanced: {
+        text: "Excellent. Let's talk strategy. How would you design a go-to-market plan for a new B2B SaaS product, and how do you compute target Customer Acquisition Cost and Lifetime Value?",
+        speech: "Excellent. Let's talk strategy. How would you design a go-to-market plan for a new B2B SaaS product, and how do you compute target Customer Acquisition Cost and Lifetime Value?"
+      },
+      supportive: {
+        text: "No worries, let's step back. If you notice user signup numbers are high but active usage drops after day one, what steps would you take to diagnose this onboarding funnel leak?",
+        speech: "No worries, let's step back. If you notice user signup numbers are high but active usage drops after day one, what steps would you take to diagnose this onboarding funnel leak?"
+      },
+      foundational: {
+        text: "Let's review core concepts. What is a minimum viable product, and how do you balance speed-to-market against product quality when launching a new feature?",
+        speech: "Let's review core concepts. What is a minimum viable product, and how do you balance speed-to-market against product quality when launching a new feature?"
+      },
+      analytical: {
+        text: "Good. Let's analyze metrics. How do you construct and interpret an A/B test, and how do you ensure the results are statistically significant before rolling it out?",
+        speech: "Good. Let's analyze metrics. How do you construct and interpret an A/B test, and how do you ensure the results are statistically significant before rolling it out?"
+      }
+    },
+    keywords: {
+      "mvp": {
+        text: "You mentioned the MVP. How do you define its scope without ending up with a product that is too bare or a project that experiences scope creep?",
+        speech: "You mentioned the MVP. How do you define its scope without ending up with a product that is too bare or a project that experiences scope creep?"
+      },
+      "funnel": {
+        text: "You referred to user funnels. Can you describe how you map the user journey and which analytical metrics you track at each conversion stage?",
+        speech: "You referred to user funnels. Can you describe how you map the user journey and which analytical metrics you track at each conversion stage?"
+      },
+      "ab testing": {
+        text: "You brought up A/B testing. What is a p-value, and how do you prevent sample ratio mismatch or false positive results during testing?",
+        speech: "You brought up A/B testing. What is a p-value, and how do you prevent sample ratio mismatch or false positive results during testing?"
+      },
+      "retention": {
+        text: "You mentioned retention. How do you design product loop mechanisms to encourage repeat engagement and increase overall user stickiness?",
+        speech: "You mentioned retention. How do you design product loop mechanisms to encourage repeat engagement and increase overall user stickiness?"
+      }
+    }
+  },
+  "Data Scientist": {
+    intro: {
+      text: "What are the core differences between Supervised and Unsupervised machine learning models, and how do you choose between them?",
+      speech: "Welcome. Let's begin the mock interview. What are the core differences between Supervised and Unsupervised machine learning models, and how do you choose between them?"
+    },
+    branches: {
+      advanced: {
+        text: "Excellent. Let's talk deep learning. How do you prevent gradient vanishing or explosion during training in deep neural networks, and how do residual connections mitigate this?",
+        speech: "Excellent. Let's talk deep learning. How do you prevent gradient vanishing or explosion during training in deep neural networks, and how do residual connections mitigate this?"
+      },
+      supportive: {
+        text: "No worries, let's simplify. If you want to predict if an email is spam or not, what basic features would you extract from the text, and how would you verify your model's predictions?",
+        speech: "No worries, let's simplify. If you want to predict if an email is spam or not, what basic features would you extract from the text, and how would you verify your model's predictions?"
+      },
+      foundational: {
+        text: "Let's review core concepts. What is the bias-variance trade-off in machine learning, and how do you diagnose if a model is overfitting or underfitting?",
+        speech: "Let's review core concepts. What is the bias-variance trade-off in machine learning, and how do you diagnose if a model is overfitting or underfitting?"
+      },
+      analytical: {
+        text: "Good. Let's analyze data quality. What is feature engineering, and how do you handle missing data values, outliers, and highly imbalanced datasets in training?",
+        speech: "Good. Let's analyze data quality. What is feature engineering, and how do you handle missing data values, outliers, and highly imbalanced datasets in training?"
+      }
+    },
+    keywords: {
+      "overfitting": {
+        text: "You mentioned overfitting. What regularization techniques (L1 Lasso, L2 Ridge, Dropout) do you use to penalize model complexity and improve generalizability?",
+        speech: "You mentioned overfitting. What regularization techniques (L1 Lasso, L2 Ridge, Dropout) do you use to penalize model complexity and improve generalizability?"
+      },
+      "feature": {
+        text: "You referred to features. How do you perform dimensionality reduction, and how does Principal Component Analysis (PCA) preserve data variance?",
+        speech: "You referred to features. How do you perform dimensionality reduction, and how does Principal Component Analysis (PCA) preserve data variance?"
+      },
+      "precision": {
+        text: "You brought up precision. When should you prioritize Precision over Recall, and how does the F1-score balance these two classification metrics?",
+        speech: "You brought up precision. When should you prioritize Precision over Recall, and how does the F1-score balance these two classification metrics?"
+      },
+      "regression": {
+        text: "You mentioned regression models. What are the key assumptions of linear regression, and how do you detect multicollinearity using Variance Inflation Factor (VIF)?",
+        speech: "You mentioned regression models. What are the key assumptions of linear regression, and how do you detect multicollinearity using Variance Inflation Factor (VIF)?"
+      }
+    }
   }
 };
 

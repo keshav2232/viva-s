@@ -33,6 +33,7 @@ export default function Home() {
   const [isGuest, setIsGuest] = useState(false);
   const [syncingGuest, setSyncingGuest] = useState(false);
   const [syncSuccessMsg, setSyncSuccessMsg] = useState("");
+  const [currentMode, setCurrentMode] = useState("academic");
 
   // Guest Offline Backup State (mirrors original logic)
   const [guestUserName, setGuestUserName] = useState(() => {
@@ -124,8 +125,14 @@ export default function Home() {
       await logout();
     } else {
       setIsGuest(false);
+      setSessions([]);
+      setStats(EMPTY_STATS);
       if (typeof window !== "undefined") {
         localStorage.removeItem("vivasim_user");
+        localStorage.removeItem("vivasim_sessions");
+        localStorage.removeItem("vivasim_stats");
+        localStorage.removeItem("vivasim_mastery");
+        localStorage.removeItem("vivasim_paused_session");
       }
     }
     setActiveScreen("dashboard");
@@ -159,8 +166,18 @@ export default function Home() {
     }
   }, [user, syncingGuest, handleMigrateGuestHistory]);
 
+  // Auto-detect currentMode from the latest session in the history list
+  useEffect(() => {
+    if (activeSessions && activeSessions.length > 0) {
+      setCurrentMode(activeSessions[0].mode || "academic");
+    }
+  }, [activeSessions]);
+
   const handleBeginViva = (config) => {
     setVivaConfig(config);
+    if (config.mode) {
+      setCurrentMode(config.mode);
+    }
     setActiveScreen("active-viva");
   };
 
@@ -193,6 +210,9 @@ export default function Home() {
   };
 
   const handleViewReport = (session) => {
+    if (session.mode) {
+      setCurrentMode(session.mode);
+    }
     if (session.reportData) {
       setResultsData(session.reportData);
     } else {
@@ -242,7 +262,11 @@ export default function Home() {
         const paused = localStorage.getItem("vivasim_paused_session");
         if (paused) {
           try {
-            setPausedSession(JSON.parse(paused));
+            const parsedObj = JSON.parse(paused);
+            setPausedSession(parsedObj);
+            if (parsedObj.config?.mode) {
+              setCurrentMode(parsedObj.config.mode);
+            }
           } catch (e) {
             setPausedSession(null);
           }
@@ -252,6 +276,10 @@ export default function Home() {
       }
       setActiveScreen("dashboard");
       return;
+    }
+
+    if (summary.mode) {
+      setCurrentMode(summary.mode);
     }
 
     const finalScore = calculateFinalScore(summary);
@@ -272,11 +300,12 @@ export default function Home() {
       id: generateSessionId(),
       subject: summary.subjectName,
       duration: vivaConfig.duration,
-      personality: getPersonalityName(vivaConfig.personality),
+      personality: getPersonalityName(vivaConfig.personality, summary.mode),
       score: finalScore,
       date: sessionDateStr,
       gradeClass: finalScore >= 80 ? "high" : (finalScore >= 65 ? "med" : "low"),
-      reportData: summary
+      reportData: summary,
+      mode: summary.mode
     };
 
     // Calculate updated aggregate statistics
@@ -355,13 +384,14 @@ export default function Home() {
     return score;
   };
 
-  const getPersonalityName = (pType) => {
+  const getPersonalityName = (pType, mode) => {
+    const isProfessional = mode === "professional";
     switch(pType) {
-      case "friendly": return "Friendly Professor";
-      case "strict": return "Strict Professor";
-      case "brutal": return "Brutal External";
-      case "terror": return "Viva Terror";
-      default: return "AI Examiner";
+      case "friendly": return isProfessional ? "Warm Recruiter" : "Friendly Professor";
+      case "strict": return isProfessional ? "Structured EM" : "Strict Professor";
+      case "brutal": return isProfessional ? "Bar Raiser EM" : "Brutal External";
+      case "terror": return isProfessional ? "Director Bar Raiser" : "Viva Terror";
+      default: return isProfessional ? "AI Recruiter" : "AI Examiner";
     }
   };
 
@@ -417,37 +447,129 @@ export default function Home() {
         <div className="bg-decor-orb decor-orb-2"></div>
         <div className="bg-decor-orb decor-orb-3"></div>
         
-        {/* Normal Distribution Curve (Telemetry Curve) */}
-        <svg className="bg-academic-watermark watermark-bell" viewBox="0 0 100 50" fill="none" stroke="currentColor" strokeWidth="0.5">
-          <path d="M5 45 L25 45 Q40 45 50 10 Q60 45 75 45 L95 45" />
-          <line x1="50" y1="10" x2="50" y2="45" strokeDasharray="1 2" />
-          <line x1="5" y1="45" x2="95" y2="45" />
-          <text x="48" y="7" fontSize="4" fill="currentColor">μ</text>
-          <text x="62" y="38" fontSize="4.5" fill="currentColor">σ</text>
-        </svg>
+        {currentMode === "professional" ? (
+          <>
+            {/* STAR Flowchart Watermark */}
+            <svg className="bg-academic-watermark watermark-bell" viewBox="0 0 100 50" fill="none" stroke="currentColor" strokeWidth="0.5">
+              <rect x="5" y="15" width="16" height="20" rx="2" strokeWidth="0.6" />
+              <text x="13" y="27" fontSize="8" fontWeight="700" fill="currentColor" textAnchor="middle">S</text>
+              <text x="13" y="32" fontSize="2.5" fill="currentColor" textAnchor="middle">SITUATION</text>
 
-        {/* Grid Cartesian Coordinate Plane (Computational Graph) */}
-        <svg className="bg-academic-watermark watermark-grid" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="0.3">
-          <line x1="10" y1="50" x2="90" y2="50" strokeWidth="0.8" />
-          <line x1="50" y1="10" x2="50" y2="90" strokeWidth="0.8" />
-          <circle cx="50" cy="50" r="30" strokeDasharray="2 2" />
-          <path d="M 20 80 Q 50 50 80 20" strokeWidth="0.6" strokeDasharray="1 1" />
-          <path d="M 20 20 Q 50 50 80 80" strokeWidth="0.6" />
-          <text x="88" y="47" fontSize="5" fill="currentColor">x</text>
-          <text x="52" y="14" fontSize="5" fill="currentColor">y</text>
-        </svg>
+              <line x1="21" y1="25" x2="27" y2="25" strokeWidth="0.6" />
+              <polygon points="27,25 24,23 24,27" fill="currentColor" stroke="none" />
 
-        {/* Vector Circle Coordinate System (Kinematics Plane) */}
-        <svg className="bg-academic-watermark watermark-circle" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="0.4">
-          <circle cx="50" cy="50" r="40" />
-          <circle cx="50" cy="50" r="2" fill="currentColor" />
-          <line x1="50" y1="50" x2="78" y2="22" />
-          <line x1="50" y1="50" x2="50" y2="10" strokeDasharray="1 2" />
-          <line x1="10" y1="50" x2="90" y2="50" strokeDasharray="1 2" />
-          <path d="M 60 50 A 10 10 0 0 0 57 43" strokeWidth="0.6" />
-          <text x="62" y="46" fontSize="5" fill="currentColor">θ</text>
-          <text x="75" y="20" fontSize="5" fill="currentColor">r</text>
-        </svg>
+              <rect x="28" y="15" width="16" height="20" rx="2" strokeWidth="0.6" />
+              <text x="36" y="27" fontSize="8" fontWeight="700" fill="currentColor" textAnchor="middle">T</text>
+              <text x="36" y="32" fontSize="2.5" fill="currentColor" textAnchor="middle">TASK</text>
+
+              <line x1="44" y1="25" x2="50" y2="25" strokeWidth="0.6" />
+              <polygon points="50,25 47,23 47,27" fill="currentColor" stroke="none" />
+
+              <rect x="51" y="15" width="16" height="20" rx="2" strokeWidth="0.6" />
+              <text x="59" y="27" fontSize="8" fontWeight="700" fill="currentColor" textAnchor="middle">A</text>
+              <text x="59" y="32" fontSize="2.5" fill="currentColor" textAnchor="middle">ACTION</text>
+
+              <line x1="67" y1="25" x2="73" y2="25" strokeWidth="0.6" />
+              <polygon points="73,25 70,23 70,27" fill="currentColor" stroke="none" />
+
+              <rect x="74" y="15" width="16" height="20" rx="2" strokeWidth="0.6" />
+              <text x="82" y="27" fontSize="8" fontWeight="700" fill="currentColor" textAnchor="middle">R</text>
+              <text x="82" y="32" fontSize="2.5" fill="currentColor" textAnchor="middle">RESULT</text>
+            </svg>
+
+            {/* System Design Component Watermark */}
+            <svg className="bg-academic-watermark watermark-grid" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="0.3">
+              <rect x="10" y="40" width="16" height="20" rx="2" strokeWidth="0.6" />
+              <text x="18" y="52" fontSize="4.5" fill="currentColor" textAnchor="middle">Client</text>
+              
+              <line x1="26" y1="50" x2="34" y2="50" strokeWidth="0.6" />
+              <polygon points="34,50 31,48 31,52" fill="currentColor" stroke="none" />
+
+              <rect x="35" y="30" width="18" height="40" rx="2" strokeWidth="0.6" />
+              <text x="44" y="52" fontSize="4.5" fill="currentColor" textAnchor="middle">LB / API</text>
+              
+              <line x1="53" y1="42" x2="61" y2="35" strokeWidth="0.6" />
+              <polygon points="61,35 57,35 59,38" fill="currentColor" stroke="none" />
+              
+              <line x1="53" y1="58" x2="61" y2="65" strokeWidth="0.6" />
+              <polygon points="61,65 59,62 57,65" fill="currentColor" stroke="none" />
+
+              <rect x="62" y="20" width="18" height="20" rx="2" strokeWidth="0.6" />
+              <text x="71" y="32" fontSize="4" fill="currentColor" textAnchor="middle">App Svc</text>
+
+              <rect x="62" y="60" width="18" height="20" rx="2" strokeWidth="0.6" />
+              <text x="71" y="72" fontSize="4.0" fill="currentColor" textAnchor="middle">DB Cluster</text>
+              
+              <path d="M 80 30 Q 95 50 80 70" strokeWidth="0.5" strokeDasharray="1 1" />
+            </svg>
+
+            {/* Calendar Grid Schedule Watermark */}
+            <svg className="bg-academic-watermark watermark-circle" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="0.4">
+              <rect x="10" y="10" width="80" height="80" rx="4" strokeWidth="0.8" />
+              <line x1="10" y1="28" x2="90" y2="28" strokeWidth="0.8" />
+              <text x="50" y="21" fontSize="6.5" fontWeight="700" fill="currentColor" textAnchor="middle">INTERVIEW SCHEDULE</text>
+              
+              <line x1="21.4" y1="28" x2="21.4" y2="90" />
+              <line x1="32.8" y1="28" x2="32.8" y2="90" />
+              <line x1="44.2" y1="28" x2="44.2" y2="90" />
+              <line x1="55.6" y1="28" x2="55.6" y2="90" />
+              <line x1="67" y1="28" x2="67" y2="90" />
+              <line x1="78.4" y1="28" x2="78.4" y2="90" />
+
+              <line x1="10" y1="43.5" x2="90" y2="43.5" />
+              <line x1="10" y1="59" x2="90" y2="59" />
+              <line x1="10" y1="74.5" x2="90" y2="74.5" />
+              
+              <rect x="34.8" y="30" width="7.4" height="11.5" rx="1.5" strokeWidth="0.5" strokeDasharray="1 1" />
+              <text x="38.5" y="38" fontSize="4.5" fill="currentColor" textAnchor="middle" fontWeight="700">9a</text>
+              
+              <rect x="57.6" y="45.5" width="7.4" height="11.5" rx="1.5" strokeWidth="0.5" />
+              <path d="M59.5,51.5 L61,53 L63.5,49.5" strokeWidth="0.6" strokeLinecap="round" strokeLinejoin="round" />
+
+              <rect x="23.4" y="61" width="7.4" height="11.5" rx="1.5" strokeWidth="0.5" />
+              <text x="27.1" y="69" fontSize="4.5" fill="currentColor" textAnchor="middle" fontWeight="700">2p</text>
+
+              <rect x="69" y="76.5" width="7.4" height="11.5" rx="1.5" strokeWidth="0.5" strokeDasharray="1 1" />
+              <circle cx="72.7" cy="82.2" r="3.2" strokeWidth="0.5" />
+              <line x1="72.7" y1="82.2" x2="72.7" y2="80.2" strokeWidth="0.5" />
+              <line x1="72.7" y1="82.2" x2="74.2" y2="82.2" strokeWidth="0.5" />
+            </svg>
+          </>
+        ) : (
+          <>
+            {/* Normal Distribution Curve (Telemetry Curve) */}
+            <svg className="bg-academic-watermark watermark-bell" viewBox="0 0 100 50" fill="none" stroke="currentColor" strokeWidth="0.5">
+              <path d="M5 45 L25 45 Q40 45 50 10 Q60 45 75 45 L95 45" />
+              <line x1="50" y1="10" x2="50" y2="45" strokeDasharray="1 2" />
+              <line x1="5" y1="45" x2="95" y2="45" />
+              <text x="48" y="7" fontSize="4" fill="currentColor">μ</text>
+              <text x="62" y="38" fontSize="4.5" fill="currentColor">σ</text>
+            </svg>
+
+            {/* Grid Cartesian Coordinate Plane (Computational Graph) */}
+            <svg className="bg-academic-watermark watermark-grid" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="0.3">
+              <line x1="10" y1="50" x2="90" y2="50" strokeWidth="0.8" />
+              <line x1="50" y1="10" x2="50" y2="90" strokeWidth="0.8" />
+              <circle cx="50" cy="50" r="30" strokeDasharray="2 2" />
+              <path d="M 20 80 Q 50 50 80 20" strokeWidth="0.6" strokeDasharray="1 1" />
+              <path d="M 20 20 Q 50 50 80 80" strokeWidth="0.6" />
+              <text x="88" y="47" fontSize="5" fill="currentColor">x</text>
+              <text x="52" y="14" fontSize="5" fill="currentColor">y</text>
+            </svg>
+
+            {/* Vector Circle Coordinate System (Kinematics Plane) */}
+            <svg className="bg-academic-watermark watermark-circle" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="0.4">
+              <circle cx="50" cy="50" r="40" />
+              <circle cx="50" cy="50" r="2" fill="currentColor" />
+              <line x1="50" y1="50" x2="78" y2="22" />
+              <line x1="50" y1="50" x2="50" y2="10" strokeDasharray="1 2" />
+              <line x1="10" y1="50" x2="90" y2="50" strokeDasharray="1 2" />
+              <path d="M 60 50 A 10 10 0 0 0 57 43" strokeWidth="0.6" />
+              <text x="62" y="46" fontSize="5" fill="currentColor">θ</text>
+              <text x="75" y="20" fontSize="5" fill="currentColor">r</text>
+            </svg>
+          </>
+        )}
       </div>
 
       {/* Header */}

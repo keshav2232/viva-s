@@ -102,6 +102,33 @@ export const SyllabusMasteryService = {
       ]
     };
 
+    const seSyllabus = {
+      topic: "Software Engineer (Backend)",
+      units: [
+        { name: "Competency 1: System Design & Architecture", topics: ["Microservices vs Monoliths", "Scalability & Load Balancing", "Database Replication & Caching", "Message Queuing & Eventual Consistency"] },
+        { name: "Competency 2: Algorithms & Concurrency", topics: ["High-Concurrency Execution", "Thread Pool Deadlocks", "Data Structures Complexity", "Asynchronous Processing Loops"] },
+        { name: "Competency 3: Databases & Integrity", topics: ["SQL Indexing Performance", "NoSQL vs Relational Storage", "Distributed Transaction Sagas", "Cache Invalidation Strategies"] }
+      ]
+    };
+
+    const pmSyllabus = {
+      topic: "Product Manager",
+      units: [
+        { name: "Competency 1: Product Strategy & Prioritization", topics: ["Feature Prioritization Frameworks", "MVP Scope Definition", "Market Opportunity Analysis", "Go-To-Market Plans"] },
+        { name: "Competency 2: Execution Analytics & Funnels", topics: ["A/B Testing Significance", "Funnel Conversion Optimization", "Onboarding Drop-off Diagnostics", "Retention Loop Design"] },
+        { name: "Competency 3: Business & Product Metrics", topics: ["Customer Acquisition Cost", "Customer Lifetime Value", "North Star Metrics", "Churn Rate Analysis"] }
+      ]
+    };
+
+    const dataSciSyllabus = {
+      topic: "Data Scientist",
+      units: [
+        { name: "Competency 1: ML Model Fundamentals", topics: ["Supervised vs Unsupervised Models", "Bias-Variance Trade-off", "Regularization L1/L2/Dropout", "Model Overfitting Diagnostics"] },
+        { name: "Competency 2: Data Engineering & Quality", topics: ["Feature Engineering Pipelines", "Imbalanced Class Strategies", "Outlier & Missing Data Handling", "Dimensionality Reduction PCA"] },
+        { name: "Competency 3: Advanced Deep Learning", topics: ["Gradient Vanishing/Explosion", "Residual Connection Functions", "Precision vs Recall Balance", "Evaluation Metrics F1-score"] }
+      ]
+    };
+
     const populate = (syllabus, score) => {
       const subject = syllabus.topic;
       data[subject] = {
@@ -126,6 +153,9 @@ export const SyllabusMasteryService = {
 
     populate(dsSyllabus, dsSession ? dsSession.score : 82);
     populate(thermoSyllabus, thermoSession ? thermoSession.score : 78);
+    populate(seSyllabus, 84);
+    populate(pmSyllabus, 75);
+    populate(dataSciSyllabus, 80);
 
     this.saveMasteryData(data);
     return data;

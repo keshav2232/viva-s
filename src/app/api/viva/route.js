@@ -103,9 +103,9 @@ export async function POST(req) {
 
     switch(action) {
       case "expand-topic":
-        return await handleExpandTopic(payload.topic, apiKey);
+        return await handleExpandTopic(payload.topic, payload.mode, apiKey);
       case "parse-syllabus":
-        return await handleParseSyllabus(payload.text, apiKey);
+        return await handleParseSyllabus(payload.text, payload.mode, apiKey);
       case "generate-question":
         return await handleGenerateQuestion(payload, apiKey);
       case "evaluate-answer":
@@ -115,7 +115,7 @@ export async function POST(req) {
       case "generate-subquestion":
         return await handleGenerateSubquestion(payload, apiKey);
       case "generate-flashcards":
-        return await handleGenerateFlashcards(payload.syllabusStructure, apiKey);
+        return await handleGenerateFlashcards(payload.syllabusStructure, payload.mode, apiKey);
       case "analyze-hume-emotion":
         const humeKey = process.env.HUME_API_KEY || "zxaj1GRdT7kD3G58PEUG3UTGmjHrrofETDKFQAGGmfY4hQtT";
         const humeResult = await handleAnalyzeHumeEmotion(payload.audioBase64, humeKey);
@@ -133,8 +133,18 @@ export async function POST(req) {
 // ==========================================
 // 1. EXPAND TOPIC TREE
 // ==========================================
-async function handleExpandTopic(topic, apiKey) {
-  const prompt = `Act as an academic curriculum specialist. Expand the topic "${topic}" into a structured syllabus with exactly 3 Units. Each Unit must have a name, and exactly 3 or 4 concise core subtopics. 
+async function handleExpandTopic(topic, mode, apiKey) {
+  const isProfessional = mode === "professional";
+  const prompt = isProfessional
+    ? `Act as an expert recruiter and corporate talent specialist. Expand the job role or domain "${topic}" into a structured competency framework with exactly 3 Competency Areas. Each Area must have a name (e.g. "Competency 1: System Design"), and exactly 3 or 4 concise core skills or subtopics.
+  Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown blocks:
+  {
+    "topic": "${topic}",
+    "units": [
+      { "name": "Competency area name", "topics": ["skill 1", "skill 2", "skill 3"] }
+    ]
+  }`
+    : `Act as an academic curriculum specialist. Expand the topic "${topic}" into a structured syllabus with exactly 3 Units. Each Unit must have a name, and exactly 3 or 4 concise core subtopics. 
   Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown blocks:
   {
     "topic": "${topic}",
@@ -150,8 +160,24 @@ async function handleExpandTopic(topic, apiKey) {
 // ==========================================
 // 1.5. PARSE CUSTOM SYLLABUS TEXT WITH GEMINI
 // ==========================================
-async function handleParseSyllabus(rawText, apiKey) {
-  const prompt = `Act as an academic curriculum specialist. Analyze the following raw course syllabus, lecture notes, or subject outlines, and extract a structured course topic and exactly 3 logical Units. Each Unit must have a clean name (e.g. "Unit 1: Process Scheduling"), and exactly 3 or 4 precise, highly concise technical subtopics directly mentioned or relevant to that unit's scope in the text.
+async function handleParseSyllabus(rawText, mode, apiKey) {
+  const isProfessional = mode === "professional";
+  const prompt = isProfessional
+    ? `Act as an expert recruiter and corporate talent specialist. Analyze the following raw job description, resume, or role requirements, and extract a structured job title and exactly 3 logical Competency Areas. Each Competency Area must have a clean name (e.g. "Competency 1: Backend Engineering"), and exactly 3 or 4 precise, highly concise subtopics/skills directly mentioned or relevant to that competency's scope in the text.
+  
+  Raw Text:
+  """
+  ${rawText.substring(0, 6000)}
+  """
+  
+  Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown blocks:
+  {
+    "topic": "Overall Job Title (e.g. Software Engineer)",
+    "units": [
+      { "name": "Competency area name", "topics": ["skill 1", "skill 2", "skill 3"] }
+    ]
+  }`
+    : `Act as an academic curriculum specialist. Analyze the following raw course syllabus, lecture notes, or subject outlines, and extract a structured course topic and exactly 3 logical Units. Each Unit must have a clean name (e.g. "Unit 1: Process Scheduling"), and exactly 3 or 4 precise, highly concise technical subtopics directly mentioned or relevant to that unit's scope in the text.
   
   Raw Syllabus Text:
   """
@@ -174,55 +200,127 @@ async function handleParseSyllabus(rawText, apiKey) {
 // 2. GENERATE QUESTION & REMARKS (ADAPTIVE BRANCHING)
 // ==========================================
 async function handleGenerateQuestion(payload, apiKey) {
-  const { syllabus, personality, duration, asked, history, lastTag, activeTopic, nervousness, isTargetDrill, targetSubtopic } = payload;
+  const { syllabus, personality, duration, asked, history, lastTag, activeTopic, nervousness, isTargetDrill, targetSubtopic, mode } = payload;
+  const isProfessional = mode === "professional";
   
   // Format history for the prompt
   const conversationContext = history && history.length > 0
     ? history.map((h, idx) => `Q${idx+1}: "${asked[idx]}" -> A${idx+1}: "${h}"`).join("\n")
-    : "No questions asked yet. This is the first question of the exam.";
+    : "No questions asked yet. This is the first question.";
 
   const studentNervousness = nervousness || 0;
 
   // Personality prompts mapping
   let personaPrompt = "";
-  switch(personality) {
-    case "friendly":
-      personaPrompt = "Friendly Professor: You are patient, warm, and encouraging. If the student struggled (last tag is Weak or Confused), provide a gentle, supportive remark (e.g. 'No worries, let's look at it simply...') and pivot to a foundational question. If strong, praise them warmly and go slightly deeper.";
-      if (studentNervousness > 70) {
-        personaPrompt += " Note: The student is currently extremely nervous. Soften your tone even further, be highly reassuring, and ask an easier conceptual question to boost their confidence.";
-      }
-      break;
-    case "strict":
-      personaPrompt = "Strict Professor: You are highly formal, demand exact equations and definitions. If the student was weak, mention that their definition was incomplete and ask them to specify fundamentals precisely. Do not give hints.";
-      if (studentNervousness > 70) {
-        personaPrompt += " Note: The student is highly nervous. Reduce your intensity slightly to allow them to collect their thoughts, while still maintaining high standards of exact definitions.";
-      }
-      break;
-    case "brutal":
-      personaPrompt = "Brutal Examiner: High pressure, skeptical. You question their claims and challenge their confidence. If they answered strongly, ask a tricky conceptual twist (e.g. 'Are you sure? What if we change...'). If weak, point out their error sharply.";
-      if (studentNervousness > 70) {
-        personaPrompt += " Note: The student is highly nervous. Become even more probing and challenge them further to see if they break under academic pressure.";
-      }
-      break;
-    case "terror":
-      personaPrompt = "Viva Terror: Intimidating, rapid follow-ups. You point out logical fallacies instantly. You test fundamental understanding aggressively: 'That sounds like a memorized book answer. Explain what actually happens at the boundary.'";
-      if (studentNervousness > 70) {
-        personaPrompt += " Note: The student is highly nervous. Become completely unpredictable—either drop a sudden silence nudge or launch a rapid-fire series of highly intense technical questions to test their limits.";
-      }
-      break;
+  if (isProfessional) {
+    switch(personality) {
+      case "friendly":
+        personaPrompt = "Warm Recruiter: You are patient, warm, and highly encouraging. Introduce yourself as a Recruiter. If the candidate struggled (last tag is Weak or Confused), provide a gentle, supportive remark (e.g. 'No worries, let's look at this simple scenario...') and pivot to a foundational behavioral or domain question. If strong, praise them warmly and ask about their experience.";
+        if (studentNervousness > 70) {
+          personaPrompt += " Note: The candidate is currently extremely nervous. Soften your tone even further, be highly reassuring, and ask an easier high-level question to build rapport.";
+        }
+        break;
+      case "strict":
+        personaPrompt = "Structured Hiring Manager: You are highly structured, formal, and analytical. You expect clear engineering trade-offs, system architecture choices, and concrete technical details. If the candidate was weak, point out that their technical depth was lacking and ask them to specify real-world constraints or design choices. Do not offer hints.";
+        if (studentNervousness > 70) {
+          personaPrompt += " Note: The candidate is highly nervous. Maintain high technical standards but give them a structured prompt so they can collect their thoughts.";
+        }
+        break;
+      case "brutal":
+        personaPrompt = "Bar Raiser EM: Highly skeptical, detail-oriented, and demanding. You probe deeply into their past projects and technical claims. You expect concrete STAR-formatted details (Situation, Task, Action, Result) and real architectural trade-offs. Challenge their choices sharply.";
+        if (studentNervousness > 70) {
+          personaPrompt += " Note: The candidate is highly nervous. Continue challenging them under pressure to evaluate their resilience and engineering principles.";
+        }
+        break;
+      case "terror":
+        personaPrompt = "Director Bar Raiser: Intimidating, rapid-fire follow-ups, and unpredictable. You immediately target logical fallacies, edge cases, and high-pressure trade-offs. 'That sounds like a generic online guide answer. Tell me about a real production outage or concrete scale challenge you personally solved and the exact API/DB level bottleneck.'";
+        if (studentNervousness > 70) {
+          personaPrompt += " Note: The candidate is highly nervous. Test their limits with a rapid-fire technical scenario or sudden intense edge case.";
+        }
+        break;
+    }
+  } else {
+    switch(personality) {
+      case "friendly":
+        personaPrompt = "Friendly Professor: You are patient, warm, and encouraging. If the student struggled (last tag is Weak or Confused), provide a gentle, supportive remark (e.g. 'No worries, let's look at it simply...') and pivot to a foundational question. If strong, praise them warmly and go slightly deeper.";
+        if (studentNervousness > 70) {
+          personaPrompt += " Note: The student is currently extremely nervous. Soften your tone even further, be highly reassuring, and ask an easier conceptual question to boost their confidence.";
+        }
+        break;
+      case "strict":
+        personaPrompt = "Strict Professor: You are highly formal, demand exact equations and definitions. If the student was weak, mention that their definition was incomplete and ask them to specify fundamentals precisely. Do not give hints.";
+        if (studentNervousness > 70) {
+          personaPrompt += " Note: The student is highly nervous. Reduce your intensity slightly to allow them to collect their thoughts, while still maintaining high standards of exact definitions.";
+        }
+        break;
+      case "brutal":
+        personaPrompt = "Brutal Examiner: High pressure, skeptical. You question their claims and challenge their confidence. If they answered strongly, ask a tricky conceptual twist (e.g. 'Are you sure? What if we change...'). If weak, point out their error sharply.";
+        if (studentNervousness > 70) {
+          personaPrompt += " Note: The student is highly nervous. Become even more probing and challenge them further to see if they break under academic pressure.";
+        }
+        break;
+      case "terror":
+        personaPrompt = "Viva Terror: Intimidating, rapid follow-ups. You point out logical fallacies instantly. You test fundamental understanding aggressively: 'That sounds like a memorized book answer. Explain what actually happens at the boundary.'";
+        if (studentNervousness > 70) {
+          personaPrompt += " Note: The student is highly nervous. Become completely unpredictable—either drop a sudden silence nudge or launch a rapid-fire series of highly intense technical questions to test their limits.";
+        }
+        break;
+    }
   }
 
   let targetDrillPrompt = "";
   if (isTargetDrill && targetSubtopic) {
-    targetDrillPrompt = `
+    if (isProfessional) {
+      targetDrillPrompt = `
+  
+  🎯 TARGET DRILL ENFORCED FOCUS:
+  - This is a highly focused Custom Target Drill centering strictly on the competency or skill: "${targetSubtopic}".
+  - You MUST formulate this question and all subsequent questions in this session strictly centered on the concept, patterns, trade-offs, or real-world application of "${targetSubtopic}".
+  - DO NOT ask questions about other unrelated competency areas. Maintain 100% concentration on "${targetSubtopic}".`;
+    } else {
+      targetDrillPrompt = `
   
   🎯 TARGET DRILL ENFORCED FOCUS:
   - This is a highly focused Custom Target Drill centering strictly on the subtopic concept: "${targetSubtopic}".
   - You MUST formulate this question and all subsequent questions in this exam strictly centered on the concept, equations, physical trade-offs, boundaries, or real-world failures of "${targetSubtopic}".
   - DO NOT ask questions about other unrelated units or subtopics. Maintain 100% conceptual concentration on "${targetSubtopic}".`;
+    }
   }
 
-  const prompt = `Act as a college professor conducting a dynamic oral examination (viva).
+  const prompt = isProfessional
+    ? `Act as an expert corporate interviewer conducting a professional mock interview.
+  ${targetDrillPrompt}
+  
+  Interviewer Personality: ${personaPrompt}
+  Job Competency Framework Context: ${JSON.stringify(syllabus)}
+  Pacing Target: Session duration is ${duration} minutes. Limit mock interview to 4 questions. This is question #${asked.length + 1}.
+  
+  Asked Questions History: ${JSON.stringify(asked)}
+  Candidate Answer History: ${conversationContext}
+  Last Response Evaluation Tag: "${lastTag || 'None'}"
+  
+  HUMAN CONVERSATION GUIDELINES:
+  - DO NOT SOUND SCRIPTED. REAL INTERVIEWERS ARE CONVERSATIONAL.
+  - INJECT NATURAL FILLERS: Incorporate natural verbal pauses/fillers (e.g., 'Well...', 'Hmm...', 'Alright', 'Interesting', 'I see') where appropriate, especially at the start of remarks.
+  - SENSITIVE EMOTIONAL PACING: Emulate slight human breathing and pauses by using punctuation like '...' or short natural hesitation phrases.
+  - ACCORDING TO PERSONALITY: Soft, slower warm recruiter pauses; structured professional EM pauses; skeptical bar raiser pauses; rapid-fire and unpredictable cuts for director stress level.
+  
+  ANTI-HALLUCINATION GUARD:
+  - Stay strictly within the job competency topics or requirements.
+  - Do not make up fictional industry concepts or facts.
+  - Choose one active competency or subtopic that has NOT been tested yet, unless deep-diving into a previously weak response.
+  - The next question must connect logically to the candidate's last response (e.g., follow-up on an architectural pattern they named, or pivot to another relevant skill category).
+  
+  Response Format:
+  Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown blocks:
+  {
+    "text": "The next interview question text (Concise, professional)",
+    "speech": "Interviewer's spoken remark representing your personality (e.g., 'Good. Let's look at...' or 'That is incomplete...') followed immediately by the next question text",
+    "topic": "The exact competency/subtopic being tested",
+    "difficulty": "Low" | "Medium" | "High",
+    "correctAnswer": "A detailed explanation of what a strong answer should include, outlining key design trade-offs, architecture choices, industry best practices, or STAR behavioral highlights."
+  }`
+    : `Act as a college professor conducting a dynamic oral examination (viva).
   ${targetDrillPrompt}
   
   Examiner Personality: ${personaPrompt}
@@ -263,9 +361,41 @@ async function handleGenerateQuestion(payload, apiKey) {
 // 3. EVALUATE TRANSCRIPT ANSWER
 // ==========================================
 async function handleEvaluateAnswer(payload, apiKey) {
-  const { question, answer, syllabus } = payload;
+  const { question, answer, syllabus, mode } = payload;
+  const isProfessional = mode === "professional";
 
-  const prompt = `Act as an academic examiner grading an oral response in a college viva.
+  const prompt = isProfessional
+    ? `Act as an expert industry interviewer grading a candidate's response in a mock interview.
+  
+  Question Asked: "${question}"
+  Candidate Response: "${answer}"
+  Job Competency Context: ${JSON.stringify(syllabus)}
+  
+  Evaluate the response across the following metrics out of 100:
+  1. correctness: logical correctness, technical depth, and industry validity of the explanation (0-100)
+  2. completeness: coverage of edge cases, trade-offs, and details using the STAR format if applicable (0-100)
+  3. accuracy: use of precise engineering terminology, patterns, and architectural accuracy (0-100)
+  4. clarity: structural flow, articulation, and professional delivery (0-100)
+  
+  Also select a singular evaluation tag:
+  - "Strong": highly correct, technically accurate, confident.
+  - "Weak": incorrect, extremely short, or blank.
+  - "Partially Correct": correct direction but lacks precise design trade-offs/STAR details.
+  - "Bluffing": uses lots of general filler words or corporate buzzwords but has near-zero real competence.
+  - "Incomplete": correct direction but way too brief (no depth/examples).
+  - "Confused": contradicts itself or completely lost.
+  
+  Response Format:
+  Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown:
+  {
+    "correctness": 85,
+    "completeness": 70,
+    "accuracy": 80,
+    "clarity": 90,
+    "tag": "Strong" | "Weak" | "Partially Correct" | "Bluffing" | "Incomplete" | "Confused",
+    "correctAnswer": "A detailed and professional response showing how a top-tier candidate should answer, outlining key design trade-offs, architecture choices, industry standards, or STAR highlights."
+  }`
+    : `Act as an academic examiner grading an oral response in a college viva.
   
   Question Asked: "${question}"
   Student Response: "${answer}"
@@ -304,8 +434,17 @@ async function handleEvaluateAnswer(payload, apiKey) {
 // 3.5. GENERATE HINT
 // ==========================================
 async function handleGenerateHint(payload, apiKey) {
-  const { question, answer, topic } = payload;
-  const prompt = `You are conducting a university oral exam as a Friendly Professor. The student is currently stuck or hesitating on this question: "${question}". They have spoken or typed so far: "${answer || 'nothing yet'}". The question is on the topic: "${topic}".
+  const { question, answer, topic, mode } = payload;
+  const isProfessional = mode === "professional";
+  const prompt = isProfessional
+    ? `You are conducting a professional mock interview as a Warm Recruiter. The candidate is currently stuck or hesitating on this question: "${question}". They have spoken or typed so far: "${answer || 'nothing yet'}". The question is on the topic: "${topic}".
+  Generate a brief, gentle professional hint (exactly 1-2 sentences) to guide them without giving away the exact answer. Keep the tone warm, patient, and encouraging.
+  Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown:
+  {
+    "hintText": "The text of the hint to display on screen (e.g. 'Think about the trade-offs of microservices vs monolithic')",
+    "hintSpeech": "George's warm recruiter spoken remark. Incorporate friendly fillers like 'No worries, let's look at...' (e.g. 'No worries, think about the trade-offs...')"
+  }`
+    : `You are conducting a university oral exam as a Friendly Professor. The student is currently stuck or hesitating on this question: "${question}". They have spoken or typed so far: "${answer || 'nothing yet'}". The question is on the topic: "${topic}".
   Generate a brief, gentle conceptual hint (exactly 1-2 sentences) to guide them without giving away the exact answer. Keep the tone warm, patient, and encouraging.
   Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown:
   {
@@ -321,8 +460,17 @@ async function handleGenerateHint(payload, apiKey) {
 // 3.6. GENERATE SIMPLER SUBQUESTION
 // ==========================================
 async function handleGenerateSubquestion(payload, apiKey) {
-  const { question, answer, topic } = payload;
-  const prompt = `You are conducting a university oral exam as a high-pressure Viva Terror examiner. The student is struggling and has paused/hesitated on this question: "${question}". They have spoken or typed so far: "${answer || 'nothing yet'}".
+  const { question, answer, topic, mode } = payload;
+  const isProfessional = mode === "professional";
+  const prompt = isProfessional
+    ? `You are conducting a mock interview as a Director Bar Raiser. The candidate is struggling and has paused/hesitated on this question: "${question}". They have spoken or typed so far: "${answer || 'nothing yet'}".
+  Interrupt them and ask a much simpler, basic sub-question related to the topic "${topic}" to test their core understanding. Keep it direct and slightly challenging.
+  Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown:
+  {
+    "subQuestionText": "The sub-question text to display on screen (e.g. 'What is the standard purpose of an index in a database?')",
+    "subQuestionSpeech": "Thorne's sharp spoken remark. Incorporate fillers or a direct tone (e.g. 'Let's take a step back: what is the fundamental purpose of...')"
+  }`
+    : `You are conducting a university oral exam as a high-pressure Viva Terror examiner. The student is struggling and has paused/hesitated on this question: "${question}". They have spoken or typed so far: "${answer || 'nothing yet'}".
   Interrupt them and ask a much simpler, basic sub-question related to the topic "${topic}" to test their elementary understanding. Keep it direct and slightly intimidating.
   Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown:
   {
@@ -413,10 +561,17 @@ async function callGeminiAPI(prompt, apiKey) {
 // RESILIENT OFFLINE FALLBACK HEURISTIC NLP ENGINE
 // ==========================================
 function handleOfflineFallback(payload) {
-  const { action } = payload;
+  const { action, mode } = payload;
+  const isProfessional = mode === "professional";
   
   if (action === "generate-hint") {
     const { question, answer, topic } = payload;
+    if (isProfessional) {
+      return NextResponse.json({
+        hintText: `Warm hint: Consider how you would approach this from an industry perspective for ${topic || "this topic"}. What design trade-offs matter?`,
+        hintSpeech: `No worries, let's look at this simple scenario. Consider how you would approach this from an industry perspective for ${topic || "this topic"}. What design trade-offs/scenarios matter?`
+      });
+    }
     return NextResponse.json({
       hintText: `Friendly hint: Think about the core principles of ${topic || "this topic"}. How does it relate to its main variables or inputs?`,
       hintSpeech: `Don't worry, let's take a step back. Think about the core principles of ${topic || "this topic"}. How does it relate to its main variables or inputs? Take your time.`
@@ -425,6 +580,12 @@ function handleOfflineFallback(payload) {
 
   if (action === "generate-subquestion") {
     const { question, answer, topic } = payload;
+    if (isProfessional) {
+      return NextResponse.json({
+        subQuestionText: `Simpler question: Can you describe the primary purpose of ${topic || "this concept"} in software engineering?`,
+        subQuestionSpeech: `Let's make it simpler. Just tell me: can you describe the primary purpose of ${topic || "this concept"} in software engineering?`
+      });
+    }
     return NextResponse.json({
       subQuestionText: `Simpler question: What is the absolute basic definition of ${topic || "this concept"}?`,
       subQuestionSpeech: `You are taking too long. Let's make it simpler. Just tell me: what is the absolute basic definition of ${topic || "this concept"}?`
@@ -449,12 +610,39 @@ function handleOfflineFallback(payload) {
     }
 
     // Dynamic fallback generation based on standard subjects
-    if (lower.includes("data") || lower.includes("structure")) {
+    if (lower.includes("software") || lower.includes("backend") || lower.includes("engineer") || lower.includes("developer")) {
+      return NextResponse.json({
+        topic: "Software Engineer (Backend)",
+        units: [
+          { name: "Competency 1: System Design & Architecture", topics: ["Microservices vs Monoliths", "Scalability & Load Balancing", "Database Replication & Caching", "Message Queuing & Eventual Consistency"] },
+          { name: "Competency 2: Algorithms & Concurrency", topics: ["High-Concurrency Execution", "Thread Pool Deadlocks", "Data Structures Complexity", "Asynchronous Processing Loops"] },
+          { name: "Competency 3: Databases & Integrity", topics: ["SQL Indexing Performance", "NoSQL vs Relational Storage", "Distributed Transaction Sagas", "Cache Invalidation Strategies"] }
+        ]
+      });
+    } else if (lower.includes("product manager") || lower.includes("pm")) {
+      return NextResponse.json({
+        topic: "Product Manager",
+        units: [
+          { name: "Competency 1: Product Strategy & Prioritization", topics: ["Feature Prioritization Frameworks", "MVP Scope Definition", "Market Opportunity Analysis", "Go-To-Market Plans"] },
+          { name: "Competency 2: Execution Analytics & Funnels", topics: ["A/B Testing Significance", "Funnel Conversion Optimization", "Onboarding Drop-off Diagnostics", "Retention Loop Design"] },
+          { name: "Competency 3: Business & Product Metrics", topics: ["Customer Acquisition Cost", "Customer Lifetime Value", "North Star Metrics", "Churn Rate Analysis"] }
+        ]
+      });
+    } else if (lower.includes("data scientist") || lower.includes("machine learning") || lower.includes("ml")) {
+      return NextResponse.json({
+        topic: "Data Scientist",
+        units: [
+          { name: "Competency 1: ML Model Fundamentals", topics: ["Supervised vs Unsupervised Models", "Bias-Variance Trade-off", "Regularization L1/L2/Dropout", "Model Overfitting Diagnostics"] },
+          { name: "Competency 2: Data Engineering & Quality", topics: ["Feature Engineering Pipelines", "Imbalanced Class Strategies", "Outlier & Missing Data Handling", "Dimensionality Reduction PCA"] },
+          { name: "Competency 3: Advanced Deep Learning", topics: ["Gradient Vanishing/Explosion", "Residual Connection Functions", "Precision vs Recall Balance", "Evaluation Metrics F1-score"] }
+        ]
+      });
+    } else if (lower.includes("data") || lower.includes("structure")) {
       return NextResponse.json({
         topic: "Data Structures",
         units: [
-          { name: "Unit 1: Linear Data Structures", topics: ["Arrays & Arraylists", "Stack LIFO boundaries", "Queue FIFO parameters", "Linked list traversal"] },
-          { name: "Unit 2: Non-Linear Structures", topics: ["Binary Search Trees", "AVL self-balancing logic", "Red-black tree margins", "Graph representations"] },
+          { name: "Unit 1: Linear Data Structures", topics: ["Arrays & Arraylists", "Stack LIFO limits", "Queue FIFO indices", "Linked list traversal"] },
+          { name: "Unit 2: Non-Linear Structures", topics: ["Binary Search Trees", "AVL self-balancing balance factor", "Red-black trees", "Graph representations"] },
           { name: "Unit 3: Algorithms & Hashing", topics: ["Hash collisions buckets", "Probing techniques", "Graph BFS queues", "DFS recursive stacks"] }
         ]
       });
@@ -462,9 +650,9 @@ function handleOfflineFallback(payload) {
       return NextResponse.json({
         topic: "Machine Design",
         units: [
-          { name: "Unit 1: Static & Fatigue Loading", topics: ["Static stress limits", "Alternating stress fatigue", "Goodman line diagrams", "Soderberg yield boundaries"] },
+          { name: "Unit 1: Structural Static & Fatigue Loading", topics: ["Static stress limits", "Alternating stress fatigue", "Goodman line diagrams", "Soderberg yield boundaries"] },
           { name: "Unit 2: Shafts & stress Concentrations", topics: ["Torsional stress shafts", "Stress flow singularties", "Fillet radii mitigation", "Shaft keys grooves"] },
-          { name: "Unit 3: Bearings & Gears", topics: ["Sommerfeld lubrication coefficient", "Journal bearings eccentrity", "Spur root teeth bending", "Lewis stress AGMA values"] }
+          { name: "Unit 3: Bearings & Gears", topics: ["Sommerfeld lubrication coefficient", "Journal bearings eccentricity", "Spur root teeth bending", "Lewis stress AGMA values"] }
         ]
       });
     } else {
@@ -472,7 +660,11 @@ function handleOfflineFallback(payload) {
       const formalSubject = topic.charAt(0).toUpperCase() + topic.slice(1);
       return NextResponse.json({
         topic: formalSubject,
-        units: [
+        units: isProfessional ? [
+          { name: "Competency 1: Foundational Principles", topics: [`Introduction to ${formalSubject}`, "Core terminology", "Basic practical settings"] },
+          { name: "Competency 2: Advanced Design Analysis", topics: ["Secondary parameters", "Detailed operational scenarios", "Engineering trade-offs"] },
+          { name: "Competency 3: Real-world Integrations", topics: ["System optimization limits", "Practical case studies", "Performance analysis"] }
+        ] : [
           { name: "Unit 1: Foundational Principles", topics: [`Introduction to ${formalSubject}`, "Core terminology", "Basic boundary conditions"] },
           { name: "Unit 2: Advanced Conceptual Analysis", topics: ["Secondary parameters", "Detailed structural models", "Analytical derivations"] },
           { name: "Unit 3: Applied Real-world Scenarios", topics: ["System optimization limits", "Practical integration examples", "Analytical evaluations"] }
@@ -501,7 +693,11 @@ function handleOfflineFallback(payload) {
     }
 
     if (allTopics.length === 0) {
-      allTopics = [
+      allTopics = isProfessional ? [
+        { unitName: "Competency 1: Fundamentals", topicName: "Core operational principles" },
+        { unitName: "Competency 2: Architectural Analysis", topicName: "Standard trade-off scenarios" },
+        { unitName: "Competency 3: Practical Systems", topicName: "Real-world engineering models" }
+      ] : [
         { unitName: "Unit 1: Fundamentals", topicName: "Core conceptual principles" },
         { unitName: "Unit 2: Structural Analysis", topicName: "Standard boundary equations" },
         { unitName: "Unit 3: Applied Scenarios", topicName: "Real-world physical models" }
@@ -517,7 +713,28 @@ function handleOfflineFallback(payload) {
     const activeSubtopic = (isTargetDrill && targetSubtopic) ? targetSubtopic : selected.topicName;
 
     // Compile dynamic question templates based on personality
-    const questionTemplates = {
+    const questionTemplates = isProfessional ? {
+      friendly: [
+        `Could you explain the basic principles behind ${activeSubtopic} in your own words?`,
+        `Let's look at ${activeSubtopic}. What are the primary concerns or scenarios we need to consider here?`,
+        `How would you describe the practical significance of ${activeSubtopic} to a junior engineer?`
+      ],
+      strict: [
+        `State the precise definition and components of ${activeSubtopic}.`,
+        `What are the core design trade-offs and performance implications for ${activeSubtopic}?`,
+        `Explain the architectural implementation and scaling constraints of ${activeSubtopic} precisely.`
+      ],
+      brutal: [
+        `What represents the ultimate failure point or bottleneck in ${activeSubtopic}, and why?`,
+        `Why do standard configurations for ${activeSubtopic} frequently fail in real-world high-traffic scenarios?`,
+        `Prove why we cannot achieve zero downtime or complete consistency when dealing with ${activeSubtopic}.`
+      ],
+      terror: [
+        `That sounds like a generic online guide response. Explain exactly how you would debug or scale ${activeSubtopic} from absolute first principles in production.`,
+        `Most candidates just memorize definitions. Can you prove to me that you actually understand the performance trade-offs of ${activeSubtopic}?`,
+        `Under high write loads, what is the micro-architectural bottleneck inside ${activeSubtopic}, and why does it fail under database locking stress?`
+      ]
+    } : {
       friendly: [
         `Could you explain the basic principles behind ${activeSubtopic} in your own words?`,
         `Let's look at ${activeSubtopic}. What are the primary concepts we need to consider here?`,
@@ -544,11 +761,37 @@ function handleOfflineFallback(payload) {
     const questionText = templatesList[asked.length % templatesList.length];
 
     // Compile dynamic examiner remark based on last performance tag
-    let remarkText = "Good. Now let us proceed. ";
+    let remarkText = isProfessional ? "Good. Now let's proceed. " : "Good. Now let us proceed. ";
     if (asked.length === 0) {
-      remarkText = `Welcome. Let us begin your oral examination on ${payload.topic || "this subject"}. `;
+      remarkText = isProfessional
+        ? `Welcome. Let us begin your mock interview on ${payload.topic || "this role"}. `
+        : `Welcome. Let us begin your oral examination on ${payload.topic || "this subject"}. `;
     } else {
-      const remarksByTag = {
+      const remarksByTag = isProfessional ? {
+        Strong: [
+          "Excellent response. Your practical clarity is outstanding. Let's go a step deeper. ",
+          "Very well articulated. You hit the key architectural trade-offs perfectly. Now let's pivot. ",
+          "Highly accurate explanation. Let us stretch this design scenario further. "
+        ],
+        Weak: [
+          "That explanation lacked technical depth. Let us drop back to some fundamental concepts. ",
+          "I see. Let's step back to some core basics to clarify your understanding. ",
+          "No worries, let us take it step-by-step. Let's look at something simpler. "
+        ],
+        Bluffing: [
+          "You are using a lot of industry buzzwords but missing the actual engineering trade-offs. Let's get highly precise. ",
+          "That sounds like a generic response. Let's test your direct hands-on experience. ",
+          "Let's cut through the general explanations. Answer this next question strictly with concrete examples. "
+        ],
+        Incomplete: [
+          "That was correct in direction but lacked detailed examples. Let's verify details on this next topic. ",
+          "You got the basic concept but missed the structural depth. Let's explore this. "
+        ],
+        Confused: [
+          "You seem to be contradicting yourself. Let's steady your thoughts on this fundamental topic. ",
+          "Let us simplify the engineering boundaries so you can structure your explanation. "
+        ]
+      } : {
         Strong: [
           "Excellent response. Your conceptual clarity is outstanding. Let's go a step deeper. ",
           "Very well articulated. You hit the key technical details perfectly. Now let's pivot. ",
@@ -581,7 +824,9 @@ function handleOfflineFallback(payload) {
       ];
       remarkText = tagList[asked.length % tagList.length];
       const activeSubtopicLower = activeSubtopic.toLowerCase();
-      let correctAnswer = `A correct response on "${activeSubtopic}" should explain the underlying technical principles, state any governing formulas/relationships, and outline how parameters behave under boundary conditions.`;
+      let correctAnswer = isProfessional
+        ? `A correct response on "${activeSubtopic}" should explain the underlying engineering principles, state any design trade-offs or behavioral framework details, and outline standard production implementations.`
+        : `A correct response on "${activeSubtopic}" should explain the underlying technical principles, state any governing formulas/relationships, and outline how parameters behave under boundary conditions.`;
       for (const [key, val] of Object.entries(DEFAULT_CORRECT_ANSWERS)) {
         if (activeSubtopicLower.includes(key.toLowerCase()) || key.toLowerCase().includes(activeSubtopicLower)) {
           correctAnswer = val;
@@ -619,7 +864,7 @@ function handleOfflineFallback(payload) {
     let completeness = 50;
     let tag = "Partially Correct";
     
-    if (wordsCount < 6 || lowerAnswer.includes("student remained silent")) {
+    if (wordsCount < 6 || lowerAnswer.includes("student remained silent") || lowerAnswer.includes("candidate remained silent")) {
       correctness = 25;
       accuracy = 20;
       completeness = 15;
@@ -658,7 +903,9 @@ function handleOfflineFallback(payload) {
     }
 
     const questionLower = (question || "").toLowerCase();
-    let correctAnswer = `A correct response should explain the underlying technical principles, state any governing formulas/relationships, and outline how parameters behave under boundary conditions.`;
+    let correctAnswer = isProfessional
+      ? `A correct response should explain the underlying engineering principles, state any design trade-offs/STAR details, and outline architectural best practices.`
+      : `A correct response should explain the underlying technical principles, state any governing formulas/relationships, and outline how parameters behave under boundary conditions.`;
     for (const [key, val] of Object.entries(DEFAULT_CORRECT_ANSWERS)) {
       if (questionLower.includes(key.toLowerCase()) || key.toLowerCase().includes(questionLower)) {
         correctAnswer = val;
@@ -680,9 +927,78 @@ function handleOfflineFallback(payload) {
     const syllabusStructure = payload.syllabusStructure;
     const topic = (syllabusStructure?.topic || "Custom Syllabus").toLowerCase();
     
-    // Curated high-yield mock flashcards for common subjects
+    // Curated high-yield mock flashcards for common subjects/roles
     let cards = [];
-    if (topic.includes("data") || topic.includes("structure")) {
+    if (topic.includes("software engineer") || topic.includes("backend") || topic.includes("developer")) {
+      cards = [
+        {
+          question: "What is the key architectural difference between a Microservice and a Monolith?",
+          shortAnswer: "A monolith has all services compiled into a single executable deployed together. Microservices split services into independently deployable, loosely coupled units communicating via network interfaces (APIs, MQ), allowing independent scaling, separate tech stacks, and modular fault tolerance, but introducing higher operations overhead and distributed data challenges."
+        },
+        {
+          question: "Explain SQL indexing, how it speeds up query execution, and the overhead it introduces.",
+          shortAnswer: "SQL indexes (typically B-Tree or Hash indexes) speed up query execution from O(N) full-table scans to O(log N) searches by mapping lookup columns to table rows in sorted order. The overhead is that indexes must be updated on every INSERT, UPDATE, or DELETE operation, adding disk write latency and consuming extra storage space."
+        },
+        {
+          question: "What is a cache invalidation strategy, and how does write-through compare to cache-aside?",
+          shortAnswer: "Cache invalidation maintains consistency between database and cache. In write-through, data is written to the cache and database simultaneously, guaranteeing consistency but adding write latency. In cache-aside, the application reads from cache first; on a miss, it reads from database, updates cache, and returns. Writes go directly to the database, requiring TTL or explicit eviction to invalidate cache."
+        },
+        {
+          question: "Compare multithreading and asynchronous execution in high-concurrency backend services.",
+          shortAnswer: "Multithreading achieves concurrency by running multiple OS threads in parallel (ideal for CPU-bound tasks, but uses more memory and risks deadlocks). Asynchronous execution uses a single thread with a non-blocking event loop (ideal for I/O-bound tasks, using very little memory and avoiding context-switching costs)."
+        },
+        {
+          question: "How does the Saga pattern manage distributed transaction consistency across microservices?",
+          shortAnswer: "The Saga pattern coordinates local transactions sequentially. Each service runs its local transaction and publishes an event. If a transaction fails, the Saga orchestrator triggers compensating backward transactions (compensating actions) in preceding services to roll back the overall state and ensure eventual consistency."
+        }
+      ];
+    } else if (topic.includes("product manager") || topic.includes("pm")) {
+      cards = [
+        {
+          question: "What is features prioritization RICE scoring?",
+          shortAnswer: "RICE is a prioritization framework evaluating features on Reach (users impacted in a time period), Impact (estimated boost to goal), Confidence (metric certainty from 0-100%), and Effort (person-months). Formula: Score = (Reach * Impact * Confidence) / Effort."
+        },
+        {
+          question: "How do you calculate CAC and LTV, and what is a healthy ratio for B2B SaaS?",
+          shortAnswer: "Customer Acquisition Cost (CAC) = total sales & marketing spend / customers acquired. Lifetime Value (LTV) = average revenue per user * gross margin / churn rate. A healthy SaaS ratio is LTV:CAC >= 3:1, indicating sustainable unit economics."
+        },
+        {
+          question: "Explain the MVP concept and the risk of over-building before launch.",
+          shortAnswer: "A Minimum Viable Product (MVP) is the simplest version of a product that allows a team to collect the maximum amount of validated learning about customers with the least effort. Over-building increases time-to-market, wastes engineering resources on unproven features, and delays critical feedback loops."
+        },
+        {
+          question: "What is an A/B test and how do you ensure statistical significance?",
+          shortAnswer: "An A/B test splits users randomly between control (A) and variant (B) groups to test feature efficacy. You ensure statistical significance by calculating a p-value (typically p < 0.05) using a t-test or chi-square test to verify that observed metric differences are not due to random chance, requiring a pre-calculated sample size."
+        },
+        {
+          question: "How do you diagnose user drop-off in a signup funnel?",
+          shortAnswer: "Analyze funnel analytics to identify the step with the highest drop-off rate, run session replays/heuristics to check for UX friction or bugs, and conduct user interviews to understand why users abandon at that specific step."
+        }
+      ];
+    } else if (topic.includes("data scientist") || topic.includes("machine learning") || topic.includes("ml")) {
+      cards = [
+        {
+          question: "Explain the Bias-Variance Trade-off in Machine Learning.",
+          shortAnswer: "Bias represents error from erroneous assumptions in the model (leads to underfitting). Variance represents sensitivity to small fluctuations in the training set (leads to overfitting). Optimizing generalization error requires finding the balance point where total error (Bias^2 + Variance + Irreducible Noise) is minimized."
+        },
+        {
+          question: "How do you handle highly imbalanced classes in a classification problem?",
+          shortAnswer: "Imbalance can be addressed via resampling (oversampling minority class with SMOTE, undersampling majority class), using appropriate evaluation metrics (Precision, Recall, F1-score, PR-AUC instead of raw accuracy), using cost-sensitive learning algorithms, or ensemble methods like Balanced Random Forests."
+        },
+        {
+          question: "What is the difference between L1 (Lasso) and L2 (Ridge) regularization?",
+          shortAnswer: "L1 regularization adds the sum of absolute weights (|w|) as a penalty to the loss function, which drives some weights to exactly zero, performing feature selection. L2 regularization adds the sum of squared weights (w^2), which shrinks weights close to zero but never exactly zero, keeping all features but reducing their individual influence."
+        },
+        {
+          question: "Explain the Vanishing and Exploding Gradient problems in deep neural networks.",
+          shortAnswer: "Vanishing gradients occur when backpropagated gradients shrink exponentially in early layers, slowing training. Exploding gradients occur when gradients accumulate and grow exponentially, causing numerical instability. Mitigations include proper weight initialization (He/Glorot), Batch Normalization, residual connections, and gradient clipping."
+        },
+        {
+          question: "Compare Precision and Recall. When is one preferred over the other?",
+          shortAnswer: "Precision is True Positives / (True Positives + False Positives) — preferred when false positives are costly (e.g. spam detection). Recall is True Positives / (True Positives + False Negatives) — preferred when false negatives are critical/costly (e.g. cancer diagnosis)."
+        }
+      ];
+    } else if (topic.includes("data") || topic.includes("structure")) {
       cards = [
         {
           question: "What is the key self-balancing rule of an AVL Tree?",
@@ -759,14 +1075,18 @@ function handleOfflineFallback(payload) {
       
       const targetList = topicsList.slice(0, 5);
       if (targetList.length === 0) {
-        targetList.push({ unitName: "Unit 1", topic: "Core Principles" });
-        targetList.push({ unitName: "Unit 2", topic: "Analytical Models" });
-        targetList.push({ unitName: "Unit 3", topic: "Applied Problems" });
+        targetList.push({ unitName: isProfessional ? "Competency 1" : "Unit 1", topic: "Core Principles" });
+        targetList.push({ unitName: isProfessional ? "Competency 2" : "Unit 2", topic: "Analytical Models" });
+        targetList.push({ unitName: isProfessional ? "Competency 3" : "Unit 3", topic: "Applied Problems" });
       }
 
       cards = targetList.map(item => ({
-        question: `Explain the fundamental concepts, governing parameters, and core principles of: "${item.topic}" (${item.unitName}).`,
-        shortAnswer: `A robust study review of "${item.topic}" requires understanding its basic definitions, physical equations, structural properties, and how it behaves under boundary constraints. Pay attention to how this concept scales under real-world operational loading.`
+        question: isProfessional
+          ? `Explain the core concepts, design trade-offs, and practical considerations of: "${item.topic}" (${item.unitName}).`
+          : `Explain the fundamental concepts, governing parameters, and core principles of: "${item.topic}" (${item.unitName}).`,
+        shortAnswer: isProfessional
+          ? `A robust review of "${item.topic}" requires understanding its industry standards, typical scaling trade-offs, and how it is implemented in production systems using the STAR format.`
+          : `A robust study review of "${item.topic}" requires understanding its basic definitions, physical equations, structural properties, and how it behaves under boundary constraints. Pay attention to how this concept scales under real-world operational loading.`
       }));
     }
 
@@ -877,8 +1197,21 @@ async function handleAnalyzeHumeEmotion(audioBase64, apiKey) {
 // ==========================================
 // 3.5. GENERATE FLASHCARDS WITH GEMINI
 // ==========================================
-async function handleGenerateFlashcards(syllabusStructure, apiKey) {
-  const prompt = `Act as an academic curriculum specialist. Based on the syllabus topics provided, generate exactly 5 comprehensive, high-yield flashcards to help a student study. Each flashcard must consist of:
+async function handleGenerateFlashcards(syllabusStructure, mode, apiKey) {
+  const isProfessional = mode === "professional";
+  const prompt = isProfessional
+    ? `Act as an expert recruiter and corporate talent specialist. Based on the job competency structure provided, generate exactly 5 comprehensive, high-yield flashcards to help a candidate prepare. Each flashcard must consist of:
+  - "question": a targeted, focused interview question testing candidate depth.
+  - "shortAnswer": a concise, technical explanation of the answer, including critical design trade-offs, architecture choices, industry best practices, or STAR behavioral highlights.
+  
+  Job Competency Structure:
+  ${JSON.stringify(syllabusStructure)}
+  
+  Respond ONLY with a valid, clean JSON array matching this schema. Do not enclose in markdown blocks:
+  [
+    { "question": "Question text here?", "shortAnswer": "Detailed high-yield preparation answer here." }
+  ]`
+    : `Act as an academic curriculum specialist. Based on the syllabus topics provided, generate exactly 5 comprehensive, high-yield flashcards to help a student study. Each flashcard must consist of:
   - "question": a targeted, focused conceptual question testing student depth.
   - "shortAnswer": a concise, technical explanation of the answer, including any critical equations, definitions, and physical parameters.
   
@@ -895,6 +1228,6 @@ async function handleGenerateFlashcards(syllabusStructure, apiKey) {
     return NextResponse.json(responseJson);
   } catch (err) {
     console.warn("Failed generating flashcards via Gemini, using offline fallback:", err);
-    return handleOfflineFallback({ action: "generate-flashcards", syllabusStructure });
+    return handleOfflineFallback({ action: "generate-flashcards", syllabusStructure, mode });
   }
 }

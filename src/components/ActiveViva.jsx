@@ -15,10 +15,23 @@ function getNow() {
 }
 
 export default function ActiveViva({ config, activeUser, onFinishViva }) {
+  const getPersonaTitle = (p, mode) => {
+    const cleanType = p?.toLowerCase();
+    if (cleanType === "friendly") return mode === "professional" ? "Warm Recruiter" : "Friendly Professor";
+    if (cleanType === "strict") return mode === "professional" ? "Structured Hiring Manager" : "Strict Professor";
+    if (cleanType === "brutal") return mode === "professional" ? "Bar Raiser" : "Brutal External";
+    if (cleanType === "terror") return mode === "professional" ? "Stress Interviewer" : "Viva Terror";
+    return mode === "professional" ? "AI Interviewer" : "AI Examiner";
+  };
+
   // State machine variables
   const [vivaState, setVivaState] = useState(() => config.isResume ? "speaking" : "intro"); // "intro" | "speaking" | "listening" | "analyzing" | "generating"
   const [visualState, setVisualState] = useState("speaking"); // "speaking" | "listening" | "analyzing"
-  const [statusText, setStatusText] = useState(() => config.isResume ? "Professor is speaking..." : "Professor is introducing the exam...");
+  const [statusText, setStatusText] = useState(() => 
+    config.isResume 
+      ? (config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...") 
+      : (config.mode === "professional" ? "Interviewer is introducing the session..." : "Professor is introducing the exam...")
+  );
   
   // Timer stopwatch states
   const [timeRemaining, setTimeRemaining] = useState(config.duration * 60);
@@ -85,11 +98,13 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       SessionContextManager.askedTopics = config.resumeState.askedTopics || [];
 
       // Repeat the active question upon resume!
-      const resumeNudge = `Resuming your exam on ${config.topic}. Let me repeat the question: ${config.resumeState.activeQuestion.text}`;
+      const resumeNudge = config.mode === "professional" 
+        ? `Resuming your mock interview on ${config.topic}. Let me repeat the question: ${config.resumeState.activeQuestion.text}`
+        : `Resuming your exam on ${config.topic}. Let me repeat the question: ${config.resumeState.activeQuestion.text}`;
       VoiceManager.speak(resumeNudge, config.personality,
         () => {
           setVisualState("speaking");
-          setStatusText("Professor is speaking...");
+          setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
           startWaveAnimations();
           if (config.personality !== "friendly" && config.enableInterruption !== false) {
             startBackgroundListeningForInterruptions(config.resumeState.activeQuestion);
@@ -237,9 +252,13 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     
     setVivaState("speaking");
     setVisualState("speaking");
-    setStatusText("Professor interrupted you...");
+    setStatusText(config.mode === "professional" ? "Interviewer interrupted you..." : "Professor interrupted you...");
     
-    const interruptionPhrases = {
+    const interruptionPhrases = config.mode === "professional" ? {
+      strict: "One moment, please. Let me finish framing the scenario before you answer.",
+      brutal: "Hold on. Let's finish the question before we dig into the details. Hear me out.",
+      terror: "Excuse me! Let me complete the question. Pacing is key here. Answer what is asked."
+    } : {
       strict: "One moment, please. Do not speak over me. Listen to the question carefully first.",
       brutal: "Hold on. Stop talking. Let me finish my question before you jump in with your answer.",
       terror: "Silence! Do not interrupt me. Answer precisely what is being asked, and nothing else."
@@ -270,7 +289,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
   async function triggerIntroduction() {
     setVivaState("generating");
     setVisualState("analyzing");
-    setStatusText("Professor is initializing the exam...");
+    setStatusText(config.mode === "professional" ? "Interviewer is initializing the session..." : "Professor is initializing the exam...");
     
     // Reset Session Context
     SessionContextManager.reset();
@@ -286,28 +305,50 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         currentTopic: "",
         nervousness: 20,
         isTargetDrill: config.isTargetDrill || false,
-        targetSubtopic: config.targetSubtopic || null
+        targetSubtopic: config.targetSubtopic || null,
+        mode: config.mode
       });
       
       setActiveQuestion(firstQuestion);
       
       // Dynamic intro speech: combine dynamic introductory greetings based on personality and user name
-      let greeting = config.isTargetDrill 
-        ? `Good evening, ${activeUser}. Welcome to your dynamic target drill on ${config.targetSubtopic}. `
-        : `Good evening, ${activeUser}. Welcome to your oral examination on ${config.topic}. `;
-        
-      if (config.personality === "terror") {
+      let greeting = "";
+      if (config.mode === "professional") {
         greeting = config.isTargetDrill 
-          ? `Sit down, ${activeUser}. We will begin your high-pressure board drill on ${config.targetSubtopic} now. `
-          : `Sit down, ${activeUser}. Let us begin the examination on ${config.topic}. I expect absolute precision. `;
-      } else if (config.personality === "strict") {
+          ? `Welcome, ${activeUser}. Let's begin the mock session on your selected competency, ${config.targetSubtopic}. `
+          : `Welcome, ${activeUser}. Let's begin the mock interview for the ${config.topic} role. `;
+          
+        if (config.personality === "terror") {
+          greeting = config.isTargetDrill 
+            ? `Hello ${activeUser}. I am Thorne, the bar raiser. Let's immediately probe your competency on ${config.targetSubtopic}. `
+            : `Hello ${activeUser}. I am Thorne, the bar raiser for this panel. Let's begin the mock interview on ${config.topic}. `;
+        } else if (config.personality === "strict") {
+          greeting = config.isTargetDrill 
+            ? `Welcome, ${activeUser}. Let's verify your competence in ${config.targetSubtopic}. `
+            : `Welcome, ${activeUser}. Let's assess your qualifications for ${config.topic}. `;
+        } else if (config.personality === "brutal") {
+          greeting = config.isTargetDrill 
+            ? `Alright, ${activeUser}. Let's test your practical limits in ${config.targetSubtopic}. `
+            : `Alright, ${activeUser}. Let's examine your experience depth for ${config.topic}. `;
+        }
+      } else {
         greeting = config.isTargetDrill 
-          ? `Good evening, ${activeUser}. We will now begin a focused review on ${config.targetSubtopic}. `
-          : `Good evening, ${activeUser}. We will now begin your viva on ${config.topic}. Answer concisely. `;
-      } else if (config.personality === "brutal") {
-        greeting = config.isTargetDrill 
-          ? `Alright, ${activeUser}. Let's see if you actually understand the limits of ${config.targetSubtopic}. `
-          : `Alright, ${activeUser}. Let's see how well you actually know ${config.topic}. `;
+          ? `Good evening, ${activeUser}. Welcome to your dynamic target drill on ${config.targetSubtopic}. `
+          : `Good evening, ${activeUser}. Welcome to your oral examination on ${config.topic}. `;
+          
+        if (config.personality === "terror") {
+          greeting = config.isTargetDrill 
+            ? `Sit down, ${activeUser}. We will begin your high-pressure board drill on ${config.targetSubtopic} now. `
+            : `Sit down, ${activeUser}. Let us begin the examination on ${config.topic}. I expect absolute precision. `;
+        } else if (config.personality === "strict") {
+          greeting = config.isTargetDrill 
+            ? `Good evening, ${activeUser}. We will now begin a focused review on ${config.targetSubtopic}. `
+            : `Good evening, ${activeUser}. We will now begin your viva on ${config.topic}. Answer concisely. `;
+        } else if (config.personality === "brutal") {
+          greeting = config.isTargetDrill 
+            ? `Alright, ${activeUser}. Let's see if you actually understand the limits of ${config.targetSubtopic}. `
+            : `Alright, ${activeUser}. Let's see how well you actually know ${config.topic}. `;
+        }
       }
       
       const fullSpeech = greeting + (firstQuestion.speech || firstQuestion.text);
@@ -320,7 +361,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         // onStart
         () => {
           setVisualState("speaking");
-          setStatusText("Professor is speaking...");
+          setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
           startWaveAnimations();
           if (config.personality !== "friendly" && config.enableInterruption !== false) {
             startBackgroundListeningForInterruptions(firstQuestion);
@@ -345,7 +386,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       VoiceManager.speak(fallback.speech, config.personality,
         () => {
           setVisualState("speaking");
-          setStatusText("Professor is speaking...");
+          setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
           startWaveAnimations();
           if (config.personality !== "friendly" && config.enableInterruption !== false) {
             startBackgroundListeningForInterruptions(fallback);
@@ -453,7 +494,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     startWaveAnimations();
 
     if (persona === "friendly") {
-      setStatusText(`${EXAMINER_PERSONALITIES.friendly.name} is offering a hint...`);
+      setStatusText(`${getPersonaTitle("friendly", config.mode)} is offering a hint...`);
       
       let hintText = "";
       let hintSpeech = "";
@@ -466,7 +507,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
             action: "generate-hint",
             question: activeQuestion.text,
             answer: transcriptText === "Speak now. System is listening..." ? "" : transcriptText,
-            topic: activeQuestion.topic
+            topic: activeQuestion.topic,
+            mode: config.mode
           })
         });
         if (res.ok) {
@@ -494,14 +536,19 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       );
 
     } else if (persona === "strict" || persona === "brutal") {
-      setStatusText(`${EXAMINER_PERSONALITIES[persona].name} is reminding you of the time...`);
+      setStatusText(`${getPersonaTitle(persona, config.mode)} is reminding you of the time...`);
 
       const mins = Math.floor(timeRemaining / 60);
       const secs = timeRemaining % 60;
       const timeStr = mins > 0 ? `${mins} minutes and ${secs} seconds` : `${secs} seconds`;
-      const reminderSpeech = `We are running out of time. You have ${timeStr} remaining for this examination. Please provide your explanation immediately.`;
+      const reminderSpeech = config.mode === "professional"
+        ? `We are running out of time. You have ${timeStr} remaining for this interview. Please provide your answer immediately.`
+        : `We are running out of time. You have ${timeStr} remaining for this examination. Please provide your explanation immediately.`;
       
-      setTranscriptText(`[Examiner reminded you of the remaining time: ${getFormattedTime()}]`);
+      setTranscriptText(config.mode === "professional"
+        ? `[Interviewer reminded you of the remaining time: ${getFormattedTime()}]`
+        : `[Examiner reminded you of the remaining time: ${getFormattedTime()}]`
+      );
       setIsPlaceholder(false);
 
       VoiceManager.speak(reminderSpeech, persona,
@@ -512,7 +559,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       );
 
     } else if (persona === "terror") {
-      setStatusText(`${EXAMINER_PERSONALITIES.terror.name} is interrupting you...`);
+      setStatusText(`${getPersonaTitle("terror", config.mode)} is interrupting you...`);
       
       setHesitationPenalties(prev => ({
         ...prev,
@@ -530,7 +577,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
             action: "generate-subquestion",
             question: activeQuestion.text,
             answer: transcriptText === "Speak now. System is listening..." ? "" : transcriptText,
-            topic: activeQuestion.topic
+            topic: activeQuestion.topic,
+            mode: config.mode
           })
         });
         if (res.ok) {
@@ -551,7 +599,10 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         ...prev,
         text: `${prev.text} (Simplified: ${subQuestionText})`
       }));
-      setTranscriptText(`[Examiner interrupted to ask a simpler sub-question. Score penalty applied.]`);
+      setTranscriptText(config.mode === "professional"
+        ? `[Interviewer interrupted to ask a simpler sub-question. Score penalty applied.]`
+        : `[Examiner interrupted to ask a simpler sub-question. Score penalty applied.]`
+      );
       setIsPlaceholder(false);
 
       VoiceManager.speak(subQuestionSpeech, "terror",
@@ -635,12 +686,14 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       return;
     }
     if (!answerText || answerText.length < 5) {
-      answerText = "[Student remained silent or provided no substantive answer]";
+      answerText = config.mode === "professional" 
+        ? "[Candidate remained silent or provided no substantive answer]" 
+        : "[Student remained silent or provided no substantive answer]";
     }
 
     setVivaState("analyzing");
     setVisualState("analyzing");
-    setStatusText("Examiner is evaluating your answer...");
+    setStatusText(config.mode === "professional" ? "Interviewer is evaluating your answer..." : "Examiner is evaluating your answer...");
     setTranscriptText(answerText);
     setIsPlaceholder(false);
     clearInterval(waveIntervalRef.current);
@@ -658,7 +711,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         speechDurationMs: durationMs,
         pauseCount: pauseCount,
         liveMetrics: liveMetrics,
-        isHesitationPenalty: hasPenalty
+        isHesitationPenalty: hasPenalty,
+        mode: config.mode
       });
 
       // Track nervousness for dynamic pressure adaptations
@@ -690,11 +744,11 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       });
 
       // Update status text based on reaction
-      let reactionText = "Professor is noting your response...";
+      let reactionText = config.mode === "professional" ? "Interviewer is noting your response..." : "Professor is noting your response...";
       if (resultMetrics.correctness >= 75) {
-        reactionText = `${EXAMINER_PERSONALITIES[config.personality].name} is pleased with your answer.`;
+        reactionText = `${getPersonaTitle(config.personality, config.mode)} is pleased with your answer.`;
       } else if (resultMetrics.correctness < 55 || resultMetrics.tag === "Bluffing" || resultMetrics.tag === "Incorrect") {
-        reactionText = `${EXAMINER_PERSONALITIES[config.personality].name} looks skeptical.`;
+        reactionText = `${getPersonaTitle(config.personality, config.mode)} looks skeptical.`;
       }
       setStatusText(reactionText);
 
@@ -714,7 +768,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         setCurrentQuestionIndex(qIndex);
         setVivaState("generating");
         setVisualState("analyzing");
-        setStatusText("Formulating next question...");
+        setStatusText(config.mode === "professional" ? "Formulating next interview question..." : "Formulating next question...");
 
         try {
           const nextQuestion = await QuestionGraphEngine.generateNextQuestion({
@@ -727,7 +781,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
             currentTopic: activeQuestion.topic,
             nervousness: latestNervousnessRef.current,
             isTargetDrill: config.isTargetDrill || false,
-            targetSubtopic: config.targetSubtopic || null
+            targetSubtopic: config.targetSubtopic || null,
+            mode: config.mode
           });
 
           setActiveQuestion(nextQuestion);
@@ -738,7 +793,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
           VoiceManager.speak(nextQuestion.speech, config.personality,
             () => {
               setVisualState("speaking");
-              setStatusText("Professor is speaking...");
+              setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
               startWaveAnimations();
               if (config.personality !== "friendly" && config.enableInterruption !== false) {
                 startBackgroundListeningForInterruptions(nextQuestion);
@@ -756,7 +811,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
           setCurrentQuestionIndex(qIdx);
           setVivaState("generating");
           setVisualState("analyzing");
-          setStatusText("Formulating next question...");
+          setStatusText(config.mode === "professional" ? "Formulating next interview question..." : "Formulating next question...");
 
           const nextQuestion = QuestionGraphEngine.getRuleBasedOfflineFallback(qIdx + 1, config.personality, activeQuestion.topic);
           setActiveQuestion(nextQuestion);
@@ -766,7 +821,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
           VoiceManager.speak(nextQuestion.speech, config.personality,
             () => {
               setVisualState("speaking");
-              setStatusText("Professor is speaking...");
+              setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
               startWaveAnimations();
               if (config.personality !== "friendly" && config.enableInterruption !== false) {
                 startBackgroundListeningForInterruptions(nextQuestion);
@@ -798,7 +853,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         SessionContextManager.askedTopics = [];
       }
       SessionContextManager.askedTopics.push({
-        topic: activeQuestion.topic || "Syllabus Fundamentals",
+        topic: activeQuestion.topic || (config.mode === "professional" ? "Role Core Competence" : "Syllabus Fundamentals"),
         metrics: fallbackMetrics
       });
 
@@ -809,11 +864,11 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       });
 
       // Update status text based on reaction
-      let reactionText = "Professor is noting your response...";
+      let reactionText = config.mode === "professional" ? "Interviewer is noting your response..." : "Professor is noting your response...";
       if (fallbackMetrics.correctness >= 75) {
-        reactionText = `${EXAMINER_PERSONALITIES[config.personality].name} is pleased with your answer.`;
+        reactionText = `${getPersonaTitle(config.personality, config.mode)} is pleased with your answer.`;
       } else if (fallbackMetrics.correctness < 55 || fallbackMetrics.tag === "Bluffing" || fallbackMetrics.tag === "Incorrect") {
-        reactionText = `${EXAMINER_PERSONALITIES[config.personality].name} looks skeptical.`;
+        reactionText = `${getPersonaTitle(config.personality, config.mode)} looks skeptical.`;
       }
       setStatusText(reactionText);
 
@@ -832,7 +887,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         setCurrentQuestionIndex(qIndex);
         setVivaState("generating");
         setVisualState("analyzing");
-        setStatusText("Formulating next question...");
+        setStatusText(config.mode === "professional" ? "Formulating next interview question..." : "Formulating next question...");
 
         const nextQuestion = QuestionGraphEngine.getRuleBasedOfflineFallback(qIndex + 1, config.personality, activeQuestion.topic);
         setActiveQuestion(nextQuestion);
@@ -843,7 +898,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         VoiceManager.speak(nextQuestion.speech, config.personality,
           () => {
             setVisualState("speaking");
-            setStatusText("Professor is speaking...");
+            setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
             startWaveAnimations();
             if (config.personality !== "friendly" && config.enableInterruption !== false) {
               startBackgroundListeningForInterruptions(nextQuestion);
@@ -877,7 +932,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     };
     
     localStorage.setItem("vivasim_paused_session", JSON.stringify(pauseState));
-    alert("Your oral examination session has been paused and saved securely. You can resume it anytime from the dashboard!");
+    const sessionNameText = config.mode === "professional" ? "interview practice session" : "oral examination session";
+    alert(`Your ${sessionNameText} has been paused and saved securely. You can resume it anytime from the dashboard!`);
     onFinishViva(null); // Return directly to dashboard
   };
 
@@ -955,7 +1011,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       isLastMinute: config.isLastMinute || false,
       isMockExternal: config.isMockExternal || false,
       examinerPersonality: config.personality,
-      recordedAudios: audioUrls
+      recordedAudios: audioUrls,
+      mode: config.mode
     });
   };
 
@@ -973,7 +1030,9 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       
       let textToSubmit = transcriptText;
       if (isPlaceholder || !textToSubmit || textToSubmit.includes("Speak now") || textToSubmit.includes("System is listening")) {
-        textToSubmit = "[Student force-submitted response early without substantive oral recording]";
+        textToSubmit = config.mode === "professional"
+          ? "[Candidate force-submitted response early without substantive oral recording]"
+          : "[Student force-submitted response early without substantive oral recording]";
       }
       
       processResponse(textToSubmit);
@@ -1073,6 +1132,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
               vivaState={vivaState}
               liveMetrics={liveMetrics}
               lastEvaluation={lastEvalRecord}
+              isProfessional={config.mode === "professional"}
             />
           </div>
 
@@ -1106,7 +1166,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
               </svg>
             </button>
             <span className="mic-subtext" id="btn-microphone-sub">
-              {fallbackMode ? "Microphone access blocked." : vivaState === "listening" ? "Microphone active. Speak naturally." : "Microphone inactive while examiner speaks."}
+              {fallbackMode ? "Microphone access blocked." : vivaState === "listening" ? "Microphone active. Speak naturally." : (config.mode === "professional" ? "Microphone inactive while interviewer speaks." : "Microphone inactive while examiner speaks.")}
             </span>
             {vivaState === "listening" && !fallbackMode && (
               <button 
@@ -1128,7 +1188,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
             <div className="biometric-sync-panel">
               <div className="biometric-header">
                 <span className="biometric-pulse"></span>
-                <span>Student Biometric Sync</span>
+                <span>{config.mode === "professional" ? "Candidate Biometric Sync" : "Student Biometric Sync"}</span>
               </div>
               <div className="biometric-grid">
                 
@@ -1197,7 +1257,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
 
           <div className="transcript-stage-card">
             <span className="transcript-label" id="transcript-speaker-label">
-              {vivaState === "listening" ? "Student Oral Response (Live)" : "Transcription Output"}
+              {vivaState === "listening" ? (config.mode === "professional" ? "Candidate Oral Response (Live)" : "Student Oral Response (Live)") : "Transcription Output"}
             </span>
             <div className={`transcript-text ${isPlaceholder ? "transcript-placeholder" : ""}`} id="viva-transcript-text">
               {transcriptText}
@@ -1233,16 +1293,16 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
             Question {currentQuestionIndex + 1} of 4
           </span>
           <div className="viva-question-content" id="viva-question-content-text">
-            {activeQuestion ? `"${activeQuestion.text}"` : '"Loading examination question..."'}
+            {activeQuestion ? `"${activeQuestion.text}"` : (config.mode === "professional" ? '"Loading interview question..."' : '"Loading examination question..."')}
           </div>
           
           <div className="viva-card-controls">
             <div style={{ display: "flex", gap: "var(--space-xs)" }}>
               <button className="btn btn-secondary" onClick={handlePauseSession} style={{ fontSize: "0.85rem", padding: "8px 16px" }}>
-                Pause Exam
+                {config.mode === "professional" ? "Pause Interview" : "Pause Exam"}
               </button>
               <button className="btn btn-secondary" onClick={() => handleFinish(true)} style={{ fontSize: "0.85rem", padding: "8px 16px", color: "var(--color-error)", borderColor: "var(--color-error-bg)" }}>
-                End Exam
+                {config.mode === "professional" ? "End Interview" : "End Exam"}
               </button>
             </div>
             <button 

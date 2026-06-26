@@ -18,14 +18,14 @@ export default function Header({ userName, onNavigate, onLogout }) {
             <path d="M8 8v6"></path>
             <path d="M16 9v4"></path>
           </svg>
-          <span className="logo-text">VivaSim</span>
+          <span className="logo-text">PrepSim</span>
         </div>
         <div className="nav-actions">
           <div className="user-profile" id="user-profile-widget">
             <span className="user-avatar" id="avatar-letters">
               {getInitials(userName)}
             </span>
-            <span id="user-display-name">{userName || "Student"}</span>
+            <span id="user-display-name">{userName || "Candidate"}</span>
           </div>
           <button 
             className="btn btn-text btn-logout-hover" 

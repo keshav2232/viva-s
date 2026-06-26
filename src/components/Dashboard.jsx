@@ -19,6 +19,16 @@ export default function Dashboard({ userName, stats, sessions, onStartNewViva, p
   const activeSubject = selectedSubject || (subjects.length > 0 ? subjects[0] : "");
   const activeSubjectData = masteryData[activeSubject];
 
+  const isProfessionalMode = activeSubjectData?.units?.[0]?.name?.toLowerCase().includes("competency") || 
+                              (sessions && sessions.find(s => s.subject === activeSubject)?.mode === "professional") ||
+                              activeSubject?.toLowerCase().includes("software engineer") ||
+                              activeSubject?.toLowerCase().includes("product manager") ||
+                              activeSubject?.toLowerCase().includes("data scientist");
+
+  const isProfessionalDashboard = sessions && sessions.length > 0 
+    ? sessions[0].mode === "professional" 
+    : isProfessionalMode;
+
   const getUnitMastery = (unit) => {
     if (!activeSubjectData || !activeSubjectData.mastery) return 0;
     const topics = unit.topics || [];
@@ -48,14 +58,13 @@ export default function Dashboard({ userName, stats, sessions, onStartNewViva, p
     return "hsl(145, 65%, 45%)";
   };
 
-  const getPersonalityName = (pType) => {
-    switch(pType) {
-      case "friendly": return "Friendly Professor";
-      case "strict": return "Strict Professor";
-      case "brutal": return "Brutal External";
-      case "terror": return "Viva Terror";
-      default: return "AI Examiner";
-    }
+  const getPersonalityName = (pType, mode = "academic") => {
+    const cleanType = pType?.toLowerCase();
+    if (cleanType?.includes("friendly") || cleanType === "friendly") return mode === "professional" ? "Warm Recruiter" : "Friendly Professor";
+    if (cleanType?.includes("strict") || cleanType === "strict") return mode === "professional" ? "Structured Hiring Manager" : "Strict Professor";
+    if (cleanType?.includes("brutal") || cleanType === "brutal") return mode === "professional" ? "Bar Raiser" : "Brutal External";
+    if (cleanType?.includes("terror") || cleanType === "terror") return mode === "professional" ? "Stress Interviewer" : "Viva Terror";
+    return pType || (mode === "professional" ? "AI Interviewer" : "AI Examiner");
   };
 
   return (
@@ -95,10 +104,10 @@ export default function Dashboard({ userName, stats, sessions, onStartNewViva, p
               </div>
               <div>
                 <h4 style={{ margin: 0, fontWeight: "600", fontSize: "0.95rem", color: "hsl(38, 90%, 65%)" }}>
-                  Active Paused Exam Session Detected
+                  Active Paused Practice Session Detected
                 </h4>
                 <p style={{ margin: "2px 0 0 0", color: "rgba(255, 255, 255, 0.8)", fontSize: "0.85rem" }}>
-                  You have a saved viva in progress on <strong>{pausedSession.config?.topic}</strong> with <strong>{getPersonalityName(pausedSession.config?.personality)}</strong> (Question {pausedSession.currentQuestionIndex + 1} of 4).
+                  You have a saved practice session in progress on <strong>{pausedSession.config?.topic}</strong> with <strong>{getPersonalityName(pausedSession.config?.personality, pausedSession.config?.mode)}</strong> (Question {pausedSession.currentQuestionIndex + 1} of 4).
                 </p>
               </div>
             </div>
@@ -129,7 +138,7 @@ export default function Dashboard({ userName, stats, sessions, onStartNewViva, p
                   boxShadow: "0 0 12px rgba(225, 150, 20, 0.3)"
                 }}
               >
-                Resume Exam
+                Resume Session
               </button>
             </div>
           </div>
@@ -137,7 +146,7 @@ export default function Dashboard({ userName, stats, sessions, onStartNewViva, p
         <div className="hero-section">
           <div className="greeting-section">
             <h1 id="dashboard-greeting">{salutation}, {userName}</h1>
-            <p>Ready for your next viva? Select a subject or upload a syllabus to practice.</p>
+            <p>Ready for your next session? Select an area or configure custom settings to practice.</p>
           </div>
           <div className="dashboard-actions">
             <button 
@@ -149,7 +158,7 @@ export default function Dashboard({ userName, stats, sessions, onStartNewViva, p
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 5v14M5 12h14"/>
               </svg>
-              Start New Viva
+              Start New Session
             </button>
           </div>
         </div>
@@ -160,7 +169,7 @@ export default function Dashboard({ userName, stats, sessions, onStartNewViva, p
               <circle cx="12" cy="12" r="10"></circle>
               <polyline points="12 6 12 12 16 14"></polyline>
             </svg>
-            <span className="stat-label">Total Attempted</span>
+            <span className="stat-label">Total Practice Sessions</span>
             <span className="stat-value" id="stat-total-vivas">{stats.totalVivas}</span>
             <span className="stat-sub neutral">Practice sessions complete</span>
           </div>
@@ -169,7 +178,7 @@ export default function Dashboard({ userName, stats, sessions, onStartNewViva, p
             <svg className="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
             </svg>
-            <span className="stat-label">Avg Confidence</span>
+            <span className="stat-label">Average Confidence</span>
             <span className="stat-value" id="stat-avg-confidence">{stats.avgConfidence}%</span>
             <span className="stat-sub" style={{ color: stats.totalVivas > 0 ? "var(--color-success)" : "var(--text-muted)" }}>
               {stats.totalVivas > 0 ? "Overall confidence score" : "No practice sessions recorded"}
@@ -181,12 +190,12 @@ export default function Dashboard({ userName, stats, sessions, onStartNewViva, p
               <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
               <polyline points="22 4 12 14.01 9 11.01"></polyline>
             </svg>
-            <span className="stat-label">Strongest Subject</span>
+            <span className="stat-label">Strongest Area</span>
             <span className="stat-value" id="stat-strongest-subject" style={{ fontSize: "1.2rem", fontWeight: "700", marginTop: "4px" }}>
               {stats.strongestSubject || "None yet"}
             </span>
             <span className="stat-sub" style={{ color: stats.totalVivas > 0 ? "var(--color-success)" : "var(--text-muted)" }}>
-              {stats.totalVivas > 0 ? "Highest-performing topic" : "Start a viva to analyze strength"}
+              {stats.totalVivas > 0 ? (isProfessionalDashboard ? "Highest-performing domain" : "Highest-performing topic") : "Start a session to analyze strength"}
             </span>
           </div>
 
@@ -196,17 +205,17 @@ export default function Dashboard({ userName, stats, sessions, onStartNewViva, p
               <line x1="12" y1="9" x2="12" y2="13"></line>
               <line x1="12" y1="17" x2="12.01" y2="17"></line>
             </svg>
-            <span className="stat-label">Weakest Subject</span>
+            <span className="stat-label">Weakest Area</span>
             <span className="stat-value" id="stat-weakest-subject" style={{ fontSize: "1.2rem", fontWeight: "700", marginTop: "4px" }}>
               {stats.weakestSubject || "None yet"}
             </span>
             <span className="stat-sub" style={{ color: stats.totalVivas > 0 ? "var(--color-error)" : "var(--text-muted)" }}>
-              {stats.totalVivas > 0 ? "Recommended focus area" : "Practice needed to detect weaknesses"}
+              {stats.totalVivas > 0 ? (isProfessionalDashboard ? "Recommended focus domain" : "Recommended focus area") : "Practice needed to detect weaknesses"}
             </span>
           </div>
         </div>
 
-        {/* 📊 Syllabus Coverage & Mastery Tracker Section */}
+        {/* 📊 Syllabus & Competency Mastery Tracker Section */}
         {Object.keys(masteryData).length > 0 && activeSubjectData && (
           <div className="mastery-tracker-card">
             <div className="mastery-tracker-header">
@@ -215,8 +224,12 @@ export default function Dashboard({ userName, stats, sessions, onStartNewViva, p
                   <path d="M12 20h9M3 20v-8a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v8M11 20V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v16"/>
                 </svg>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: "700" }}>Syllabus Mastery Tracker</h3>
-                  <p style={{ margin: "2px 0 0 0", fontSize: "0.78rem", color: "var(--text-secondary)" }}>Track real-time concept depth and unit exam-readiness.</p>
+                  <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: "700" }}>
+                    {isProfessionalMode ? "Role Competency Matrix" : "Syllabus Progress"}
+                  </h3>
+                  <p style={{ margin: "2px 0 0 0", fontSize: "0.78rem", color: "var(--text-secondary)" }}>
+                    {isProfessionalMode ? "Track real-time competency depth and role readiness." : "Track real-time concept depth and topic readiness."}
+                  </p>
                 </div>
               </div>
 
@@ -237,8 +250,12 @@ export default function Dashboard({ userName, stats, sessions, onStartNewViva, p
 
             {/* Overall Subject Mastery Banner */}
             <div className="mastery-overview-row">
-              <span style={{ fontSize: "0.85rem", fontWeight: "600", color: "var(--text-secondary)" }}>Overall Course Readiness</span>
-              <span style={{ fontSize: "1.1rem", fontWeight: "800", color: "var(--accent-primary)" }}>{getOverallMastery()}% Mastered</span>
+              <span style={{ fontSize: "0.85rem", fontWeight: "600", color: "var(--text-secondary)" }}>
+                {isProfessionalMode ? "Overall Role Readiness" : "Overall Syllabus Mastery"}
+              </span>
+              <span style={{ fontSize: "1.1rem", fontWeight: "800", color: "var(--accent-primary)" }}>
+                {getOverallMastery()}% {isProfessionalMode ? "Ready" : "Mastered"}
+              </span>
             </div>
 
             {/* Units Accordion Grid */}
@@ -316,7 +333,7 @@ export default function Dashboard({ userName, stats, sessions, onStartNewViva, p
 
         <div className="sessions-container">
           <div className="sessions-section-title">
-            <span>Recent Practice Sessions</span>
+            <span>{isProfessionalDashboard ? "Recent Mock Interviews" : "Recent Practice Sessions"}</span>
           </div>
           
           <div className="sessions-list" id="dashboard-sessions-list">
@@ -344,7 +361,7 @@ export default function Dashboard({ userName, stats, sessions, onStartNewViva, p
                           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                           <circle cx="12" cy="7" r="4"></circle>
                         </svg>
-                        <span>{sess.personality}</span>
+                        <span>{getPersonalityName(sess.personality, sess.mode)}</span>
                       </div>
                     </div>
                   </div>
@@ -370,9 +387,13 @@ export default function Dashboard({ userName, stats, sessions, onStartNewViva, p
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: "12px", color: "var(--text-muted)" }}>
                   <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
                 </svg>
-                <h4 style={{ fontWeight: "600", fontSize: "1.05rem", color: "var(--text-primary)", marginBottom: "4px" }}>No Practice Sessions Yet</h4>
+                <h4 style={{ fontWeight: "600", fontSize: "1.05rem", color: "var(--text-primary)", marginBottom: "4px" }}>
+                  {isProfessionalDashboard ? "No Interview Sessions Yet" : "No Practice Sessions Yet"}
+                </h4>
                 <p style={{ fontSize: "0.88rem", maxWidth: "340px", color: "var(--text-secondary)", margin: "0 auto" }}>
-                  Start your first interactive AI viva exam using the button above to begin compiling your personalized study metrics!
+                  {isProfessionalDashboard 
+                    ? "Start your first interactive AI mock interview using the button above to begin compiling your career metrics!"
+                    : "Start your first interactive AI viva exam using the button above to begin compiling your study metrics!"}
                 </p>
               </div>
             )}

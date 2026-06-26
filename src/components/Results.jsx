@@ -22,8 +22,11 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     subjectName,
     isLastMinute,
     isMockExternal,
-    examinerPersonality
+    examinerPersonality,
+    mode
   } = resultsData;
+
+  const isProfessional = mode === "professional";
 
   // Cleanup active audio playbacks on unmount
   useEffect(() => {
@@ -192,9 +195,11 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     const allTopicsToReview = [...new Set([...(weakConcepts || []), ...(revisions || [])])];
     
     // Default fallback topics if nothing is diagnosed
-    const fallbackTopics = subjectName === "Data Structures" 
-      ? ["BST insert & delete operations", "Stack overflow checks", "Double hashing probing", "Graph traversal state space"] 
-      : ["Clapeyron phase transitions", "Exergy entropy degradation calculations", "Maxwell conversions", "Carnot thermal bounds"];
+    const fallbackTopics = isProfessional
+      ? ["System design trade-offs", "Data consistency scaling", "API interface design patterns", "STAR response structure review"]
+      : (subjectName === "Data Structures" 
+          ? ["BST insert & delete operations", "Stack overflow checks", "Double hashing probing", "Graph traversal state space"] 
+          : ["Clapeyron phase transitions", "Exergy entropy degradation calculations", "Maxwell conversions", "Carnot thermal bounds"]);
     
     // Make sure we have enough topics to distribute
     while (allTopicsToReview.length < 5) {
@@ -207,6 +212,41 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     }
 
     // Build the 5 days
+    if (isProfessional) {
+      return [
+        {
+          day: 1,
+          focus: allTopicsToReview[0] || "Core Domain Concepts",
+          actions: ["Define core system patterns", "Identify engineering trade-offs", "Sketch high-level architecture diagram"],
+          time: "45 Mins"
+        },
+        {
+          day: 2,
+          focus: allTopicsToReview[1] || "System Scaling & Scenarios",
+          actions: ["Analyze horizontal vs vertical scaling limits", "Verify distributed system failure modes", "Solve 2 scenario design problems"],
+          time: "50 Mins"
+        },
+        {
+          day: 3,
+          focus: allTopicsToReview[2] || "Comparative Analysis",
+          actions: ["Create comparison table for databases or protocols", "List key advantages & disadvantages", "Use flashcards to self-test domain vocabulary"],
+          time: "40 Mins"
+        },
+        {
+          day: 4,
+          focus: allTopicsToReview[3] || "Advanced Architectures",
+          actions: ["Analyze database locking and index bottlenecks", "Explain queue-based asynchronous limits", "Take a 5-question mock technical drill"],
+          time: "60 Mins"
+        },
+        {
+          day: 5,
+          focus: allTopicsToReview[4] || "Comprehensive Practice",
+          actions: ["Execute a full timed mock interview practice session", "Review remaining diagnostic gaps", "Practice mock STAR answers out loud to a peer/AI"],
+          time: "45 Mins"
+        }
+      ];
+    }
+
     return [
       {
         day: 1,
@@ -216,7 +256,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
       },
       {
         day: 2,
-        focus: allTopicsToReview[1] || "Mathematical Relations",
+        focus: allTopicsToReview[1] || "Mathematical Derivations",
         actions: ["Perform textbook derivations", "Verify boundary cases", "Solve at least 2 practice problems"],
         time: "50 Mins"
       },
@@ -242,16 +282,20 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
   };
 
   const handleDownloadSchedule = () => {
-    let md = `# AI Study Plan: ${subjectName}\n\n`;
-    md += `**Prepared For**: Student Scholar\n`;
+    let md = isProfessional ? `# AI Preparation Roadmap: ${subjectName}\n\n` : `# AI Study Plan: ${subjectName}\n\n`;
+    md += isProfessional ? `**Prepared For**: Candidate\n` : `**Prepared For**: Student Scholar\n`;
     md += `**Date Generated**: ${new Date().toLocaleDateString()}\n`;
-    md += `**Target Score Improvement Focus**: Based on performance evaluation: **${overallScore}%**\n\n`;
+    md += isProfessional ? `**Target Role Improvement Focus**: Based on performance evaluation: **${overallScore}%**\n\n` : `**Target Score Improvement Focus**: Based on performance evaluation: **${overallScore}%**\n\n`;
     
     md += `## Performance Summary & Diagnosed Gaps\n`;
-    md += `* **Diagnosed Weak Concepts**: ${weakConcepts.length > 0 ? weakConcepts.join(", ") : "None detected (Minor polish needed)"}\n`;
-    md += `* **Recommended Revision Units**: ${revisions.join(", ")}\n\n`;
+    md += isProfessional
+      ? `* **Diagnosed Weak Competencies**: ${weakConcepts.length > 0 ? weakConcepts.join(", ") : "None detected (Minor polish needed)"}\n`
+      : `* **Diagnosed Weak Concepts**: ${weakConcepts.length > 0 ? weakConcepts.join(", ") : "None detected (Minor polish needed)"}\n`;
+    md += isProfessional
+      ? `* **Recommended Development Areas**: ${revisions.join(", ")}\n\n`
+      : `* **Recommended Revision Units**: ${revisions.join(", ")}\n\n`;
     
-    md += `## 5-Day Targeted Study Roadmap\n\n`;
+    md += isProfessional ? `## 5-Day Targeted Preparation Roadmap\n\n` : `## 5-Day Targeted Study Roadmap\n\n`;
     md += `| Day | Focus Area | Action Items | Time Commitment |\n`;
     md += `| :--- | :--- | :--- | :--- |\n`;
     
@@ -260,17 +304,25 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
       md += `| **Day ${day.day}** | ${day.focus} | ${day.actions.join("; ")} | ${day.time} |\n`;
     });
     
-    md += `\n## Core Pedagogical Study Tips\n`;
-    md += `1. **Active Recall**: Don't just re-read. Prompt yourself with "Quick Cram" flashcards or explain the concept aloud.\n`;
-    md += `2. **Incremental Feedback**: Take another targeted VivaSim session on this subject after Day 3 to measure progress.\n`;
-    md += `3. **Spaced Repetition**: Re-test yourself on Day 5 specifically on the items under the *Weak Concepts* list.\n\n`;
-    md += `*Generated automatically by VivaSim. Build academic confidence through high-fidelity simulation.*`;
+    md += isProfessional ? `\n## Core Professional Interview Tips\n` : `\n## Core Pedagogical Study Tips\n`;
+    md += isProfessional
+      ? `1. **STAR Format**: Answer behavioral and technical scenarios by outlining Situation, Task, Action, and Result.\n`
+      : `1. **Active Recall**: Don't just re-read. Prompt yourself with "Quick Cram" flashcards or explain the concept aloud.\n`;
+    md += isProfessional
+      ? `2. **Incremental Feedback**: Take another targeted PrepSim mock interview session after Day 3 to measure progress.\n`
+      : `2. **Incremental Feedback**: Take another targeted VivaSim session on this subject after Day 3 to measure progress.\n`;
+    md += isProfessional
+      ? `3. **Spaced Repetition**: Re-test yourself on Day 5 specifically on the items under the *Weak Competencies* list.\n\n`
+      : `3. **Spaced Repetition**: Re-test yourself on Day 5 specifically on the items under the *Weak Concepts* list.\n\n`;
+    md += isProfessional
+      ? `*Generated automatically by PrepSim. Build professional confidence through high-fidelity simulation.*`
+      : `*Generated automatically by VivaSim. Build academic confidence through high-fidelity simulation.*`;
 
     const blob = new Blob([md], { type: "text/markdown;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.setAttribute("download", `StudyPlan_${subjectName.replace(/\s+/g, "_")}.md`);
+    link.setAttribute("download", isProfessional ? `PrepPlan_${subjectName.replace(/\s+/g, "_")}.md` : `StudyPlan_${subjectName.replace(/\s+/g, "_")}.md`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -292,18 +344,26 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
   );
 
   // Set Verdict labels
-  let gradeLabel = "Upper Second Class Honor";
-  let evaluationVerdict = "Competent general understanding. Handled core subjects confidently with minor pauses when pressed on deep mechanisms.";
+  let gradeLabel = isProfessional ? "Strong Candidate (Good Fit)" : "Upper Second Class Honor";
+  let evaluationVerdict = isProfessional
+    ? "Competent general performance. Addressed core competencies confidently with minor pauses when pressed on deep technical trade-offs."
+    : "Competent general understanding. Handled core subjects confidently with minor pauses when pressed on deep mechanisms.";
 
   if (totalRounds === 0) {
     gradeLabel = "No Responses Submitted";
-    evaluationVerdict = "The oral examination was terminated before any questions were answered. No metrics or diagnostics could be recorded.";
+    evaluationVerdict = isProfessional
+      ? "The mock interview session was terminated before any questions were answered. No metrics or diagnostics could be recorded."
+      : "The oral examination was terminated before any questions were answered. No metrics or diagnostics could be recorded.";
   } else if (overallScore >= 80) {
-    gradeLabel = "First Class Honor (Distinction)";
-    evaluationVerdict = `Outstanding presentation. You answered with strong cognitive clarity (${clarityOfComm}%), solid semantic phrasing, and successfully countered deep cross-examinations.`;
+    gradeLabel = isProfessional ? "Recommended Hire" : "First Class Honor (Distinction)";
+    evaluationVerdict = isProfessional
+      ? `Outstanding interview presentation. You demonstrated excellent technical depth (${clarityOfComm}%), clear engineering trade-offs, structured communication, and successfully handled challenging follow-up questions.`
+      : `Outstanding presentation. You answered with strong cognitive clarity (${clarityOfComm}%), solid semantic phrasing, and successfully countered deep cross-examinations.`;
   } else if (overallScore < 65) {
-    gradeLabel = "Requires Conceptual Review";
-    evaluationVerdict = "Your answers lacked structured academic terminology. High uncertainty or hesitation markers significantly degraded speaking clarity scores.";
+    gradeLabel = isProfessional ? "Needs Role Review" : "Requires Conceptual Review";
+    evaluationVerdict = isProfessional
+      ? "Your answers lacked structured technical frameworks or STAR methodology highlights. High hesitation or nervousness indicators affected your communication clarity."
+      : "Your answers lacked structured academic terminology. High uncertainty or hesitation markers significantly degraded speaking clarity scores.";
   }
 
   // Branch default strengths/weaknesses if empty
@@ -829,8 +889,8 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                 </span>
               )}
             </div>
-            <h1 style={{ marginTop: "6px", marginBottom: "0", fontSize: "1.75rem", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Oral Examination Transcript</h1>
-            <p style={{ margin: "2px 0 0 0" }}>High-fidelity post-viva cognitive and delivery metrics.</p>
+            <h1 style={{ marginTop: "6px", marginBottom: "0", fontSize: "1.75rem", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{isProfessional ? "Mock Interview Performance Transcript" : "Oral Examination Transcript"}</h1>
+            <p style={{ margin: "2px 0 0 0" }}>{isProfessional ? "High-fidelity post-interview evaluation and delivery metrics." : "High-fidelity post-viva cognitive and delivery metrics."}</p>
           </div>
           <div className="no-print" style={{ display: "flex", gap: "var(--space-xs)" }}>
             <button className="btn btn-secondary" onClick={handlePrintReport} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
@@ -891,27 +951,27 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
               {/* Six detailed score fields */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-sm)", marginTop: "var(--space-lg)", borderTop: "1px solid var(--border-color)", paddingTop: "var(--space-md)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Subject Understanding</span>
+                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Technical/Domain Competence" : "Subject Understanding"}</span>
                   <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{subjectUnderstanding}%</strong>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Speaking Confidence</span>
+                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Communication Confidence" : "Speaking Confidence"}</span>
                   <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{vocalConfidence}%</strong>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Speaking Clarity</span>
+                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Clarity & Delivery" : "Speaking Clarity"}</span>
                   <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{clarityOfComm}%</strong>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Conceptual Depth</span>
+                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Problem-Solving Depth" : "Conceptual Depth"}</span>
                   <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{conceptualDepth}%</strong>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Handling Pressure</span>
+                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Stress Tolerance" : "Handling Pressure"}</span>
                   <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{handlingPressure}%</strong>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Consistency</span>
+                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Role Consistency" : "Consistency"}</span>
                   <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{consistency}%</strong>
                 </div>
               </div>
@@ -954,11 +1014,11 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
               {pastSessionsAvg !== null ? (
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "6px 0" }}>
-                    <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Previous Subject Average</span>
+                    <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Previous Role Average" : "Previous Subject Average"}</span>
                     <strong style={{ fontSize: "0.85rem", color: "var(--text-primary)" }}>{pastSessionsAvg}%</strong>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "6px 0" }}>
-                    <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Current Viva Score</span>
+                    <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Current Interview Score" : "Current Viva Score"}</span>
                     <strong style={{ fontSize: "0.85rem", color: "var(--accent-primary)" }}>{overallScore}%</strong>
                   </div>
                   <div style={{
@@ -997,7 +1057,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                     <line x1="12" y1="16" x2="12" y2="12"></line>
                     <line x1="12" y1="8" x2="12.01" y2="8"></line>
                   </svg>
-                  <span style={{ fontSize: "0.8rem" }}>First viva registered for this subject. Subsequent exams will unlock delta progress metrics.</span>
+                  <span style={{ fontSize: "0.8rem" }}>{isProfessional ? "First session registered for this role. Subsequent practice will unlock delta progress metrics." : "First viva registered for this subject. Subsequent exams will unlock delta progress metrics."}</span>
                 </div>
               )}
             </div>
@@ -1005,10 +1065,10 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
             {/* Smart Revision planner */}
             <div className="card suggested-revision-card" style={{ padding: "var(--space-lg)" }}>
               <h3 style={{ fontSize: "1.05rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-sm)", textAlign: "left" }}>
-                Smart Revision Plan
+                {isProfessional ? "Targeted Development Plan" : "Smart Revision Plan"}
               </h3>
               <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "var(--space-md)", textAlign: "left" }}>
-                Prioritized revision queue compiled from detected conceptual gaps.
+                {isProfessional ? "Prioritized development queue compiled from detected competency gaps." : "Prioritized revision queue compiled from detected conceptual gaps."}
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
                 {getSuggestedRevisionPills().map((rev, idx) => (
@@ -1029,10 +1089,10 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
                 <div>
                   <h3 style={{ fontSize: "1.05rem", fontWeight: "700", textAlign: "left", margin: 0 }}>
-                    Custom AI Study Planner
+                    {isProfessional ? "Custom AI Preparation Roadmap" : "Custom AI Study Planner"}
                   </h3>
                   <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", margin: "2px 0 0 0", textAlign: "left" }}>
-                    Day-by-day roadmap tailored to close your diagnosed knowledge gaps.
+                    {isProfessional ? "Day-by-day roadmap tailored to close your diagnosed competency gaps." : "Day-by-day roadmap tailored to close your diagnosed knowledge gaps."}
                   </p>
                 </div>
                 <button 
@@ -1166,13 +1226,13 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
             {/* PROFESSOR MODE REPLAY */}
             <div className="card" style={{ padding: "var(--space-lg)", textAlign: "left" }}>
               <h3 style={{ fontSize: "1.05rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-md)" }}>
-                Professor Mode Replay
+                {isProfessional ? "Interviewer Feedback Replay" : "Professor Mode Replay"}
               </h3>
               
               <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
                 {askedQuestions.length === 0 ? (
                   <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", textAlign: "center", padding: "16px 0", margin: 0 }}>
-                    No recorded rounds. Answer at least one question to replay the examiner's evaluation.
+                    {isProfessional ? "No recorded rounds. Answer at least one question to replay the interviewer's evaluation." : "No recorded rounds. Answer at least one question to replay the examiner's evaluation."}
                   </p>
                 ) : (
                   askedQuestions.map((qText, idx) => {
@@ -1180,7 +1240,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                   const emotion = detectedEmotions[idx] || { correctness: 80, confidence: 80 };
                   const answer = answerTranscripts[idx] || "";
                   const qObj = askedQuestionsObjects && askedQuestionsObjects[idx] ? askedQuestionsObjects[idx] : null;
-                  const topicText = qObj ? qObj.topic : "Syllabus Concept";
+                  const topicText = qObj ? qObj.topic : (isProfessional ? "Competency Skill" : "Syllabus Concept");
                   
                   return (
                     <div key={idx} style={{ border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", overflow: "hidden", transition: "var(--transition-smooth)" }}>
@@ -1229,7 +1289,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                           {/* Question row with Replay speaker */}
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
                             <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", fontStyle: "italic" }}>
-                              <strong>Examiner prompt:</strong> &quot;{qObj ? qObj.text : qText}&quot;
+                              <strong>{isProfessional ? "Interviewer prompt:" : "Examiner prompt:"}</strong> &quot;{qObj ? qObj.text : qText}&quot;
                             </div>
                             <button 
                               className="btn btn-secondary"
@@ -1282,7 +1342,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                             marginBottom: "var(--space-sm)",
                             lineHeight: "1.45"
                           }}>
-                            <strong style={{ display: "block", color: "hsl(145, 60%, 20%)", marginBottom: "4px", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Expected Correct Answer:</strong>
+                            <strong style={{ display: "block", color: "hsl(145, 60%, 20%)", marginBottom: "4px", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>{isProfessional ? "Optimal Professional Response:" : "Expected Correct Answer:"}</strong>
                             {emotion.correctAnswer || qObj?.correctAnswer || getExpectedCorrectAnswer(topicText, qObj ? qObj.text : qText, qObj)}
                           </div>
 
