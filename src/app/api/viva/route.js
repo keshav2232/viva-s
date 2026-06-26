@@ -110,6 +110,10 @@ export async function POST(req) {
         return await handleGenerateQuestion(payload, apiKey);
       case "evaluate-answer":
         return await handleEvaluateAnswer(payload, apiKey);
+      case "generate-hint":
+        return await handleGenerateHint(payload, apiKey);
+      case "generate-subquestion":
+        return await handleGenerateSubquestion(payload, apiKey);
       case "generate-flashcards":
         return await handleGenerateFlashcards(payload.syllabusStructure, apiKey);
       case "analyze-hume-emotion":
@@ -297,6 +301,40 @@ async function handleEvaluateAnswer(payload, apiKey) {
 }
 
 // ==========================================
+// 3.5. GENERATE HINT
+// ==========================================
+async function handleGenerateHint(payload, apiKey) {
+  const { question, answer, topic } = payload;
+  const prompt = `You are conducting a university oral exam as a Friendly Professor. The student is currently stuck or hesitating on this question: "${question}". They have spoken or typed so far: "${answer || 'nothing yet'}". The question is on the topic: "${topic}".
+  Generate a brief, gentle conceptual hint (exactly 1-2 sentences) to guide them without giving away the exact answer. Keep the tone warm, patient, and encouraging.
+  Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown:
+  {
+    "hintText": "The text of the hint to display on screen (e.g. 'Think about how the first law relates to heat transfer')",
+    "hintSpeech": "Dr. George's friendly spoken remark. Incorporate warm fillers like 'No worries, let's look at...' (e.g. 'No worries, think about how the first law...')"
+  }`;
+
+  const responseJson = await callGeminiAPI(prompt, apiKey);
+  return NextResponse.json(responseJson);
+}
+
+// ==========================================
+// 3.6. GENERATE SIMPLER SUBQUESTION
+// ==========================================
+async function handleGenerateSubquestion(payload, apiKey) {
+  const { question, answer, topic } = payload;
+  const prompt = `You are conducting a university oral exam as a high-pressure Viva Terror examiner. The student is struggling and has paused/hesitated on this question: "${question}". They have spoken or typed so far: "${answer || 'nothing yet'}".
+  Interrupt them and ask a much simpler, basic sub-question related to the topic "${topic}" to test their elementary understanding. Keep it direct and slightly intimidating.
+  Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown:
+  {
+    "subQuestionText": "The sub-question text to display on screen (e.g. 'What is the basic definition of entropy?')",
+    "subQuestionSpeech": "Professor Thorne's sharp spoken remark. Incorporate fillers or a stern tone (e.g. 'You seem stuck. Let's make it simpler: what is...')"
+  }`;
+
+  const responseJson = await callGeminiAPI(prompt, apiKey);
+  return NextResponse.json(responseJson);
+}
+
+// ==========================================
 // GEMINI API CALLER
 // ==========================================
 async function callGeminiAPI(prompt, apiKey) {
@@ -376,6 +414,22 @@ async function callGeminiAPI(prompt, apiKey) {
 // ==========================================
 function handleOfflineFallback(payload) {
   const { action } = payload;
+  
+  if (action === "generate-hint") {
+    const { question, answer, topic } = payload;
+    return NextResponse.json({
+      hintText: `Friendly hint: Think about the core principles of ${topic || "this topic"}. How does it relate to its main variables or inputs?`,
+      hintSpeech: `Don't worry, let's take a step back. Think about the core principles of ${topic || "this topic"}. How does it relate to its main variables or inputs? Take your time.`
+    });
+  }
+
+  if (action === "generate-subquestion") {
+    const { question, answer, topic } = payload;
+    return NextResponse.json({
+      subQuestionText: `Simpler question: What is the absolute basic definition of ${topic || "this concept"}?`,
+      subQuestionSpeech: `You are taking too long. Let's make it simpler. Just tell me: what is the absolute basic definition of ${topic || "this concept"}?`
+    });
+  }
   
   if (action === "expand-topic") {
     const topic = payload.topic || "Thermodynamics";

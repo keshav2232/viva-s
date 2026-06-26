@@ -1205,6 +1205,32 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                             <strong>Your Transcript:</strong> &quot;{answer}&quot;
                           </div>
 
+                          {/* Local Audio Recording Replay */}
+                          {resultsData.recordedAudios && resultsData.recordedAudios[idx] && (
+                            <div className="audio-replay-container" style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "var(--space-sm)",
+                              backgroundColor: "var(--bg-primary)",
+                              padding: "8px 12px",
+                              borderRadius: "var(--radius-xs)",
+                              border: "1px solid var(--border-color)",
+                              marginBottom: "var(--space-sm)"
+                            }}>
+                              <span style={{ fontSize: "0.75rem", fontWeight: "600", color: "var(--text-secondary)", flexShrink: 0 }}>
+                                Listen back:
+                              </span>
+                              <audio 
+                                src={resultsData.recordedAudios[idx]} 
+                                controls 
+                                style={{
+                                  height: "32px",
+                                  flex: 1
+                                }}
+                              />
+                            </div>
+                          )}
+
                           {/* Expected Correct Answer */}
                           <div style={{
                             fontSize: "0.825rem",

@@ -12,7 +12,7 @@ export const AnswerEvaluationService = {
    * @returns {Promise<object>} Combined metrics { confidence, clarity, nervousness, hesitation, correctness, accuracy, completeness, tag }
    */
   async evaluateResponse(params) {
-    const { question, answer, syllabus, speechDurationMs, pauseCount, liveMetrics } = params;
+    const { question, answer, syllabus, speechDurationMs, pauseCount, liveMetrics, isHesitationPenalty } = params;
 
     // 1. Calculate local acoustic/delivery metrics (prefer live-tracked metrics)
     const delivery = liveMetrics || this.calculateLocalDeliveryMetrics(answer, speechDurationMs, pauseCount);
@@ -41,6 +41,12 @@ export const AnswerEvaluationService = {
 
       const finalConfidence = Math.min(Math.max(delivery.confidence + confAdjustment, 30), 98);
       const finalClarity = Math.round((delivery.clarity * 0.4) + (semanticGrading.clarity * 0.6));
+
+      if (isHesitationPenalty) {
+        semanticGrading.correctness = Math.max(Math.round(semanticGrading.correctness * 0.8), 0);
+        semanticGrading.accuracy = Math.max(Math.round(semanticGrading.accuracy * 0.8), 0);
+        semanticGrading.tag = "Partially Correct";
+      }
 
       return {
         // Combined metrics
@@ -120,12 +126,21 @@ export const AnswerEvaluationService = {
   /**
    * Highly responsive fallback metrics in case API key is offline.
    */
-  getLocalFallbackMetrics(delivery, answerText) {
+  getLocalFallbackMetrics(delivery, answerText, isHesitationPenalty) {
     const isShort = answerText.length < 15;
     let tag = "Partially Correct";
     if (isShort) tag = "Incomplete";
     else if (delivery.confidence >= 80) tag = "Strong";
     else if (delivery.confidence < 60) tag = "Weak";
+
+    let correctness = isShort ? 55 : 82;
+    let accuracy = isShort ? 50 : 80;
+
+    if (isHesitationPenalty) {
+      correctness = Math.max(Math.round(correctness * 0.8), 0);
+      accuracy = Math.max(Math.round(accuracy * 0.8), 0);
+      tag = "Partially Correct";
+    }
 
     return {
       confidence: delivery.confidence,
@@ -134,8 +149,8 @@ export const AnswerEvaluationService = {
       hesitation: delivery.hesitation,
       wpm: delivery.wpm || 120,
       fillerCount: delivery.fillerCount || 0,
-      correctness: isShort ? 55 : 82,
-      accuracy: isShort ? 50 : 80,
+      correctness: correctness,
+      accuracy: accuracy,
       completeness: isShort ? 45 : 78,
       tag: tag
     };

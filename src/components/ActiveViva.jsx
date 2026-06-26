@@ -40,6 +40,12 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
   const interruptedRef = useRef(false);
   const latestNervousnessRef = useRef(20);
   
+  // Hesitation Monitor & Local Audio Replay states/refs
+  const [hesitationPenalties, setHesitationPenalties] = useState({});
+  const hesitationTimerRef = useRef(null);
+  const hasHesitatedInCurrentRoundRef = useRef(false);
+  const recordedAudiosRef = useRef({});
+  
   // Live Biometric Synchronization
   const [liveMetrics, setLiveMetrics] = useState({ confidence: 85, nervousness: 15, clarity: 80, hesitation: 10 });
   const [liveStatusText, setLiveStatusText] = useState("Calibration active. Ready.");
@@ -85,7 +91,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
           setVisualState("speaking");
           setStatusText("Professor is speaking...");
           startWaveAnimations();
-          if (config.personality !== "friendly") {
+          if (config.personality !== "friendly" && config.enableInterruption !== false) {
             startBackgroundListeningForInterruptions(config.resumeState.activeQuestion);
           }
         },
@@ -316,7 +322,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
           setVisualState("speaking");
           setStatusText("Professor is speaking...");
           startWaveAnimations();
-          if (config.personality !== "friendly") {
+          if (config.personality !== "friendly" && config.enableInterruption !== false) {
             startBackgroundListeningForInterruptions(firstQuestion);
           }
         },
@@ -341,7 +347,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
           setVisualState("speaking");
           setStatusText("Professor is speaking...");
           startWaveAnimations();
-          if (config.personality !== "friendly") {
+          if (config.personality !== "friendly" && config.enableInterruption !== false) {
             startBackgroundListeningForInterruptions(fallback);
           }
         },
@@ -398,6 +404,165 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     }
   };
 
+  const getOfflineHint = (topic, questionText) => {
+    return {
+      hintText: `Friendly hint: Think about the core principles of ${topic || "this topic"}. How does it relate to its main variables or inputs?`,
+      hintSpeech: `Don't worry, let's take a step back. Think about the core principles of ${topic || "this topic"}. How does it relate to its main variables or inputs? Take your time.`
+    };
+  };
+
+  const getOfflineSubquestion = (topic, questionText) => {
+    return {
+      subQuestionText: `Simpler question: What is the absolute basic definition of ${topic || "this concept"}?`,
+      subQuestionSpeech: `You are taking too long. Let's make it simpler. Just tell me: what is the absolute basic definition of ${topic || "this concept"}?`
+    };
+  };
+
+  const clearHesitationTimer = () => {
+    if (hesitationTimerRef.current) {
+      clearTimeout(hesitationTimerRef.current);
+      hesitationTimerRef.current = null;
+    }
+  };
+
+  const resetHesitationTimer = () => {
+    clearHesitationTimer();
+    
+    // Only run hesitation monitor if:
+    // 1. We are in listening state
+    // 2. We are NOT in keyboard fallback mode
+    // 3. We haven't already hesitated in this specific question round
+    if (!fallbackMode && !hasHesitatedInCurrentRoundRef.current) {
+      hesitationTimerRef.current = setTimeout(() => {
+        handleStudentHesitation();
+      }, 5000); // 5 seconds of inactivity triggers the hesitation monitor
+    }
+  };
+
+  const handleStudentHesitation = async () => {
+    hasHesitatedInCurrentRoundRef.current = true;
+    clearHesitationTimer();
+
+    // Stop Speech Recognition temporarily so it doesn't pick up the examiner's voice
+    SpeechManager.stop();
+
+    const persona = config.personality;
+    
+    setVivaState("speaking");
+    setVisualState("speaking");
+    startWaveAnimations();
+
+    if (persona === "friendly") {
+      setStatusText(`${EXAMINER_PERSONALITIES.friendly.name} is offering a hint...`);
+      
+      let hintText = "";
+      let hintSpeech = "";
+      
+      try {
+        const res = await fetch("/api/viva", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "generate-hint",
+            question: activeQuestion.text,
+            answer: transcriptText === "Speak now. System is listening..." ? "" : transcriptText,
+            topic: activeQuestion.topic
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          hintText = data.hintText;
+          hintSpeech = data.hintSpeech;
+        } else {
+          throw new Error("Hint generation error");
+        }
+      } catch (err) {
+        console.warn("Using offline fallback hint:", err);
+        const fallbackHint = getOfflineHint(activeQuestion.topic, activeQuestion.text);
+        hintText = fallbackHint.hintText;
+        hintSpeech = fallbackHint.hintSpeech;
+      }
+
+      setTranscriptText(`[Hint: ${hintText}]`);
+      setIsPlaceholder(false);
+
+      VoiceManager.speak(hintSpeech, "friendly", 
+        null,
+        () => {
+          startListeningMode();
+        }
+      );
+
+    } else if (persona === "strict" || persona === "brutal") {
+      setStatusText(`${EXAMINER_PERSONALITIES[persona].name} is reminding you of the time...`);
+
+      const mins = Math.floor(timeRemaining / 60);
+      const secs = timeRemaining % 60;
+      const timeStr = mins > 0 ? `${mins} minutes and ${secs} seconds` : `${secs} seconds`;
+      const reminderSpeech = `We are running out of time. You have ${timeStr} remaining for this examination. Please provide your explanation immediately.`;
+      
+      setTranscriptText(`[Examiner reminded you of the remaining time: ${getFormattedTime()}]`);
+      setIsPlaceholder(false);
+
+      VoiceManager.speak(reminderSpeech, persona,
+        null,
+        () => {
+          startListeningMode();
+        }
+      );
+
+    } else if (persona === "terror") {
+      setStatusText(`${EXAMINER_PERSONALITIES.terror.name} is interrupting you...`);
+      
+      setHesitationPenalties(prev => ({
+        ...prev,
+        [currentQuestionIndex]: true
+      }));
+
+      let subQuestionText = "";
+      let subQuestionSpeech = "";
+
+      try {
+        const res = await fetch("/api/viva", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "generate-subquestion",
+            question: activeQuestion.text,
+            answer: transcriptText === "Speak now. System is listening..." ? "" : transcriptText,
+            topic: activeQuestion.topic
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          subQuestionText = data.subQuestionText;
+          subQuestionSpeech = data.subQuestionSpeech;
+        } else {
+          throw new Error("Sub-question generation failed");
+        }
+      } catch (err) {
+        console.warn("Using offline subquestion fallback:", err);
+        const fallbackSub = getOfflineSubquestion(activeQuestion.topic, activeQuestion.text);
+        subQuestionText = fallbackSub.subQuestionText;
+        subQuestionSpeech = fallbackSub.subQuestionSpeech;
+      }
+
+      setActiveQuestion(prev => ({
+        ...prev,
+        text: `${prev.text} (Simplified: ${subQuestionText})`
+      }));
+      setTranscriptText(`[Examiner interrupted to ask a simpler sub-question. Score penalty applied.]`);
+      setIsPlaceholder(false);
+
+      VoiceManager.speak(subQuestionSpeech, "terror",
+        null,
+        () => {
+          startListeningMode();
+        }
+      );
+    }
+  };
+
   // Phase 2: Dynamic Listening
   function startListeningMode() {
     setVivaState("listening");
@@ -408,9 +573,11 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     
     speechStartTime.current = getNow();
     startListeningWaveAnimations();
+    resetHesitationTimer();
 
     SpeechManager.start({
       onResult: (interim, final) => {
+        resetHesitationTimer();
         if (!final && !interim) {
           setTranscriptText("Speak now. System is listening...");
           setIsPlaceholder(true);
@@ -435,6 +602,9 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       },
       onAudioCaptured: (audioBlob) => {
         handleHumeEmotionAnalysis(audioBlob, currentQuestionIndex);
+        if (audioBlob && audioBlob.size > 100) {
+          recordedAudiosRef.current[currentQuestionIndex] = audioBlob;
+        }
       },
       onError: (err) => {
         console.warn("React SpeechManager error:", err);
@@ -452,6 +622,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
 
   function triggerKeyboardFallback() {
     SpeechManager.stop();
+    clearHesitationTimer();
     setVisualState("listening");
     setStatusText("Keyboard Fallback Active");
     setTranscriptText("Please type your detailed explanation inside the box below.");
@@ -473,18 +644,21 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     setTranscriptText(answerText);
     setIsPlaceholder(false);
     clearInterval(waveIntervalRef.current);
+    clearHesitationTimer();
 
     const durationMs = getNow() - speechStartTime.current;
     const pauseCount = SpeechManager.gapsHistory.length;
 
     try {
+      const hasPenalty = hesitationPenalties[currentQuestionIndex] || false;
       const resultMetrics = await AnswerEvaluationService.evaluateResponse({
         question: activeQuestion.text,
         answer: answerText,
         syllabus: config.syllabusStructure,
         speechDurationMs: durationMs,
         pauseCount: pauseCount,
-        liveMetrics: liveMetrics
+        liveMetrics: liveMetrics,
+        isHesitationPenalty: hasPenalty
       });
 
       // Track nervousness for dynamic pressure adaptations
@@ -536,6 +710,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
           return;
         }
 
+        hasHesitatedInCurrentRoundRef.current = false;
         setCurrentQuestionIndex(qIndex);
         setVivaState("generating");
         setVisualState("analyzing");
@@ -565,7 +740,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
               setVisualState("speaking");
               setStatusText("Professor is speaking...");
               startWaveAnimations();
-              if (config.personality !== "friendly") {
+              if (config.personality !== "friendly" && config.enableInterruption !== false) {
                 startBackgroundListeningForInterruptions(nextQuestion);
               }
             },
@@ -593,7 +768,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
               setVisualState("speaking");
               setStatusText("Professor is speaking...");
               startWaveAnimations();
-              if (config.personality !== "friendly") {
+              if (config.personality !== "friendly" && config.enableInterruption !== false) {
                 startBackgroundListeningForInterruptions(nextQuestion);
               }
             },
@@ -609,7 +784,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       console.error("Failed to process answer evaluation:", err);
       // Heuristic fallback if server error
       const localDelivery = AnswerEvaluationService.calculateLocalDeliveryMetrics(answerText, durationMs, pauseCount);
-      const fallbackMetrics = AnswerEvaluationService.getLocalFallbackMetrics(liveMetrics || localDelivery, answerText);
+      const hasPenalty = hesitationPenalties[currentQuestionIndex] || false;
+      const fallbackMetrics = AnswerEvaluationService.getLocalFallbackMetrics(liveMetrics || localDelivery, answerText, hasPenalty);
       
       SessionContextManager.recordRound({
         questionText: activeQuestion.text,
@@ -652,6 +828,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
           return;
         }
 
+        hasHesitatedInCurrentRoundRef.current = false;
         setCurrentQuestionIndex(qIndex);
         setVivaState("generating");
         setVisualState("analyzing");
@@ -668,7 +845,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
             setVisualState("speaking");
             setStatusText("Professor is speaking...");
             startWaveAnimations();
-            if (config.personality !== "friendly") {
+            if (config.personality !== "friendly" && config.enableInterruption !== false) {
               startBackgroundListeningForInterruptions(nextQuestion);
             }
           },
@@ -684,6 +861,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
   const handlePauseSession = () => {
     stopAudioStreams();
     clearInterval(waveIntervalRef.current);
+    clearHesitationTimer();
     
     const pauseState = {
       config,
@@ -756,6 +934,16 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       }
     }
 
+    const audioUrls = {};
+    Object.keys(recordedAudiosRef.current).forEach(idx => {
+      const blob = recordedAudiosRef.current[idx];
+      if (blob) {
+        audioUrls[idx] = URL.createObjectURL(blob);
+      }
+    });
+
+    clearHesitationTimer();
+
     onFinishViva({
       ...baseReport,
       askedTopics: SessionContextManager.askedTopics || [],
@@ -766,7 +954,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       dynamicRevisions,
       isLastMinute: config.isLastMinute || false,
       isMockExternal: config.isMockExternal || false,
-      examinerPersonality: config.personality
+      examinerPersonality: config.personality,
+      recordedAudios: audioUrls
     });
   };
 

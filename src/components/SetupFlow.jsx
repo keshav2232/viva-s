@@ -36,6 +36,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
   // Hackathon differentiator toggles
   const [isLastMinute, setIsLastMinute] = useState(false);
   const [isMockExternal, setIsMockExternal] = useState(false);
+  const [enableInterruption, setEnableInterruption] = useState(true);
 
   // Target Drill & Mind Map States
   const [selectedSubtopic, setSelectedSubtopic] = useState(null);
@@ -240,7 +241,8 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
       isLastMinute,
       isMockExternal,
       isTargetDrill: !!selectedSubtopic,
-      targetSubtopic: selectedSubtopic ? selectedSubtopic.name : null
+      targetSubtopic: selectedSubtopic ? selectedSubtopic.name : null,
+      enableInterruption
     });
   };
 
@@ -744,6 +746,48 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                   <h4 style={{ margin: "0 0 2px 0", fontSize: "0.9rem", color: "var(--color-error)" }}>Mock External Viva</h4>
                   <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--text-secondary)" }}>
                     High-stress university board review. Intimidating grading, intense questioning, and aggressive verbal interruptions.
+                  </p>
+                </div>
+              </div>
+
+              <div 
+                className={`card ${enableInterruption ? "selected" : ""}`} 
+                onClick={() => setEnableInterruption(prev => !prev)}
+                style={{
+                  padding: "var(--space-md)",
+                  border: enableInterruption ? "1px solid var(--accent-primary)" : "1px solid var(--border-color)",
+                  borderRadius: "var(--radius-md)",
+                  cursor: "pointer",
+                  display: "flex",
+                  gap: "var(--space-sm)",
+                  alignItems: "flex-start",
+                  backgroundColor: enableInterruption ? "var(--bg-primary)" : "var(--bg-card)",
+                  transition: "var(--transition-smooth)"
+                }}
+              >
+                <div style={{
+                  width: "20px",
+                  height: "20px",
+                  borderRadius: "var(--radius-xs)",
+                  border: "2px solid var(--accent-primary)",
+                  backgroundColor: enableInterruption ? "var(--accent-primary)" : "transparent",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "white",
+                  flexShrink: 0,
+                  marginTop: "2px"
+                }}>
+                  {enableInterruption && (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                  )}
+                </div>
+                <div style={{ textAlign: "left" }}>
+                  <h4 style={{ margin: "0 0 2px 0", fontSize: "0.9rem", color: "var(--accent-primary)" }}>Examiner Interruption</h4>
+                  <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                    Allows the examiner to verbally cut you off if you speak over them. Disable this if you prefer a calmer, uninterrupted flow.
                   </p>
                 </div>
               </div>
