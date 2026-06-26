@@ -176,7 +176,9 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
           const past = parsed.filter(p => p.subject === subjectName);
           if (past.length > 0) {
             const sum = past.reduce((acc, curr) => acc + curr.score, 0);
-            setPastSessionsAvg(Math.round(sum / past.length));
+            setTimeout(() => {
+              setPastSessionsAvg(Math.round(sum / past.length));
+            }, 0);
           }
         }
       } catch (e) {
@@ -184,6 +186,95 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
       }
     }
   }, [subjectName]);
+
+  const generate5DayPlan = () => {
+    // Collect all concepts that need revision
+    const allTopicsToReview = [...new Set([...(weakConcepts || []), ...(revisions || [])])];
+    
+    // Default fallback topics if nothing is diagnosed
+    const fallbackTopics = subjectName === "Data Structures" 
+      ? ["BST insert & delete operations", "Stack overflow checks", "Double hashing probing", "Graph traversal state space"] 
+      : ["Clapeyron phase transitions", "Exergy entropy degradation calculations", "Maxwell conversions", "Carnot thermal bounds"];
+    
+    // Make sure we have enough topics to distribute
+    while (allTopicsToReview.length < 5) {
+      const unusedFallback = fallbackTopics.find(t => !allTopicsToReview.includes(t));
+      if (unusedFallback) {
+        allTopicsToReview.push(unusedFallback);
+      } else {
+        allTopicsToReview.push(fallbackTopics[allTopicsToReview.length % fallbackTopics.length]);
+      }
+    }
+
+    // Build the 5 days
+    return [
+      {
+        day: 1,
+        focus: allTopicsToReview[0] || "Foundational Definitions",
+        actions: ["Define core definitions", "Identify active formulas", "Draw a summary block diagram"],
+        time: "45 Mins"
+      },
+      {
+        day: 2,
+        focus: allTopicsToReview[1] || "Mathematical Relations",
+        actions: ["Perform textbook derivations", "Verify boundary cases", "Solve at least 2 practice problems"],
+        time: "50 Mins"
+      },
+      {
+        day: 3,
+        focus: allTopicsToReview[2] || "Comparative Analysis",
+        actions: ["Create comparison table for different modes", "List key advantages & disadvantages", "Use Flashcards to self-test"],
+        time: "40 Mins"
+      },
+      {
+        day: 4,
+        focus: allTopicsToReview[3] || "Advanced Applications",
+        actions: ["Analyze stress failure conditions or complexity cases", "Explain real-world scaling limits", "Take a 5-question mock test"],
+        time: "60 Mins"
+      },
+      {
+        day: 5,
+        focus: allTopicsToReview[4] || "Comprehensive Review",
+        actions: ["Execute a full timed VivaSim mock practice exam", "Review remaining weak notes", "Explain concepts out loud to a peer/AI"],
+        time: "45 Mins"
+      }
+    ];
+  };
+
+  const handleDownloadSchedule = () => {
+    let md = `# AI Study Plan: ${subjectName}\n\n`;
+    md += `**Prepared For**: Student Scholar\n`;
+    md += `**Date Generated**: ${new Date().toLocaleDateString()}\n`;
+    md += `**Target Score Improvement Focus**: Based on performance evaluation: **${overallScore}%**\n\n`;
+    
+    md += `## Performance Summary & Diagnosed Gaps\n`;
+    md += `* **Diagnosed Weak Concepts**: ${weakConcepts.length > 0 ? weakConcepts.join(", ") : "None detected (Minor polish needed)"}\n`;
+    md += `* **Recommended Revision Units**: ${revisions.join(", ")}\n\n`;
+    
+    md += `## 5-Day Targeted Study Roadmap\n\n`;
+    md += `| Day | Focus Area | Action Items | Time Commitment |\n`;
+    md += `| :--- | :--- | :--- | :--- |\n`;
+    
+    const planDays = generate5DayPlan();
+    planDays.forEach(day => {
+      md += `| **Day ${day.day}** | ${day.focus} | ${day.actions.join("; ")} | ${day.time} |\n`;
+    });
+    
+    md += `\n## Core Pedagogical Study Tips\n`;
+    md += `1. **Active Recall**: Don't just re-read. Prompt yourself with "Quick Cram" flashcards or explain the concept aloud.\n`;
+    md += `2. **Incremental Feedback**: Take another targeted VivaSim session on this subject after Day 3 to measure progress.\n`;
+    md += `3. **Spaced Repetition**: Re-test yourself on Day 5 specifically on the items under the *Weak Concepts* list.\n\n`;
+    md += `*Generated automatically by VivaSim. Build academic confidence through high-fidelity simulation.*`;
+
+    const blob = new Blob([md], { type: "text/markdown;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `StudyPlan_${subjectName.replace(/\s+/g, "_")}.md`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   // 2. Bluff Probability Index Calculation
   let bluffCount = 0;
@@ -535,7 +626,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
               return (
                 <div key={word} className="filler-bar-container" style={{ margin: 0 }}>
                   <div className="filler-bar-header">
-                    <span className="filler-bar-label">"{word}"</span>
+                    <span className="filler-bar-label">&quot;{word}&quot;</span>
                     <span className="filler-bar-count">
                       {count} {count === 1 ? "occurrence" : "occurrences"}
                     </span>
@@ -898,6 +989,67 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
               </div>
             </div>
 
+            {/* Custom AI Study Planner Card */}
+            <div className="card suggested-revision-card" style={{ padding: "var(--space-lg)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
+                <div>
+                  <h3 style={{ fontSize: "1.05rem", fontWeight: "700", textAlign: "left", margin: 0 }}>
+                    Custom AI Study Planner
+                  </h3>
+                  <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", margin: "2px 0 0 0", textAlign: "left" }}>
+                    Day-by-day roadmap tailored to close your diagnosed knowledge gaps.
+                  </p>
+                </div>
+                <button 
+                  className="btn btn-secondary" 
+                  onClick={handleDownloadSchedule}
+                  style={{ 
+                    display: "flex", 
+                    alignItems: "center", 
+                    gap: "6px", 
+                    fontSize: "0.8rem", 
+                    padding: "6px 12px",
+                    backgroundColor: "rgba(99, 102, 241, 0.08)",
+                    borderColor: "rgba(99, 102, 241, 0.2)",
+                    color: "#6366f1"
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                  </svg>
+                  Download Schedule
+                </button>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)", marginTop: "var(--space-md)" }}>
+                {generate5DayPlan().map((day) => (
+                  <div key={day.day} style={{ 
+                    display: "flex", 
+                    flexDirection: "column", 
+                    padding: "10px var(--space-md)", 
+                    border: "1px solid var(--border-color)", 
+                    borderRadius: "var(--radius-sm)", 
+                    backgroundColor: "var(--bg-primary)",
+                    textAlign: "left"
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: "0.75rem", fontWeight: "700", color: "#6366f1", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                        Day {day.day} • {day.time}
+                      </span>
+                    </div>
+                    <h4 style={{ margin: "4px 0", fontSize: "0.875rem", fontWeight: "700", color: "var(--text-primary)" }}>
+                      Focus: {day.focus}
+                    </h4>
+                    <ul style={{ margin: "4px 0 0 0", paddingLeft: "16px", fontSize: "0.78rem", color: "var(--text-secondary)", lineHeight: "1.4" }}>
+                      {day.actions.map((act, aIdx) => (
+                        <li key={aIdx}>{act}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </div>
+
           </div>
 
           {/* RIGHT PANEL: Emotion Timelines, Professor Mode Replay, Recommends */}
@@ -1037,7 +1189,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                           {/* Question row with Replay speaker */}
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
                             <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", fontStyle: "italic" }}>
-                              <strong>Examiner prompt:</strong> "{qObj ? qObj.text : qText}"
+                              <strong>Examiner prompt:</strong> &quot;{qObj ? qObj.text : qText}&quot;
                             </div>
                             <button 
                               className="btn btn-secondary"
@@ -1050,7 +1202,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
 
                           {/* Student answer transcript */}
                           <div style={{ fontSize: "0.85rem", color: "var(--text-primary)", backgroundColor: "var(--bg-primary)", padding: "10px", borderRadius: "var(--radius-xs)", border: "1px solid var(--border-color)", marginBottom: "var(--space-sm)" }}>
-                            <strong>Your Transcript:</strong> "{answer}"
+                            <strong>Your Transcript:</strong> &quot;{answer}&quot;
                           </div>
 
                           {/* Expected Correct Answer */}

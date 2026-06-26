@@ -110,6 +110,8 @@ export async function POST(req) {
         return await handleGenerateQuestion(payload, apiKey);
       case "evaluate-answer":
         return await handleEvaluateAnswer(payload, apiKey);
+      case "generate-flashcards":
+        return await handleGenerateFlashcards(payload.syllabusStructure, apiKey);
       case "analyze-hume-emotion":
         const humeKey = process.env.HUME_API_KEY || "zxaj1GRdT7kD3G58PEUG3UTGmjHrrofETDKFQAGGmfY4hQtT";
         const humeResult = await handleAnalyzeHumeEmotion(payload.audioBase64, humeKey);
@@ -299,8 +301,8 @@ async function handleEvaluateAnswer(payload, apiKey) {
 // ==========================================
 async function callGeminiAPI(prompt, apiKey) {
   const CANDIDATE_MODELS = [
-    "gemini-2.5-flash-lite",
     "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
     "gemini-3.5-flash",
     "gemini-3.1-flash-lite"
   ];
@@ -320,7 +322,7 @@ async function callGeminiAPI(prompt, apiKey) {
       };
 
       const controller = new AbortController();
-      timeoutId = setTimeout(() => controller.abort(), 6000); // 6 seconds failsafe timeout
+      timeoutId = setTimeout(() => controller.abort(), 25000); // 25 seconds failsafe timeout
 
       const res = await fetch(url, {
         method: "POST",
@@ -620,6 +622,103 @@ function handleOfflineFallback(payload) {
     });
   }
 
+  if (action === "generate-flashcards") {
+    const syllabusStructure = payload.syllabusStructure;
+    const topic = (syllabusStructure?.topic || "Custom Syllabus").toLowerCase();
+    
+    // Curated high-yield mock flashcards for common subjects
+    let cards = [];
+    if (topic.includes("data") || topic.includes("structure")) {
+      cards = [
+        {
+          question: "What is the key self-balancing rule of an AVL Tree?",
+          shortAnswer: "An AVL tree is a self-balancing binary search tree. For every node, the height difference between left and right subtrees (the Balance Factor) must be strictly in {-1, 0, 1}. Balance factors of +2 or -2 trigger rebalancing rotations (LL, RR, LR, RL)."
+        },
+        {
+          question: "Explain the differences between Contiguous Arrays and Dynamic ArrayLists.",
+          shortAnswer: "Arrays have a fixed size allocated in a single block of contiguous memory, giving O(1) direct access. ArrayLists are dynamically resizable: when capacity is reached, they automatically allocate a larger array (usually 1.5x to 2x size) and copy all elements over, which is an O(N) operation in the worst case."
+        },
+        {
+          question: "How do Linear Probing and Quadratic Probing resolve Hash Collisions?",
+          shortAnswer: "Both are open-addressing collision resolution methods. Linear probing scans slots sequentially (i + 1, i + 2, etc.), which causes Primary Clustering. Quadratic Probing scans using a polynomial function (i + 1^2, i + 2^2, etc.), reducing primary clustering but still susceptible to secondary clustering."
+        },
+        {
+          question: "Compare BFS and DFS in Graph Traversal.",
+          shortAnswer: "BFS (Breadth-First Search) explores a graph level-by-level using a FIFO Queue, making it ideal for finding the shortest path in unweighted graphs. DFS (Depth-First Search) explores path branches as deep as possible before backtracking, utilizing a LIFO Stack (or recursion)."
+        },
+        {
+          question: "What is the boundary check for Stack Overflow and Stack Underflow?",
+          shortAnswer: "Stack Overflow occurs when pushing an element onto a stack that has reached its maximum size capacity limit. Stack Underflow occurs when popping or peeking an element from a stack that has a top pointer index of -1 (empty)."
+        }
+      ];
+    } else if (topic.includes("thermo")) {
+      cards = [
+        {
+          question: "Why is a 100% efficient Carnot heat engine physically impossible?",
+          shortAnswer: "Carnot efficiency is defined as 1 - T_C / T_H. To achieve 100% thermal efficiency, the cold sink temperature (T_C) must be absolute zero (0 K). The Third Law of Thermodynamics states that absolute zero is unattainable in a finite number of steps, preventing 100% efficiency."
+        },
+        {
+          question: "State the Kelvin-Planck and Clausius statements of the Second Law of Thermodynamics.",
+          shortAnswer: "Kelvin-Planck states that it is impossible for a device operating in a cycle to receive heat from a single reservoir and produce a net amount of work. Clausius states that it is impossible to construct a device that operates in a cycle and transfers heat from a lower-temperature body to a higher-temperature body without net work input."
+        },
+        {
+          question: "What is Exergy, and how is it related to entropy generation?",
+          shortAnswer: "Exergy is the maximum useful work potential of a system relative to an environment baseline. The Gouy-Stodola theorem states that lost exergy (exergy destruction, I) is directly proportional to entropy generation: I = T_0 * S_gen, where T_0 is the dead state temperature."
+        },
+        {
+          question: "What is the physical significance of the Clapeyron Equation?",
+          shortAnswer: "The Clapeyron equation relates the slope of phase boundary lines on a P-T diagram to enthalpy change and volume change: dP/dT = L / (T * delta_v). It governs how boiling point/melting point changes with pressure."
+        },
+        {
+          question: "What is the difference between open and closed systems regarding energy balances?",
+          shortAnswer: "Closed systems exchange energy (heat/work) but not mass (dE = dQ - dW). Open systems allow mass flow crossing control borders, requiring the inclusion of flow work enthalpy (h = u + Pv) in the energy equations: dE/dt = Q_dot - W_dot + sum(m_in * h_in) - sum(m_out * h_out)."
+        }
+      ];
+    } else if (topic.includes("machine") || topic.includes("design")) {
+      cards = [
+        {
+          question: "How do fatigue limits differ under static versus cyclic stress loading?",
+          shortAnswer: "Under static loading, components fail when stress exceeds yield or ultimate tensile strength. Under cyclic loading, components experience fatigue failure at stress levels far below yield strength. Failure occurs due to progressive micro-crack initiation and propagation under fluctuating loads."
+        },
+        {
+          question: "What is the difference between the Goodman and Soderberg fatigue relations?",
+          shortAnswer: "Both model fluctuating stresses. The Goodman line plots safe combinations of mean and alternating stress relative to the ultimate strength (S_ut): S_a/S_e + S_m/S_ut = 1. The Soderberg line is more conservative and uses the yield strength (S_yt): S_a/S_e + S_m/S_yt = 1."
+        },
+        {
+          question: "What does the Sommerfeld number characterize in journal bearings?",
+          shortAnswer: "The Sommerfeld number (S = (r/c)^2 * (mu * N)/P) is a dimensionless parameter that characterizes lubrication in hydrodynamic journal bearings. It incorporates clearance ratio, viscosity, rotation speed, and unit load, determining load capacity, friction, and minimum oil film thickness."
+        },
+        {
+          question: "How do stress concentration singularities occur at fillet radii, and how do we mitigate them?",
+          shortAnswer: "Stress concentrations occur at sharp geometric transitions (holes, notches, steps) where stress flow lines crowd. Fillet radii smooth this transition; increasing the fillet radius mitigates stress crowding, reducing the stress concentration factor K_t."
+        },
+        {
+          question: "What is tooth root bending in spur gears, and how does the Lewis formula address it?",
+          shortAnswer: "Tooth root bending represents the bending stress gear teeth experience at their base under tangential loading, modeled as a cantilever beam. The Lewis formula (sigma = W_t / (F * m * Y)) estimates this stress using a gear-specific form factor (Y)."
+        }
+      ];
+    } else {
+      // General dynamic flashcards based on the syllabus units/topics
+      const units = syllabusStructure?.units || [];
+      const topicsList = [];
+      units.forEach(u => u.topics.forEach(t => topicsList.push({ unitName: u.name, topic: t })));
+      
+      const targetList = topicsList.slice(0, 5);
+      if (targetList.length === 0) {
+        targetList.push({ unitName: "Unit 1", topic: "Core Principles" });
+        targetList.push({ unitName: "Unit 2", topic: "Analytical Models" });
+        targetList.push({ unitName: "Unit 3", topic: "Applied Problems" });
+      }
+
+      cards = targetList.map(item => ({
+        question: `Explain the fundamental concepts, governing parameters, and core principles of: "${item.topic}" (${item.unitName}).`,
+        shortAnswer: `A robust study review of "${item.topic}" requires understanding its basic definitions, physical equations, structural properties, and how it behaves under boundary constraints. Pay attention to how this concept scales under real-world operational loading.`
+      }));
+    }
+
+    return NextResponse.json(cards);
+  }
+
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });
 }
 
@@ -718,5 +817,30 @@ async function handleAnalyzeHumeEmotion(audioBase64, apiKey) {
       clarity: 82,
       hesitation: 15
     };
+  }
+}
+
+// ==========================================
+// 3.5. GENERATE FLASHCARDS WITH GEMINI
+// ==========================================
+async function handleGenerateFlashcards(syllabusStructure, apiKey) {
+  const prompt = `Act as an academic curriculum specialist. Based on the syllabus topics provided, generate exactly 5 comprehensive, high-yield flashcards to help a student study. Each flashcard must consist of:
+  - "question": a targeted, focused conceptual question testing student depth.
+  - "shortAnswer": a concise, technical explanation of the answer, including any critical equations, definitions, and physical parameters.
+  
+  Syllabus Structure:
+  ${JSON.stringify(syllabusStructure)}
+  
+  Respond ONLY with a valid, clean JSON array matching this schema. Do not enclose in markdown blocks:
+  [
+    { "question": "Question text here?", "shortAnswer": "Detailed high-yield study answer here." }
+  ]`;
+
+  try {
+    const responseJson = await callGeminiAPI(prompt, apiKey);
+    return NextResponse.json(responseJson);
+  } catch (err) {
+    console.warn("Failed generating flashcards via Gemini, using offline fallback:", err);
+    return handleOfflineFallback({ action: "generate-flashcards", syllabusStructure });
   }
 }

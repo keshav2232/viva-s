@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Header from "@/components/Header";
 import AuthScreen from "@/components/AuthScreen";
 import Dashboard from "@/components/Dashboard";
@@ -9,7 +9,13 @@ import ActiveViva from "@/components/ActiveViva";
 import Results from "@/components/Results";
 
 import { useAuth } from "@/context/AuthContext";
-import { INITIAL_STATS, DEFAULT_SESSIONS } from "@/utils/mockData";
+import { INITIAL_STATS, DEFAULT_SESSIONS, EMPTY_STATS } from "@/utils/mockData";
+import { SyllabusMasteryService } from "@/services/SyllabusMasteryService";
+
+// Helper function declared outside of component to ensure render purity
+function generateSessionId() {
+  return `session_${Date.now()}`;
+}
 
 export default function Home() {
   const { 
@@ -29,57 +35,58 @@ export default function Home() {
   const [syncSuccessMsg, setSyncSuccessMsg] = useState("");
 
   // Guest Offline Backup State (mirrors original logic)
-  const [guestUserName, setGuestUserName] = useState("Guest Scholar");
-  const [sessions, setSessions] = useState(DEFAULT_SESSIONS);
-  const [stats, setStats] = useState(INITIAL_STATS);
+  const [guestUserName, setGuestUserName] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("vivasim_user") || "Guest Scholar";
+    }
+    return "Guest Scholar";
+  });
+  const [sessions, setSessions] = useState(() => {
+    if (typeof window !== "undefined") {
+      const cached = localStorage.getItem("vivasim_sessions");
+      if (cached) {
+        try {
+          return JSON.parse(cached);
+        } catch (e) {
+          console.warn("Invalid cached sessions found, resetting:", e);
+          localStorage.removeItem("vivasim_sessions");
+        }
+      }
+    }
+    return [];
+  });
+  const [stats, setStats] = useState(() => {
+    if (typeof window !== "undefined") {
+      const cached = localStorage.getItem("vivasim_stats");
+      if (cached) {
+        try {
+          return JSON.parse(cached);
+        } catch (e) {
+          console.warn("Invalid cached stats found, resetting:", e);
+          localStorage.removeItem("vivasim_stats");
+        }
+      }
+    }
+    return EMPTY_STATS;
+  });
 
   // Viva run states
   const [vivaConfig, setVivaConfig] = useState(null);
   const [resultsData, setResultsData] = useState(null);
-  const [pausedSession, setPausedSession] = useState(null);
-
-  // Sync session profiles in local storage for Guest mode
-  useEffect(() => {
+  const [pausedSession, setPausedSession] = useState(() => {
     if (typeof window !== "undefined") {
-      try {
-        const cachedSessions = localStorage.getItem("vivasim_sessions");
-        const cachedStats = localStorage.getItem("vivasim_stats");
-        const cachedUser = localStorage.getItem("vivasim_user");
-        
-        if (cachedSessions) {
-          try {
-            setSessions(JSON.parse(cachedSessions));
-          } catch (e) {
-            console.warn("Invalid cached sessions found, resetting:", e);
-            localStorage.removeItem("vivasim_sessions");
-          }
+      const paused = localStorage.getItem("vivasim_paused_session");
+      if (paused) {
+        try {
+          return JSON.parse(paused);
+        } catch (e) {
+          console.warn("Invalid paused session found, removing:", e);
+          localStorage.removeItem("vivasim_paused_session");
         }
-        if (cachedStats) {
-          try {
-            setStats(JSON.parse(cachedStats));
-          } catch (e) {
-            console.warn("Invalid cached stats found, resetting:", e);
-            localStorage.removeItem("vivasim_stats");
-          }
-        }
-        if (cachedUser) {
-          setGuestUserName(cachedUser);
-        }
-
-        const paused = localStorage.getItem("vivasim_paused_session");
-        if (paused) {
-          try {
-            setPausedSession(JSON.parse(paused));
-          } catch (e) {
-            console.warn("Invalid paused session found, removing:", e);
-            localStorage.removeItem("vivasim_paused_session");
-          }
-        }
-      } catch (err) {
-        console.error("Local storage guest synchronization failed:", err);
       }
     }
-  }, []);
+    return null;
+  });
 
   const saveToStorage = (newSessions, newStats) => {
     if (typeof window !== "undefined") {
@@ -124,7 +131,7 @@ export default function Home() {
     setActiveScreen("dashboard");
   };
 
-  const handleMigrateGuestHistory = async () => {
+  const handleMigrateGuestHistory = useCallback(async () => {
     if (!user) return;
     setSyncingGuest(true);
     try {
@@ -136,7 +143,7 @@ export default function Home() {
     } finally {
       setSyncingGuest(false);
     }
-  };
+  }, [user, syncGuestData]);
 
   // Auto-migrate guest data when user is logged in
   useEffect(() => {
@@ -248,12 +255,21 @@ export default function Home() {
     }
 
     const finalScore = calculateFinalScore(summary);
+
+    // Update mastery statistics dynamically using the rolling average formula
+    if (vivaConfig?.syllabusStructure) {
+      SyllabusMasteryService.updateMastery(
+        summary.subjectName,
+        vivaConfig.syllabusStructure,
+        summary.askedTopics || []
+      );
+    }
     const sessionDateStr = new Date().toLocaleDateString('en-US', {
       month: 'short', day: 'numeric', year: 'numeric'
     });
 
     const newSession = {
-      id: `session_${Date.now()}`,
+      id: generateSessionId(),
       subject: summary.subjectName,
       duration: vivaConfig.duration,
       personality: getPersonalityName(vivaConfig.personality),

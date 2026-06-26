@@ -9,19 +9,24 @@ import { AnswerEvaluationService } from "@/services/AnswerEvaluationService";
 import { SessionContextManager } from "@/services/SessionContextManager";
 import ExaminerAvatar from "@/components/ExaminerAvatar";
 
+// Helper to guarantee render purity by getting timestamp outside component scope
+function getNow() {
+  return Date.now();
+}
+
 export default function ActiveViva({ config, activeUser, onFinishViva }) {
   // State machine variables
-  const [vivaState, setVivaState] = useState("intro"); // "intro" | "speaking" | "listening" | "analyzing" | "generating"
+  const [vivaState, setVivaState] = useState(() => config.isResume ? "speaking" : "intro"); // "intro" | "speaking" | "listening" | "analyzing" | "generating"
   const [visualState, setVisualState] = useState("speaking"); // "speaking" | "listening" | "analyzing"
-  const [statusText, setStatusText] = useState("Professor is introducing the exam...");
+  const [statusText, setStatusText] = useState(() => config.isResume ? "Professor is speaking..." : "Professor is introducing the exam...");
   
   // Timer stopwatch states
   const [timeRemaining, setTimeRemaining] = useState(config.duration * 60);
   
   // Q&A memory tracking
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [activeQuestion, setActiveQuestion] = useState(null);
-  const [transcriptText, setTranscriptText] = useState("Waiting to transcribe your response...");
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(() => config.isResume ? config.resumeState.currentQuestionIndex : 0);
+  const [activeQuestion, setActiveQuestion] = useState(() => config.isResume ? config.resumeState.activeQuestion : null);
+  const [transcriptText, setTranscriptText] = useState(() => config.isResume ? "Resumed session. Speak or type your answer..." : "Waiting to transcribe your response...");
   const [isPlaceholder, setIsPlaceholder] = useState(true);
   const [lastEvalRecord, setLastEvalRecord] = useState(null);
 
@@ -72,14 +77,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       SessionContextManager.weakConcepts = config.resumeState.weakConcepts || [];
       SessionContextManager.confidenceEvolution = config.resumeState.confidenceEvolution || [];
       SessionContextManager.askedTopics = config.resumeState.askedTopics || [];
-      
-      setCurrentQuestionIndex(config.resumeState.currentQuestionIndex);
-      setActiveQuestion(config.resumeState.activeQuestion);
-      setTranscriptText("Resumed session. Speak or type your answer...");
-      setIsPlaceholder(true);
-      setVivaState("speaking");
-      setVisualState("speaking");
-      setStatusText("Professor is speaking...");
 
       // Repeat the active question upon resume!
       const resumeNudge = `Resuming your exam on ${config.topic}. Let me repeat the question: ${config.resumeState.activeQuestion.text}`;
@@ -109,12 +106,13 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       clearInterval(waveIntervalRef.current);
       if (liveTrackerRef.current) clearInterval(liveTrackerRef.current);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const stopAudioStreams = () => {
+  function stopAudioStreams() {
     VoiceManager.stop();
     SpeechManager.stop();
-  };
+  }
 
   // Live Biometric Speech Prosody Estimator
   useEffect(() => {
@@ -122,7 +120,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       if (liveTrackerRef.current) clearInterval(liveTrackerRef.current);
 
       liveTrackerRef.current = setInterval(() => {
-        const durationSecs = (Date.now() - speechStartTime.current) / 1000;
+        const durationSecs = (getNow() - speechStartTime.current) / 1000;
         const currentText = (transcriptText || "").trim();
         const isPlaceholderText = isPlaceholder || currentText.includes("Speak now") || currentText.includes("System is listening") || currentText.includes("Please type");
         
@@ -208,7 +206,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     };
   }, [vivaState, transcriptText, isPlaceholder]);
 
-  const startBackgroundListeningForInterruptions = (activeQ) => {
+  function startBackgroundListeningForInterruptions(activeQ) {
     interruptedRef.current = false;
     SpeechManager.stop();
 
@@ -225,9 +223,9 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         console.warn("Background speech recognition error:", err);
       }
     });
-  };
+  }
 
-  const handleExaminerInterruption = (activeQ) => {
+  function handleExaminerInterruption(activeQ) {
     VoiceManager.stop();
     SpeechManager.stop();
     
@@ -254,16 +252,16 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         startListeningMode();
       }
     );
-  };
+  }
 
-  const getFormattedTime = () => {
+  function getFormattedTime() {
     const mins = Math.floor(timeRemaining / 60);
     const secs = timeRemaining % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
+  }
 
   // Phase 1: Examiner Greeting
-  const triggerIntroduction = async () => {
+  async function triggerIntroduction() {
     setVivaState("generating");
     setVisualState("analyzing");
     setStatusText("Professor is initializing the exam...");
@@ -401,14 +399,14 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
   };
 
   // Phase 2: Dynamic Listening
-  const startListeningMode = () => {
+  function startListeningMode() {
     setVivaState("listening");
     setVisualState("listening");
     setStatusText("Listening to your answer...");
     setTranscriptText("Speak now. System is listening...");
     setIsPlaceholder(true);
     
-    speechStartTime.current = Date.now();
+    speechStartTime.current = getNow();
     startListeningWaveAnimations();
 
     SpeechManager.start({
@@ -450,17 +448,17 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         }
       }
     });
-  };
+  }
 
-  const triggerKeyboardFallback = () => {
+  function triggerKeyboardFallback() {
     SpeechManager.stop();
     setVisualState("listening");
     setStatusText("Keyboard Fallback Active");
     setTranscriptText("Please type your detailed explanation inside the box below.");
     setIsPlaceholder(true);
-  };
+  }
 
-  const processResponse = async (answerText) => {
+  async function processResponse(answerText) {
     if (!activeQuestion) {
       console.warn("Speech input captured before activeQuestion was set, ignoring.");
       return;
@@ -476,7 +474,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     setIsPlaceholder(false);
     clearInterval(waveIntervalRef.current);
 
-    const durationMs = Date.now() - speechStartTime.current;
+    const durationMs = getNow() - speechStartTime.current;
     const pauseCount = SpeechManager.gapsHistory.length;
 
     try {
@@ -705,7 +703,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     onFinishViva(null); // Return directly to dashboard
   };
 
-  const handleFinish = (endedEarly = false) => {
+  function handleFinish(endedEarly = false) {
     stopAudioStreams();
     clearInterval(waveIntervalRef.current);
     
@@ -760,6 +758,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
 
     onFinishViva({
       ...baseReport,
+      askedTopics: SessionContextManager.askedTopics || [],
       endedEarly,
       sessionConfidenceScores: SessionContextManager.confidenceEvolution,
       dynamicStrengths,
@@ -793,7 +792,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
   };
 
   // Wave Animations
-  const startWaveAnimations = () => {
+  function startWaveAnimations() {
     clearInterval(waveIntervalRef.current);
     waveIntervalRef.current = setInterval(() => {
       const bars = document.querySelectorAll("#viva-waveform .waveform-bar");
@@ -802,20 +801,20 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         bar.style.height = `${height}px`;
       });
     }, 150);
-  };
+  }
 
-  const startListeningWaveAnimations = () => {
+  function startListeningWaveAnimations() {
     clearInterval(waveIntervalRef.current);
     // Initialize bars at baseline flat level (4px)
     const bars = document.querySelectorAll("#viva-waveform .waveform-bar");
     bars.forEach(bar => {
       bar.style.height = "4px";
     });
-  };
+  }
 
-  const triggerSpeechWavePulse = () => {
+  function triggerSpeechWavePulse() {
     // Pulse animation superseded by live volume physics
-  };
+  }
 
   return (
     <section id="active-viva-screen" className="screen active" style={{ position: "relative" }}>

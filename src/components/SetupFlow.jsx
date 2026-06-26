@@ -42,6 +42,40 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
   const [previewMode, setPreviewMode] = useState("map"); // "map" | "list"
   const [hoveredSubtopic, setHoveredSubtopic] = useState(null);
 
+  // Quick Cram Flashcards States
+  const [cramMode, setCramMode] = useState(false);
+  const [flashcards, setFlashcards] = useState([]);
+  const [currentCardIdx, setCurrentCardIdx] = useState(0);
+  const [isFlipped, setIsFlipped] = useState(false);
+  const [isLoadingFlashcards, setIsLoadingFlashcards] = useState(false);
+  const [masteredCards, setMasteredCards] = useState({});
+
+  const handleStartCramMode = async () => {
+    setCramMode(true);
+    setIsLoadingFlashcards(true);
+    setCurrentCardIdx(0);
+    setIsFlipped(false);
+    
+    try {
+      const response = await fetch("/api/viva", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "generate-flashcards",
+          syllabusStructure: syllabusStructure || SyllabusParserService.getDefaultHierarchy(topic || "Thermodynamics")
+        })
+      });
+      if (!response.ok) throw new Error("Failed fetching flashcards");
+      const data = await response.json();
+      setFlashcards(data);
+    } catch (e) {
+      console.error("Flashcards load error:", e);
+      alert("Failed to generate study flashcards. Please try again.");
+    } finally {
+      setIsLoadingFlashcards(false);
+    }
+  };
+
   // Load PDF.js CDN library on mount so it's ready
   useEffect(() => {
     PDFExtractionService.loadPDFJS().catch(err => {
@@ -293,6 +327,161 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
 
     return { nodes, links };
   };
+
+  if (cramMode) {
+    return (
+      <section id="setup-screen" className="screen active" style={{ maxWidth: "600px", margin: "0 auto" }}>
+        <div className="card" style={{ padding: "var(--space-lg)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-md)", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)" }}>
+            <div style={{ textAlign: "left" }}>
+              <h2 style={{ fontSize: "1.25rem", fontWeight: "800", color: "var(--accent-primary)", margin: 0 }}>⚡ Quick Cram Mode</h2>
+              <p style={{ margin: "2px 0 0 0", fontSize: "0.8rem", color: "var(--text-secondary)" }}>
+                Study key concepts for <strong>{syllabusStructure?.topic || topic || "Custom Subject"}</strong>
+              </p>
+            </div>
+            <button 
+              className="btn btn-secondary" 
+              onClick={() => setCramMode(false)}
+              style={{ padding: "6px 12px", fontSize: "0.8rem" }}
+            >
+              Exit Cram
+            </button>
+          </div>
+
+          {isLoadingFlashcards ? (
+            <div style={{ padding: "60px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: "var(--space-md)" }}>
+              <svg className="animate-spin" style={{ width: "32px", height: "32px", color: "var(--accent-primary)" }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" style={{ opacity: 0.15 }}></circle>
+                <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)", fontWeight: "600" }}>AI is compiling study flashcards...</span>
+            </div>
+          ) : flashcards.length > 0 ? (
+            <div className="flashcards-screen-container">
+              {/* Card deck counter */}
+              <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.82rem", color: "var(--text-secondary)", fontWeight: "600" }}>
+                <span>Card {currentCardIdx + 1} of {flashcards.length}</span>
+                <span style={{
+                  color: masteredCards[currentCardIdx] ? "var(--color-success)" : "var(--color-warning)",
+                  backgroundColor: masteredCards[currentCardIdx] ? "var(--color-success-bg)" : "var(--color-warning-bg)",
+                  padding: "2px 8px",
+                  borderRadius: "var(--radius-full)",
+                  fontSize: "0.72rem",
+                  fontWeight: "700"
+                }}>
+                  {masteredCards[currentCardIdx] ? "✓ Mastered" : "⏳ Reviewing"}
+                </span>
+              </div>
+
+              {/* 3D Flip Card Container */}
+              <div 
+                className={`flashcard-wrapper ${isFlipped ? "flipped" : ""}`}
+                onClick={() => setIsFlipped(!isFlipped)}
+              >
+                <div className="flashcard-inner">
+                  {/* Front Side */}
+                  <div className="flashcard-front">
+                    <span className="flashcard-watermark">Question Nudge</span>
+                    <p className="flashcard-text">{flashcards[currentCardIdx].question}</p>
+                    <span className="flashcard-hint-text">💡 Click card to flip and reveal answer</span>
+                  </div>
+
+                  {/* Back Side */}
+                  <div className="flashcard-back">
+                    <span className="flashcard-watermark">Key Concepts & Formulas</span>
+                    <div className="flashcard-text">
+                      {flashcards[currentCardIdx].shortAnswer}
+                    </div>
+                    <span className="flashcard-hint-text">💡 Click card to flip back</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Navigation and Actions */}
+              <div className="flashcards-nav-row">
+                <button 
+                  className="btn btn-secondary" 
+                  disabled={currentCardIdx === 0}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsFlipped(false);
+                    setTimeout(() => {
+                      setCurrentCardIdx(prev => prev - 1);
+                    }, 150);
+                  }}
+                  style={{ padding: "8px 16px", minWidth: "90px" }}
+                >
+                  Previous
+                </button>
+
+                <div className="flashcard-mastery-buttons">
+                  <button 
+                    className="btn btn-secondary btn-mastery-review"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMasteredCards(prev => ({ ...prev, [currentCardIdx]: false }));
+                      if (currentCardIdx < flashcards.length - 1) {
+                        setTimeout(() => {
+                          setIsFlipped(false);
+                          setTimeout(() => setCurrentCardIdx(p => p + 1), 150);
+                        }, 400);
+                      }
+                    }}
+                    style={{ padding: "8px 14px", fontSize: "0.8rem", fontWeight: "600" }}
+                  >
+                    Need Review
+                  </button>
+                  <button 
+                    className="btn btn-secondary btn-mastery-mastered"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMasteredCards(prev => ({ ...prev, [currentCardIdx]: true }));
+                      if (currentCardIdx < flashcards.length - 1) {
+                        setTimeout(() => {
+                          setIsFlipped(false);
+                          setTimeout(() => setCurrentCardIdx(p => p + 1), 150);
+                        }, 400);
+                      }
+                    }}
+                    style={{ padding: "8px 14px", fontSize: "0.8rem", fontWeight: "600" }}
+                  >
+                    Mastered ✓
+                  </button>
+                </div>
+
+                <button 
+                  className="btn btn-secondary" 
+                  disabled={currentCardIdx === flashcards.length - 1}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsFlipped(false);
+                    setTimeout(() => {
+                      setCurrentCardIdx(prev => prev + 1);
+                    }, 150);
+                  }}
+                  style={{ padding: "8px 16px", minWidth: "90px" }}
+                >
+                  Next
+                </button>
+              </div>
+
+              {/* Start Viva directly from flashcards */}
+              <button 
+                type="button"
+                className="btn btn-primary"
+                onClick={handleStartExam}
+                style={{ width: "100%", padding: "12px", fontSize: "1.02rem", marginTop: "var(--space-md)", background: "linear-gradient(135deg, var(--accent-primary) 0%, #4f46e5 100%)", fontWeight: "700", boxShadow: "0 4px 14px rgba(99, 102, 241, 0.3)" }}
+              >
+                Ready: Launch High-Pressure Viva Now
+              </button>
+            </div>
+          ) : (
+            <p style={{ color: "var(--text-secondary)", padding: "20px 0" }}>No study cards available.</p>
+          )}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section id="setup-screen" className="screen active">
@@ -909,7 +1098,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                         Focus Target Drill Engaged
                       </div>
                       <p style={{ margin: "2px 0 0 0", fontSize: "0.775rem", color: "var(--text-secondary)" }}>
-                        Practice session will center strictly on <strong>"{selectedSubtopic.name}"</strong> (Unit #{selectedSubtopic.unitIndex + 1}).
+                        Practice session will center strictly on <strong>&quot;{selectedSubtopic.name}&quot;</strong> (Unit #{selectedSubtopic.unitIndex + 1}).
                       </p>
                     </>
                   ) : (
@@ -971,6 +1160,18 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                 style={{ width: "100%", padding: "12px", fontSize: "1.05rem", marginTop: "16px", background: selectedSubtopic ? "linear-gradient(135deg, var(--color-warning), hsl(38, 85%, 35%))" : "var(--accent-primary)" }}
               >
                 {selectedSubtopic ? `Begin Target Drill: ${selectedSubtopic.name}` : "Begin Mapped Viva"}
+              </button>
+
+              <button 
+                type="button"
+                className="btn btn-secondary" 
+                onClick={handleStartCramMode}
+                style={{ width: "100%", padding: "12px", fontSize: "1.05rem", marginTop: "8px", borderColor: "var(--color-warning)", color: "var(--color-warning)", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                </svg>
+                ⚡ Quick Cram: Study Flashcards
               </button>
             </div>
 

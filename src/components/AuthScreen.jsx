@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import Image from "next/image";
 
 // Interactive Syllabus Guides for Hero Explorer
 const syllabusGuides = {
@@ -231,7 +232,7 @@ export default function AuthScreen({ onLoginSuccess }) {
               </h1>
               <div className="hero-divider-line"></div>
               <p className="hero-subtext">
-                The world's first interactive simulator combining cognitive semantic evaluation with voice-enabled emotional telemetry. Upload your syllabus, face realistic examiner profiles, and obtain actionable stress analytics.
+                The world&apos;s first interactive simulator combining cognitive semantic evaluation with voice-enabled emotional telemetry. Upload your syllabus, face realistic examiner profiles, and obtain actionable stress analytics.
               </p>
               <div className="hero-action-buttons">
                 <button type="button" className="btn-hero-primary" onClick={() => setScreenMode("auth")}>
@@ -285,7 +286,7 @@ export default function AuthScreen({ onLoginSuccess }) {
 
                   <div className={`explorer-prompt-bubble border-${syllabusGuides[selectedSyllabus].tone}`}>
                     <span className="bubble-speaker-label">Simulated Prompt ({syllabusGuides[selectedSyllabus].examiner}):</span>
-                    <p className="bubble-prompt-text">"{syllabusGuides[selectedSyllabus].prompt}"</p>
+                    <p className="bubble-prompt-text">&quot;{syllabusGuides[selectedSyllabus].prompt}&quot;</p>
                   </div>
                 </div>
               </div>
@@ -438,7 +439,7 @@ export default function AuthScreen({ onLoginSuccess }) {
 
               {/* University sketch positioned standing in the middle vertically */}
               <div className="sidebar-image-container-sketch">
-                <img src="/university_sketch.png" alt="University campus building sketch" className="sidebar-sketch-image" />
+                <Image src="/university_sketch.png" alt="University campus building sketch" className="sidebar-sketch-image" width={320} height={240} priority />
               </div>
 
               {/* Gold Quote Block seated at the bottom left */}

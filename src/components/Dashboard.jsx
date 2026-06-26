@@ -1,15 +1,52 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { SyllabusMasteryService } from "@/services/SyllabusMasteryService";
 
 export default function Dashboard({ userName, stats, sessions, onStartNewViva, pausedSession, onClearPausedSession, onResumePausedSession, onViewReport }) {
-  const [salutation, setSalutation] = useState("Good Evening");
-
-  useEffect(() => {
+  const [salutation] = useState(() => {
     const hour = new Date().getHours();
-    if (hour < 12) setSalutation("Good Morning");
-    else if (hour < 17) setSalutation("Good Afternoon");
-  }, []);
+    if (hour < 12) return "Good Morning";
+    if (hour < 17) return "Good Afternoon";
+    return "Good Evening";
+  });
+
+  const masteryData = SyllabusMasteryService.initializeDefaultMastery(sessions || []);
+  const [selectedSubject, setSelectedSubject] = useState("");
+  const [expandedUnitIdx, setExpandedUnitIdx] = useState(null);
+
+  const subjects = Object.keys(masteryData);
+  const activeSubject = selectedSubject || (subjects.length > 0 ? subjects[0] : "");
+  const activeSubjectData = masteryData[activeSubject];
+
+  const getUnitMastery = (unit) => {
+    if (!activeSubjectData || !activeSubjectData.mastery) return 0;
+    const topics = unit.topics || [];
+    if (topics.length === 0) return 0;
+    const sum = topics.reduce((acc, t) => acc + (activeSubjectData.mastery[t] || 0), 0);
+    return Math.round(sum / topics.length);
+  };
+
+  const getOverallMastery = () => {
+    if (!activeSubjectData || !activeSubjectData.units) return 0;
+    const units = activeSubjectData.units;
+    if (units.length === 0) return 0;
+    const sum = units.reduce((acc, u) => acc + getUnitMastery(u), 0);
+    return Math.round(sum / units.length);
+  };
+
+  const getProgressColor = (pct) => {
+    if (pct < 50) return "linear-gradient(90deg, hsl(0, 75%, 50%), hsl(20, 80%, 55%))";
+    if (pct < 75) return "linear-gradient(90deg, hsl(38, 85%, 50%), hsl(48, 80%, 55%))";
+    return "linear-gradient(90deg, hsl(145, 65%, 45%), hsl(160, 60%, 50%))";
+  };
+
+  const getDotColor = (pct) => {
+    if (pct === 0) return "hsl(0, 0%, 55%)";
+    if (pct < 50) return "hsl(0, 75%, 50%)";
+    if (pct < 75) return "hsl(38, 85%, 50%)";
+    return "hsl(145, 65%, 45%)";
+  };
 
   const getPersonalityName = (pType) => {
     switch(pType) {
@@ -168,6 +205,114 @@ export default function Dashboard({ userName, stats, sessions, onStartNewViva, p
             </span>
           </div>
         </div>
+
+        {/* 📊 Syllabus Coverage & Mastery Tracker Section */}
+        {Object.keys(masteryData).length > 0 && activeSubjectData && (
+          <div className="mastery-tracker-card">
+            <div className="mastery-tracker-header">
+              <div className="mastery-tracker-title-row">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 20h9M3 20v-8a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v8M11 20V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v16"/>
+                </svg>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: "700" }}>Syllabus Mastery Tracker</h3>
+                  <p style={{ margin: "2px 0 0 0", fontSize: "0.78rem", color: "var(--text-secondary)" }}>Track real-time concept depth and unit exam-readiness.</p>
+                </div>
+              </div>
+
+              {/* Subject Selector Dropdown */}
+              <select 
+                className="mastery-select-dropdown" 
+                value={activeSubject} 
+                onChange={(e) => {
+                  setSelectedSubject(e.target.value);
+                  setExpandedUnitIdx(null);
+                }}
+              >
+                {subjects.map(subject => (
+                  <option key={subject} value={subject}>{subject}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Overall Subject Mastery Banner */}
+            <div className="mastery-overview-row">
+              <span style={{ fontSize: "0.85rem", fontWeight: "600", color: "var(--text-secondary)" }}>Overall Course Readiness</span>
+              <span style={{ fontSize: "1.1rem", fontWeight: "800", color: "var(--accent-primary)" }}>{getOverallMastery()}% Mastered</span>
+            </div>
+
+            {/* Units Accordion Grid */}
+            <div className="mastery-units-container">
+              {activeSubjectData.units.map((unit, uIdx) => {
+                const uMastery = getUnitMastery(unit);
+                const isExpanded = expandedUnitIdx === uIdx;
+
+                return (
+                  <div className="mastery-unit-card" key={uIdx}>
+                    <button 
+                      className="mastery-unit-header-btn" 
+                      onClick={() => setExpandedUnitIdx(isExpanded ? null : uIdx)}
+                    >
+                      <div className="mastery-unit-title-row">
+                        <span className="mastery-unit-title">{unit.name}</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span className="mastery-unit-pct">{uMastery}%</span>
+                          <svg 
+                            width="16" 
+                            height="16" 
+                            viewBox="0 0 24 24" 
+                            fill="none" 
+                            stroke="currentColor" 
+                            strokeWidth="2.5" 
+                            style={{ 
+                              transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)", 
+                              transition: "transform 0.25s ease",
+                              color: "var(--text-muted)"
+                            }}
+                          >
+                            <path d="m6 9 6 6 6-6"/>
+                          </svg>
+                        </div>
+                      </div>
+                      <div className="mastery-progress-track">
+                        <div 
+                          className="mastery-progress-fill" 
+                          style={{ 
+                            width: `${uMastery}%`,
+                            background: getProgressColor(uMastery)
+                          }}
+                        />
+                      </div>
+                    </button>
+
+                    {/* Unit Subtopics Accordion */}
+                    {isExpanded && (
+                      <div className="mastery-subtopics-list">
+                        {unit.topics.map((t, tIdx) => {
+                          const score = activeSubjectData.mastery[t] || 0;
+                          return (
+                            <div className="mastery-subtopic-item" key={tIdx}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                <div 
+                                  className="mastery-dot-indicator" 
+                                  style={{ backgroundColor: getDotColor(score) }}
+                                />
+                                <span style={{ fontWeight: "600", color: "var(--text-primary)" }}>{t}</span>
+                              </div>
+                              <span style={{ fontWeight: "700", color: score === 0 ? "var(--text-muted)" : "var(--text-primary)" }}>
+                                {score === 0 ? "Untested" : `${score}%`}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="sessions-container">
           <div className="sessions-section-title">

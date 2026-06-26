@@ -43,7 +43,7 @@ export const useAuth = () => useContext(AuthContext);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!isFirebaseConfigured);
   const [stats, setStats] = useState(EMPTY_STATS);
   const [sessions, setSessions] = useState([]);
 
@@ -53,7 +53,6 @@ export function AuthProvider({ children }) {
   // Firebase auth listener
   useEffect(() => {
     if (!isConfigured) {
-      setLoading(false);
       return;
     }
 
@@ -74,7 +73,7 @@ export function AuthProvider({ children }) {
   }, [isConfigured]);
 
   // Loads Firestore user data (stats & sessions list)
-  const loadUserData = async (uid, displayName) => {
+  async function loadUserData(uid, displayName) {
     try {
       // 1. Fetch or initialize User Profile Doc
       const userRef = doc(db, "users", uid);
@@ -158,12 +157,19 @@ export function AuthProvider({ children }) {
       if (needsWrite) {
         await setDoc(statsRef, reconciledStats);
       }
+
+      // 4. Fetch user mastery mapping from Firestore
+      const masteryRef = doc(db, "users", uid, "mastery", "syllabus");
+      const masterySnap = await getDoc(masteryRef);
+      if (masterySnap.exists()) {
+        localStorage.setItem("vivasim_mastery", JSON.stringify(masterySnap.data()));
+      }
       
       setStats(reconciledStats);
     } catch (err) {
       console.error("Error loading user cloud database data:", err);
     }
-  };
+  }
 
   // 1. Email and Password Signup
   const signupWithEmail = async (email, password, fullName) => {
@@ -226,9 +232,16 @@ export function AuthProvider({ children }) {
       // Write to Firestore in parallel
       const sessionRef = collection(db, "users", uid, "vivas");
       const statsRef = doc(db, "users", uid, "stats", "dashboard");
+      const masteryRef = doc(db, "users", uid, "mastery", "syllabus");
 
       await addDoc(sessionRef, sessionObj);
       await setDoc(statsRef, updatedStatsData);
+
+      // Upload mastery mapping if available locally
+      const localMastery = localStorage.getItem("vivasim_mastery");
+      if (localMastery) {
+        await setDoc(masteryRef, JSON.parse(localMastery));
+      }
     } catch (err) {
       console.error("Failed syncing finished viva session to Cloud Firestore:", err);
     }
@@ -264,6 +277,13 @@ export function AuthProvider({ children }) {
       const statsRef = doc(db, "users", uid, "stats", "dashboard");
       batch.set(statsRef, cachedStats);
 
+      // Upload mastery if available
+      const localMastery = localStorage.getItem("vivasim_mastery");
+      if (localMastery) {
+        const masteryRef = doc(db, "users", uid, "mastery", "syllabus");
+        batch.set(masteryRef, JSON.parse(localMastery));
+      }
+
       await batch.commit();
 
       // Clear local storage guest artifacts
@@ -271,6 +291,7 @@ export function AuthProvider({ children }) {
       localStorage.removeItem("vivasim_stats");
       localStorage.removeItem("vivasim_user");
       localStorage.removeItem("vivasim_paused_session");
+      localStorage.removeItem("vivasim_mastery");
 
       // Reload user data to sync in-memory contexts
       await loadUserData(uid, user.displayName);
