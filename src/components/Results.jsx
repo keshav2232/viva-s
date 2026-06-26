@@ -33,14 +33,14 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
   }, []);
 
   // 1. Calculate Scorecard Averages
-  const totalRounds = detectedEmotions.length || 4;
+  const totalRounds = detectedEmotions.length;
   
-  let subjectUnderstanding = 80;
-  let vocalConfidence = 84;
-  let clarityOfComm = 82;
-  let conceptualDepth = 75;
-  let handlingPressure = 85;
-  let consistency = 80;
+  let subjectUnderstanding = 0;
+  let vocalConfidence = 0;
+  let clarityOfComm = 0;
+  let conceptualDepth = 0;
+  let handlingPressure = 0;
+  let consistency = 0;
 
   if (detectedEmotions.length > 0) {
     let correctnessSum = 0, confSum = 0, clarSum = 0, depthSum = 0, pressureSum = 0;
@@ -109,7 +109,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     ? ((totalFillerCount / totalWordsCount) * 100).toFixed(1)
     : 0;
 
-  let avgWpm = 120;
+  let avgWpm = 0;
   if (detectedEmotions.length > 0) {
     let wpmSum = 0;
     detectedEmotions.forEach((emo, idx) => {
@@ -151,8 +151,8 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     (conceptualDepth * 0.2) + 
     (handlingPressure * 0.1)
   );
-  overallScore = Math.min(Math.max(overallScore, 40), 99);
-  if (endedEarly) {
+  overallScore = totalRounds > 0 ? Math.min(Math.max(overallScore, 40), 99) : 0;
+  if (endedEarly && totalRounds > 0) {
     overallScore = Math.round(overallScore * 0.6);
   }
 
@@ -295,7 +295,10 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
   let gradeLabel = "Upper Second Class Honor";
   let evaluationVerdict = "Competent general understanding. Handled core subjects confidently with minor pauses when pressed on deep mechanisms.";
 
-  if (overallScore >= 80) {
+  if (totalRounds === 0) {
+    gradeLabel = "No Responses Submitted";
+    evaluationVerdict = "The oral examination was terminated before any questions were answered. No metrics or diagnostics could be recorded.";
+  } else if (overallScore >= 80) {
     gradeLabel = "First Class Honor (Distinction)";
     evaluationVerdict = `Outstanding presentation. You answered with strong cognitive clarity (${clarityOfComm}%), solid semantic phrasing, and successfully countered deep cross-examinations.`;
   } else if (overallScore < 65) {
@@ -363,6 +366,9 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
 
   // 5. Annotative commentary for selected Emotion Timeline point
   const getTimelineCommentary = (idx) => {
+    if (detectedEmotions.length === 0) {
+      return "No timeline commentary available (session was ended before first question response).";
+    }
     const emotion = detectedEmotions[idx];
     const qObj = askedQuestionsObjects && askedQuestionsObjects[idx] ? askedQuestionsObjects[idx] : null;
     const topicText = qObj ? qObj.topic : "Syllabus Concept";
@@ -497,6 +503,15 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
 
   // Fluency & Speech diagnostics dashboard view renderer
   const renderFluencyDiagnostics = () => {
+    if (detectedEmotions.length === 0) {
+      return (
+        <div className="card" style={{ padding: "var(--space-lg)", textAlign: "center", minHeight: "150px", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)" }}>
+          <p style={{ margin: 0, fontSize: "0.875rem" }}>
+            No speech data available. Answer at least one question during the session to see fluency diagnostics.
+          </p>
+        </div>
+      );
+    }
     const averageHesitation = detectedEmotions.length > 0
       ? Math.round(detectedEmotions.reduce((acc, emo) => acc + (emo.hesitation || 15), 0) / totalRounds)
       : 15;
@@ -657,6 +672,26 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
 
   // Graph math
   const renderGraphTimeline = () => {
+    if (totalRounds === 0) {
+      return (
+        <div className="graph-canvas-box" style={{ 
+          width: "100%", 
+          height: "180px", 
+          display: "flex", 
+          alignItems: "center", 
+          justifyContent: "center", 
+          border: "1px dashed var(--border-color)", 
+          borderRadius: "var(--radius-md)",
+          color: "var(--text-secondary)",
+          fontSize: "0.85rem",
+          padding: "16px",
+          textAlign: "center",
+          backgroundColor: "var(--bg-primary)"
+        }}>
+          No timeline data available. Answer at least one question during the session to display an emotion timeline.
+        </div>
+      );
+    }
     const width = 500;
     const height = 160;
     const paddingX = 40;
@@ -1135,7 +1170,12 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
               </h3>
               
               <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
-                {askedQuestions.map((qText, idx) => {
+                {askedQuestions.length === 0 ? (
+                  <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", textAlign: "center", padding: "16px 0", margin: 0 }}>
+                    No recorded rounds. Answer at least one question to replay the examiner's evaluation.
+                  </p>
+                ) : (
+                  askedQuestions.map((qText, idx) => {
                   const isExpanded = expandedReplayIndex === idx;
                   const emotion = detectedEmotions[idx] || { correctness: 80, confidence: 80 };
                   const answer = answerTranscripts[idx] || "";
@@ -1271,7 +1311,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
 
                     </div>
                   );
-                })}
+                }))}
               </div>
             </div>
 
