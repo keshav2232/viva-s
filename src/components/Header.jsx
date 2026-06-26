@@ -40,7 +40,7 @@ export default function Header({ userName, onNavigate, onLogout }) {
               padding: "6px 12px",
               borderRadius: "8px",
               cursor: "pointer",
-              transition: "all 0.2s ease"
+              transition: "background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease"
             }}
           >
             Sign Out
