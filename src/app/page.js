@@ -121,19 +121,18 @@ export default function Home() {
   };
 
   const handleLogout = async () => {
+    setIsGuest(false);
+    setSessions([]);
+    setStats(EMPTY_STATS);
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("vivasim_user");
+      localStorage.removeItem("vivasim_sessions");
+      localStorage.removeItem("vivasim_stats");
+      localStorage.removeItem("vivasim_mastery");
+      localStorage.removeItem("vivasim_paused_session");
+    }
     if (user) {
       await logout();
-    } else {
-      setIsGuest(false);
-      setSessions([]);
-      setStats(EMPTY_STATS);
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("vivasim_user");
-        localStorage.removeItem("vivasim_sessions");
-        localStorage.removeItem("vivasim_stats");
-        localStorage.removeItem("vivasim_mastery");
-        localStorage.removeItem("vivasim_paused_session");
-      }
     }
     setActiveScreen("dashboard");
   };
@@ -143,6 +142,8 @@ export default function Home() {
     setSyncingGuest(true);
     try {
       await syncGuestData();
+      setSessions([]);
+      setStats(EMPTY_STATS);
       setSyncSuccessMsg("Success! Offline guest viva sessions successfully migrated to your cloud database.");
       setTimeout(() => setSyncSuccessMsg(""), 6000);
     } catch (err) {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import Image from "next/image";
 
@@ -99,6 +99,61 @@ export default function AuthScreen({ onLoginSuccess }) {
   // New State variables for landing page and explorer interactivity
   const [screenMode, setScreenMode] = useState("landing"); // "landing" | "auth"
   const [selectedSyllabus, setSelectedSyllabus] = useState("backendEngineer"); // "backendEngineer" | "dataStructures" | "productManager" | "thermo"
+  const [activeSection, setActiveSection] = useState(0);
+  const progressBarRef = useRef(null);
+
+  useEffect(() => {
+    if (screenMode === "auth") return;
+
+    let ticking = false;
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const totalHeight = document.documentElement.scrollHeight - window.innerHeight;
+          if (totalHeight > 0 && progressBarRef.current) {
+            const progress = (window.scrollY / totalHeight) * 100;
+            progressBarRef.current.style.transform = `translateX(${-100 + progress}%)`;
+          }
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    const sections = document.querySelectorAll(".story-section");
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("section-active");
+            const index = Array.from(sections).indexOf(entry.target);
+            setActiveSection(index);
+          }
+        });
+      },
+      {
+        threshold: 0.2, // Trigger when 20% of section height is in view
+      }
+    );
+
+    sections.forEach((section) => observer.observe(section));
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    
+    // Set initial width on load/mount
+    handleScroll();
+
+    return () => {
+      sections.forEach((section) => observer.unobserve(section));
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, [screenMode]);
+
+  const scrollToSection = (index) => {
+    const sections = document.querySelectorAll(".story-section");
+    if (sections[index]) {
+      sections[index].scrollIntoView({ behavior: "smooth" });
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -165,7 +220,7 @@ export default function AuthScreen({ onLoginSuccess }) {
 
   return (
     <div className="landing-portal-wrapper">
-      {/* Aesthetic Academic Background Canvas */}
+      {/* Aesthetic Background Canvas */}
       <div className="bg-decor-canvas">
         <div className="bg-decor-orb decor-orb-1"></div>
         <div className="bg-decor-orb decor-orb-2"></div>
@@ -203,12 +258,44 @@ export default function AuthScreen({ onLoginSuccess }) {
           <text x="75" y="20" fontSize="5" fill="currentColor">r</text>
         </svg>
       </div>
-      {/* 📖 INTERACTIVE LANDING PAGE BROCHURE VIEW */}
+
+      {/* Fancy Scroll Progress Bar Container */}
+      <div className={`scroll-progress-container ${screenMode === "auth" ? "hidden" : ""}`}>
+        <div ref={progressBarRef} className="scroll-progress-bar"></div>
+      </div>
+
+      {/* 📖 INTERACTIVE STORYTELLING LANDING PORTAL */}
       <div className={`landing-view-container ${screenMode === "auth" ? "landing-hidden" : ""}`}>
+        {/* Continuous Storyline Background Connecting Line */}
+        <div className="story-connecting-line"></div>
         
+        {/* Story Navigator Sidebar */}
+        <div className="story-nav-sidebar">
+          <div className="story-nav-line">
+            <div className="story-nav-fill" style={{ height: `${(activeSection / 4) * 100}%` }}></div>
+          </div>
+          {[
+            { label: "01. Introduction", id: "intro" },
+            { label: "02. Practice Presets", id: "presets" },
+            { label: "03. Evaluation Panel", id: "examiners" },
+            { label: "04. Methodology", id: "methodology" },
+            { label: "05. Access Portal", id: "cta" }
+          ].map((item, idx) => (
+            <button 
+              key={idx}
+              className={`story-nav-dot-wrapper ${activeSection === idx ? "active" : ""}`}
+              onClick={() => scrollToSection(idx)}
+              aria-label={`Scroll to ${item.label}`}
+            >
+              <span className="story-nav-dot"></span>
+              <span className="story-nav-label">{item.label}</span>
+            </button>
+          ))}
+        </div>
+
         {/* Landing Navigation Header */}
         <header className="landing-header">
-          <div className="landing-logo">
+          <div className="landing-logo" onClick={() => scrollToSection(0)}>
             <div className="logo-icon-container">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="sidebar-logo-svg">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
@@ -222,80 +309,145 @@ export default function AuthScreen({ onLoginSuccess }) {
             </div>
           </div>
           <nav className="landing-nav">
-            <a href="#presets" className="nav-item-link">Practice Presets</a>
-            <a href="#examiners" className="nav-item-link">Evaluation Panel</a>
-            <a href="#methodology" className="nav-item-link">Methodology</a>
+            <button type="button" onClick={() => scrollToSection(1)} className="nav-item-link">Practice Presets</button>
+            <button type="button" onClick={() => scrollToSection(2)} className="nav-item-link">Evaluation Panel</button>
+            <button type="button" onClick={() => scrollToSection(3)} className="nav-item-link">Methodology</button>
           </nav>
           <button type="button" className="btn-landing-cta" onClick={() => setScreenMode("auth")}>
             Access Portal
           </button>
         </header>
 
-        {/* Hero Banner Section */}
-        <section className="landing-hero-section">
-          <div className="landing-hero-grid">
-            <div className="hero-left-info">
-              <span className="hero-badge">Dual-Mode Simulation Portal</span>
-              <h1 className="hero-heading">
-                Master Your Vivas & Technical Interviews Under <span className="highlight">Realistic AI Pressure.</span>
-              </h1>
-              <div className="hero-divider-line"></div>
-              <p className="hero-subtext">
-                The world&apos;s first interactive simulator combining cognitive semantic evaluation with voice-enabled emotional telemetry. Prepare for academic oral exams or professional engineering panels under realistic AI pressure with custom analytics.
-              </p>
-              <div className="hero-action-buttons">
-                <button type="button" className="btn-hero-primary" onClick={() => setScreenMode("auth")}>
-                  Access Simulator Portal
-                </button>
-                <a href="#presets" className="btn-hero-secondary">
-                  Explore Practice Presets
-                </a>
+        {/* Chapter 1: The Challenge (Hero) */}
+        <section className="story-section story-hero-section section-active" id="intro">
+          <div className="story-container">
+            <div className="story-grid hero-story-grid">
+              <div className="hero-story-left">
+                <span className="hero-badge reveal-element slide-up">Dual-Mode Simulation Portal</span>
+                <h1 className="hero-heading reveal-element slide-up delay-1">
+                  Master Vivas & Interviews Under <span className="highlight">Realistic AI Pressure.</span>
+                </h1>
+                <div className="hero-divider-line reveal-element slide-up delay-2"></div>
+                <p className="hero-subtext reveal-element slide-up delay-3">
+                  The world&apos;s first interactive simulator combining cognitive semantic evaluation with voice-enabled emotional telemetry. Prepare for academic oral exams or professional engineering panels under realistic AI pressure with custom analytics.
+                </p>
+                <div className="hero-action-buttons reveal-element slide-up delay-4">
+                  <button type="button" className="btn-hero-primary" onClick={() => setScreenMode("auth")}>
+                    Access Simulator Portal
+                  </button>
+                  <button type="button" className="btn-hero-secondary" onClick={() => scrollToSection(1)}>
+                    Explore Practice Presets
+                  </button>
+                </div>
               </div>
-            </div>
-
-            {/* Interactive Syllabus & Role Explorer */}
-            <div className="hero-right-explorer" id="presets">
-              <div className="syllabus-explorer-box">
-                <div className="explorer-header">
-                  <span className="explorer-badge">Interactive Presets</span>
-                  <h3 className="explorer-title">Practice Presets Explorer</h3>
-                  <p className="explorer-desc">Click a course or job preset to explore sample questions generated by different evaluation personas.</p>
-                </div>
-                
-                <div className="syllabus-selector-grid">
-                  {Object.keys(syllabusGuides).map((key) => (
-                    <button
-                      key={key}
-                      type="button"
-                      className={`syllabus-selector-chip ${selectedSyllabus === key ? "active" : ""}`}
-                      onClick={() => setSelectedSyllabus(key)}
-                    >
-                      {syllabusGuides[key].title.split(" & ")[0]}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="syllabus-card-content">
-                  <div className="syllabus-meta-row">
-                    <span className="syllabus-code">{syllabusGuides[selectedSyllabus].code}</span>
-                    <span className="syllabus-difficulty" data-diff={syllabusGuides[selectedSyllabus].difficulty}>
-                      Level: {syllabusGuides[selectedSyllabus].difficulty}
-                    </span>
+              <div className="hero-story-right reveal-element slide-right delay-2">
+                <div className="visualizer-stage-card">
+                  <div className="visualizer-stage-header">
+                    <span className="pulse-dot"></span>
+                    <span className="telemetry-status">AI ACTIVE CAPTURE LISTENER</span>
                   </div>
-                  <h4 className="syllabus-subject-title">{syllabusGuides[selectedSyllabus].title}</h4>
-                  
-                  <div className="syllabus-topics-list">
-                    <span className="topics-label">Key Focus Areas Covered:</span>
-                    <div className="topics-grid">
-                      {syllabusGuides[selectedSyllabus].topics.map((topic, i) => (
-                        <span key={i} className="topic-tag">• {topic}</span>
-                      ))}
+                  <div className="visualizer-wave-container">
+                    <svg className="soundwave-svg" viewBox="0 0 200 80">
+                      <path className="wave-line wave-line-1" d="M10,40 Q30,20 50,40 T90,40 T130,40 T170,40 T190,40" fill="none" stroke="rgba(99, 102, 241, 0.4)" strokeWidth="1.5"></path>
+                      <path className="wave-line wave-line-2" d="M10,40 Q25,10 45,40 T80,40 T115,40 T150,40 T190,40" fill="none" stroke="rgba(99, 102, 241, 0.7)" strokeWidth="2"></path>
+                      <path className="wave-line wave-line-3" d="M10,40 Q35,30 60,40 T110,40 T160,40 T190,40" fill="none" stroke="rgba(217, 119, 6, 0.5)" strokeWidth="1.5"></path>
+                    </svg>
+                  </div>
+                  {/* Bouncing spectrum equalizer frequency indicator */}
+                  <div className="equalizer-container">
+                    {[...Array(12)].map((_, i) => (
+                      <div key={i} className={`equalizer-bar bar-${i + 1}`}></div>
+                    ))}
+                  </div>
+                  <div className="visualizer-grid-metrics">
+                    <div className="metric-box">
+                      <span className="metric-label">Semantic Depth</span>
+                      <span className="metric-value">94.8%</span>
+                    </div>
+                    <div className="metric-box">
+                      <span className="metric-label">Vocal Hesitation</span>
+                      <span className="metric-value">0.12s</span>
+                    </div>
+                    <div className="metric-box">
+                      <span className="metric-label">Stress Index</span>
+                      <span className="metric-value">Optimized</span>
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
-                  <div className={`explorer-prompt-bubble border-${syllabusGuides[selectedSyllabus].tone}`}>
-                    <span className="bubble-speaker-label">Simulated Prompt ({syllabusGuides[selectedSyllabus].examiner}):</span>
-                    <p className="bubble-prompt-text">&quot;{syllabusGuides[selectedSyllabus].prompt}&quot;</p>
+        {/* Chapter 2: The Simulation (Presets) */}
+        <section className="story-section story-presets-section" id="presets">
+          <div className="story-container">
+            <div className="story-grid presets-story-grid">
+              <div className="presets-story-left">
+                <span className="section-badge reveal-element slide-up">02. Practice Presets</span>
+                <h2 className="story-section-title reveal-element slide-up delay-1">Choose Your Domain</h2>
+                <div className="story-section-divider reveal-element slide-up delay-2"></div>
+                <p className="story-section-text reveal-element slide-up delay-3">
+                  Select from curated academic courses or high-stakes industry roles. PrepSim adapts its question bank and evaluator personalities to fit your goal, preparing you for the exact format you&apos;ll face.
+                </p>
+                <div className="presets-features-list reveal-element slide-up delay-4">
+                  <div className="preset-feat-item">
+                    <span className="feat-number">01</span>
+                    <span className="feat-title">Subject & Syllabus Specificity</span>
+                  </div>
+                  <div className="preset-feat-item">
+                    <span className="feat-number">02</span>
+                    <span className="feat-title">Realistic Evaluator Prompting</span>
+                  </div>
+                  <div className="preset-feat-item">
+                    <span className="feat-number">03</span>
+                    <span className="feat-title">Progressive Difficulty Levels</span>
+                  </div>
+                </div>
+              </div>
+              <div className="presets-story-right reveal-element slide-left delay-2">
+                <div className="syllabus-explorer-box glassmorphic-console">
+                  <div className="explorer-header">
+                    <span className="explorer-badge">Interactive Console</span>
+                    <h3 className="explorer-title">Practice Presets Explorer</h3>
+                    <p className="explorer-desc">Click a preset to preview sample questions and stressors.</p>
+                  </div>
+                  
+                  <div className="syllabus-selector-grid">
+                    {Object.keys(syllabusGuides).map((key) => (
+                      <button
+                        key={key}
+                        type="button"
+                        className={`syllabus-selector-chip ${selectedSyllabus === key ? "active" : ""}`}
+                        onClick={() => setSelectedSyllabus(key)}
+                      >
+                        {syllabusGuides[key].title.split(" & ")[0]}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="syllabus-card-content">
+                    <div className="syllabus-meta-row">
+                      <span className="syllabus-code">{syllabusGuides[selectedSyllabus].code}</span>
+                      <span className="syllabus-difficulty" data-diff={syllabusGuides[selectedSyllabus].difficulty}>
+                        Level: {syllabusGuides[selectedSyllabus].difficulty}
+                      </span>
+                    </div>
+                    <h4 className="syllabus-subject-title">{syllabusGuides[selectedSyllabus].title}</h4>
+                    
+                    <div className="syllabus-topics-list">
+                      <span className="topics-label">Focus Areas Covered:</span>
+                      <div className="topics-grid">
+                        {syllabusGuides[selectedSyllabus].topics.map((topic, i) => (
+                          <span key={i} className="topic-tag">• {topic}</span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className={`explorer-prompt-bubble border-${syllabusGuides[selectedSyllabus].tone}`}>
+                      <span className="bubble-speaker-label">Prompt ({syllabusGuides[selectedSyllabus].examiner}):</span>
+                      <p className="bubble-prompt-text">&quot;{syllabusGuides[selectedSyllabus].prompt}&quot;</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -303,111 +455,141 @@ export default function AuthScreen({ onLoginSuccess }) {
           </div>
         </section>
 
-        {/* AI Examiner & Interviewer Panel directory Section */}
-        <section className="landing-faculty-section" id="examiners">
-          <div className="section-header-centered">
-            <span className="section-badge">Evaluation Directory</span>
-            <h2 className="section-title">The AI Examiners & Recruiters</h2>
-            <div className="section-divider-mini"></div>
-            <p className="section-desc">
-              Our panel features distinct, dynamically reacting examiner profiles designed to replicate both university examiners and corporate bar raisers.
-            </p>
-          </div>
+        {/* Chapter 3: The Evaluators (Examiners Spectrum) */}
+        <section className="story-section story-examiners-section" id="examiners">
+          <div className="story-container">
+            <div className="section-header-centered">
+              <span className="section-badge reveal-element slide-up">03. The Panel</span>
+              <h2 className="section-title reveal-element slide-up delay-1">The AI Examiners & Recruiters</h2>
+              <div className="section-divider-mini reveal-element slide-up delay-2"></div>
+              <p className="section-desc reveal-element slide-up delay-3">
+                Our evaluation panel features distinct, dynamically reacting examiner profiles designed to replicate both university examiners and corporate recruiters.
+              </p>
+            </div>
 
-          <div className="faculty-grid">
-            {examinersBulletin.map((ex, i) => (
-              <div key={i} className={`faculty-card card-${ex.toughnessClass}`}>
-                <div className="faculty-card-header">
-                  <div>
-                    <h3 className="faculty-card-name">{ex.name}</h3>
-                    <span className="faculty-card-role">{ex.role}</span>
+            <div className="examiners-timeline-container reveal-element fade-in delay-2">
+              <div className="timeline-spectrum-bar">
+                <span className="spectrum-label left">Encouraging / Low Stress</span>
+                <span className="spectrum-line"></span>
+                <span className="spectrum-label right">Relentless / Maximum Stress</span>
+              </div>
+              
+              <div className="timeline-cards-row">
+                {examinersBulletin.map((ex, i) => (
+                  <div key={i} className={`timeline-faculty-card card-${ex.toughnessClass}`}>
+                    <div className="card-top-indicator" data-class={ex.toughnessClass}></div>
+                    <div className="faculty-card-header">
+                      <div>
+                        <h3 className="faculty-card-name">{ex.name}</h3>
+                        <span className="faculty-card-role">{ex.role}</span>
+                      </div>
+                      <span className="faculty-card-badge" data-class={ex.toughnessClass}>{ex.toughness}</span>
+                    </div>
+                    <p className="faculty-card-desc">{ex.desc}</p>
+                    <div className="faculty-card-quote-box">
+                      <span className="quote-mark">“</span>
+                      <p className="faculty-card-quote">{ex.quote}</p>
+                    </div>
                   </div>
-                  <span className="faculty-card-badge" data-class={ex.toughnessClass}>{ex.toughness}</span>
-                </div>
-                <p className="faculty-card-desc">{ex.desc}</p>
-                <div className="faculty-card-quote-box">
-                  <span className="quote-mark">“</span>
-                  <p className="faculty-card-quote">{ex.quote}</p>
-                </div>
+                ))}
               </div>
-            ))}
+            </div>
           </div>
         </section>
 
-        {/* Methodology & Performance Diagnostics overview */}
-        <section className="landing-methodology-section" id="methodology">
-          <div className="section-header-centered">
-            <span className="section-badge">Our Methodology</span>
-            <h2 className="section-title">High-Fidelity Speech & Performance Diagnostics</h2>
-            <div className="section-divider-mini"></div>
-            <p className="section-desc">
-              We track and analyze complex auditory, linguistic, and structural indicators in real-time, giving you deep insights into your readiness.
-            </p>
-          </div>
-
-          <div className="methodology-grid">
-            <div className="methodology-card">
-              <div className="methodology-icon-box bg-blue">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="methodology-icon-svg">
-                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
-                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                  <line x1="12" y1="19" x2="12" y2="22"></line>
-                </svg>
-              </div>
-              <h3 className="methodology-card-title">Emotional Telemetry</h3>
-              <p className="methodology-card-desc">
-                Tracks voice inflection, pitch variance, and speech pauses to dynamically rate Confidence, Clarity, Nervousness, and Hesitation metrics.
+        {/* Chapter 4: The Diagnostics (Methodology Workflow) */}
+        <section className="story-section story-methodology-section" id="methodology">
+          <div className="story-container">
+            <div className="section-header-centered">
+              <span className="section-badge reveal-element slide-up">04. The Technology</span>
+              <h2 className="section-title reveal-element slide-up delay-1">High-Fidelity Diagnostics Engine</h2>
+              <div className="section-divider-mini reveal-element slide-up delay-2"></div>
+              <p className="section-desc reveal-element slide-up delay-3">
+                PrepSim processes and evaluates your response patterns across auditory, cognitive, and lexical channels.
               </p>
             </div>
 
-            <div className="methodology-card">
-              <div className="methodology-icon-box bg-gold">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="methodology-icon-svg">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                </svg>
-              </div>
-              <h3 className="methodology-card-title">Gemini Semantic Evaluation</h3>
-              <p className="methodology-card-desc">
-                Advanced language models analyze core academic completeness or technical trade-offs, spotting bluffing or hollow buzzword answers.
-              </p>
-            </div>
+            <div className="pipeline-flow-container reveal-element slide-up delay-2">
+              <div className="pipeline-steps">
+                <div className="pipeline-step-card">
+                  <div className="pipeline-connector-line"></div>
+                  <div className="pipeline-circle-badge bg-blue">01</div>
+                  <div className="methodology-icon-box bg-blue">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="methodology-icon-svg">
+                      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                      <line x1="12" y1="19" x2="12" y2="22"></line>
+                    </svg>
+                  </div>
+                  <h3 className="methodology-card-title">Emotional Telemetry</h3>
+                  <p className="methodology-card-desc">
+                    Tracks voice inflection, pitch variance, and speech pauses to dynamically rate Confidence, Clarity, Nervousness, and Hesitation.
+                  </p>
+                </div>
 
-            <div className="methodology-card">
-              <div className="methodology-icon-box bg-green">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="methodology-icon-svg">
-                  <line x1="18" y1="20" x2="18" y2="10"></line>
-                  <line x1="12" y1="20" x2="12" y2="4"></line>
-                  <line x1="6" y1="20" x2="6" y2="14"></line>
-                </svg>
-              </div>
-              <h3 className="methodology-card-title">Performance Insights</h3>
-              <p className="methodology-card-desc">
-                Provides a comprehensive aggregate breakdown, concept and competency gap analysis, confidence timeline graphs, and roadmaps.
-              </p>
-            </div>
-          </div>
+                <div className="pipeline-step-card">
+                  <div className="pipeline-connector-line"></div>
+                  <div className="pipeline-circle-badge bg-gold">02</div>
+                  <div className="methodology-icon-box bg-gold">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="methodology-icon-svg">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                  </div>
+                  <h3 className="methodology-card-title">Gemini Semantic Evaluation</h3>
+                  <p className="methodology-card-desc">
+                    Advanced language models analyze core academic completeness or technical trade-offs, spotting bluffing or hollow buzzwords.
+                  </p>
+                </div>
 
-          <div className="methodology-bottom-cta">
-            <h3 className="m-cta-title">Ready to face the panel?</h3>
-            <button type="button" className="btn-landing-cta-large" onClick={() => setScreenMode("auth")}>
-              Enter Portal
-            </button>
+                <div className="pipeline-step-card">
+                  <div className="pipeline-circle-badge bg-green">03</div>
+                  <div className="methodology-icon-box bg-green">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="methodology-icon-svg">
+                      <line x1="18" y1="20" x2="18" y2="10"></line>
+                      <line x1="12" y1="20" x2="12" y2="4"></line>
+                      <line x1="6" y1="20" x2="6" y2="14"></line>
+                    </svg>
+                  </div>
+                  <h3 className="methodology-card-title">Performance Insights</h3>
+                  <p className="methodology-card-desc">
+                    Provides a comprehensive aggregate breakdown, concept and competency gap analysis, confidence timeline graphs, and roadmaps.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
-        {/* Landing Page Footer */}
-        <footer className="landing-footer">
-          <div className="footer-emblem-container">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="footer-emblem-svg">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-              <path d="m22 7-10-4-10 4 10 4Z"/>
-              <path d="M6 9.5V14a6 6 0 0 0 12 0V9.5"/>
-            </svg>
-            <span className="copyright-text">
-              © 2026 PrepSim. Engineered as a high-fidelity mock prep simulator.
-            </span>
+        {/* Chapter 5: Call to Action (Portal Entrance) */}
+        <section className="story-section story-cta-section" id="cta">
+          <div className="story-container">
+            <div className="cta-stage-content reveal-element scale-up">
+              <div className="cta-glowing-orb"></div>
+              <h2 className="cta-heading">Ready to face the panel?</h2>
+              <p className="cta-subtext">
+                Access the secure practice portal immediately to select your evaluation syllabus and record your diagnostic trials.
+              </p>
+              <div className="cta-buttons-wrapper">
+                <button type="button" className="btn-cta-submit" onClick={() => setScreenMode("auth")}>
+                  Access Portal
+                </button>
+              </div>
+            </div>
           </div>
-        </footer>
+          
+          <footer className="landing-footer">
+            <div className="footer-emblem-container">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="footer-emblem-svg">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                <path d="m22 7-10-4-10 4 10 4Z"/>
+                <path d="M6 9.5V14a6 6 0 0 0 12 0V9.5"/>
+              </svg>
+              <span className="copyright-text">
+                © 2026 PrepSim. Engineered as a high-fidelity mock prep simulator.
+              </span>
+            </div>
+          </footer>
+        </section>
       </div>
 
       {/* 🔐 MORPHING SECURE CREDENTIALS CARD VIEW */}
