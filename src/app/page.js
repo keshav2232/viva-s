@@ -708,7 +708,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer style={{ borderTop: "1px solid var(--border-color)", padding: "var(--space-lg) 0", fontSize: "0.8rem", color: "var(--text-muted)", textAlign: "center", backgroundColor: "var(--bg-card)" }}>
-        <p>© 2026 VivaSim. Engineered as a high-fidelity academic prep tool.</p>
+        <p>© 2026 PrepSim. Engineered as a high-fidelity academic prep tool.</p>
       </footer>
     </div>
   );

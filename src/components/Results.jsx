@@ -112,6 +112,122 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     ? ((totalFillerCount / totalWordsCount) * 100).toFixed(1)
     : 0;
 
+  let lexicalScore = 70;
+  let uniqueWordsCount = 0;
+  let advancedWordsCount = 0;
+  
+  if (totalWordsCount > 0) {
+    const allWords = answerTranscripts.join(" ").toLowerCase().replace(/[^\w\s']/g, " ").split(/\s+/).filter(w => w.length > 0);
+    const uniqueWords = new Set(allWords);
+    uniqueWordsCount = uniqueWords.size;
+    
+    const commonWords = ["the", "and", "that", "this", "with", "have", "from", "they", "will", "would", "their"];
+    advancedWordsCount = allWords.filter(w => w.length > 6 && !commonWords.includes(w)).length;
+    
+    const diversityRatio = uniqueWordsCount / (allWords.length || 1);
+    const advancedRatio = advancedWordsCount / (allWords.length || 1);
+    
+    lexicalScore = Math.min(
+      Math.max(
+        Math.round((diversityRatio * 60) + (advancedRatio * 180) + (subjectUnderstanding * 0.4)),
+        45
+      ),
+      99
+    );
+  }
+  
+  let maturityLevel = "";
+  let maturityDesc = "";
+  if (isProfessional) {
+    if (lexicalScore >= 88) {
+      maturityLevel = "Principal Architect";
+      maturityDesc = "Uses precise systems nomenclature, high vocabulary diversity, and highly sophisticated semantic structure.";
+    } else if (lexicalScore >= 75) {
+      maturityLevel = "Senior Engineer";
+      maturityDesc = "Clear, domain-appropriate vocabulary with strong terminology choices and moderate structural variety.";
+    } else if (lexicalScore >= 60) {
+      maturityLevel = "Associate Engineer";
+      maturityDesc = "Competent domain terms but relies on conversational language rather than precise engineering formulas.";
+    } else {
+      maturityLevel = "Junior Apprentice";
+      maturityDesc = "Repetitive phrasing, low terminology variety, and heavy reliance on generic descriptions.";
+    }
+  } else {
+    if (lexicalScore >= 88) {
+      maturityLevel = "Graduate Fellow";
+      maturityDesc = "Exhibits peerless academic nomenclature, high semantic variety, and strict first-principles phrasing.";
+    } else if (lexicalScore >= 75) {
+      maturityLevel = "Senior Scholar";
+      maturityDesc = "Strong command of course vocabulary, clear conceptual definitions, and rich terminology range.";
+    } else if (lexicalScore >= 60) {
+      maturityLevel = "Junior Scholar";
+      maturityDesc = "Good general understanding but uses layperson descriptions instead of precise textbook phrasing.";
+    } else {
+      maturityLevel = "Undergraduate Sophomore";
+      maturityDesc = "Highly repetitive terminology, conversational structures, and minimal academic vocabulary range.";
+    }
+  }
+
+  const detectFallacies = () => {
+    const detections = [];
+    
+    answerTranscripts.forEach((ans, idx) => {
+      const qObj = askedQuestionsObjects && askedQuestionsObjects[idx] ? askedQuestionsObjects[idx] : null;
+      const topicText = qObj ? qObj.topic : "Syllabus Topic";
+      const emo = detectedEmotions[idx] || {};
+      
+      const cleanAns = (ans || "").toLowerCase();
+      
+      const deflectionPhrases = ["basically", "essentially", "as we know", "it depends", "high level overview", "general explanation"];
+      const containsDeflection = deflectionPhrases.some(phrase => cleanAns.includes(phrase));
+      
+      if (containsDeflection && (emo.correctness || 80) < 68) {
+        detections.push({
+          round: idx + 1,
+          topic: topicText,
+          type: "Cognitive Deflection",
+          marker: "Used vague qualifier phrase",
+          fix: "Avoid buffer phrases like 'essentially' or 'it depends' to stall. Directly present the first-principles formulas or structural patterns first."
+        });
+        return;
+      }
+      
+      if (topicText && topicText.length > 3) {
+        const topicWords = topicText.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+        if (topicWords.length > 0) {
+          const occurrences = topicWords.reduce((acc, word) => {
+            const regex = new RegExp(`\\b${word}\\b`, "g");
+            return acc + (cleanAns.match(regex) || []).length;
+          }, 0);
+          
+          if (occurrences >= 3 && (emo.correctness || 80) < 65) {
+            detections.push({
+              round: idx + 1,
+              topic: topicText,
+              type: "Circular Argumentation",
+              marker: `Repeated search terms heavily (${occurrences} times)`,
+              fix: "Rather than repeating the question terms, define the underlying variables, mechanical constants, or memory constraints."
+            });
+            return;
+          }
+        }
+      }
+      
+      const hasAbsolute = /\b(always|never|completely|impossible)\b/.test(cleanAns);
+      if (hasAbsolute && (emo.correctness || 80) < 70) {
+        detections.push({
+          round: idx + 1,
+          topic: topicText,
+          type: "Unqualified Absolute",
+          marker: "Used absolute boundaries ('always'/'never')",
+          fix: "Engineering and physical systems are governed by boundary limits. Frame responses using qualifiers (e.g. 'under transient states' or 'within load capacity')."
+        });
+      }
+    });
+    
+    return detections;
+  };
+
   let avgWpm = 0;
   if (detectedEmotions.length > 0) {
     let wpmSum = 0;
@@ -1084,65 +1200,124 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
               </div>
             </div>
 
-            {/* Custom AI Study Planner Card */}
-            <div className="card suggested-revision-card" style={{ padding: "var(--space-lg)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
-                <div>
-                  <h3 style={{ fontSize: "1.05rem", fontWeight: "700", textAlign: "left", margin: 0 }}>
-                    {isProfessional ? "Custom AI Preparation Roadmap" : "Custom AI Study Planner"}
-                  </h3>
-                  <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", margin: "2px 0 0 0", textAlign: "left" }}>
-                    {isProfessional ? "Day-by-day roadmap tailored to close your diagnosed competency gaps." : "Day-by-day roadmap tailored to close your diagnosed knowledge gaps."}
-                  </p>
+            {/* Lexical Vocabulary Maturity Card */}
+            <div className="card" style={{ padding: "var(--space-lg)", textAlign: "left" }}>
+              <h3 style={{ fontSize: "1.05rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
+                Lexical Range & Vocabulary Maturity
+              </h3>
+              <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "var(--space-md)" }}>
+                Syntactic analysis of speech variety, word complexity, and terminology usage.
+              </p>
+              
+              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-md)", marginBottom: "var(--space-md)" }}>
+                <div style={{
+                  width: "56px",
+                  height: "56px",
+                  borderRadius: "50%",
+                  backgroundColor: "rgba(99, 102, 241, 0.08)",
+                  border: "1.5px solid rgba(99, 102, 241, 0.2)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "1.4rem",
+                  color: "#6366f1",
+                  flexShrink: 0
+                }}>
+                  🎓
                 </div>
-                <button 
-                  className="btn btn-secondary" 
-                  onClick={handleDownloadSchedule}
-                  style={{ 
-                    display: "flex", 
-                    alignItems: "center", 
-                    gap: "6px", 
-                    fontSize: "0.8rem", 
-                    padding: "6px 12px",
-                    backgroundColor: "rgba(99, 102, 241, 0.08)",
-                    borderColor: "rgba(99, 102, 241, 0.2)",
-                    color: "#6366f1"
-                  }}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
-                  </svg>
-                  Download Schedule
-                </button>
+                <div>
+                  <span style={{ fontSize: "0.75rem", textTransform: "uppercase", fontWeight: "700", color: "var(--text-secondary)", letterSpacing: "0.05em" }}>Lexical Standing</span>
+                  <h4 style={{ margin: "2px 0 0 0", fontSize: "1.1rem", fontWeight: "800", color: "var(--accent-primary)" }}>{maturityLevel}</h4>
+                </div>
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)", marginTop: "var(--space-md)" }}>
-                {generate5DayPlan().map((day) => (
-                  <div key={day.day} style={{ 
-                    display: "flex", 
-                    flexDirection: "column", 
-                    padding: "10px var(--space-md)", 
-                    border: "1px solid var(--border-color)", 
-                    borderRadius: "var(--radius-sm)", 
-                    backgroundColor: "var(--bg-primary)",
-                    textAlign: "left"
-                  }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ fontSize: "0.75rem", fontWeight: "700", color: "#6366f1", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                        Day {day.day} • {day.time}
-                      </span>
-                    </div>
-                    <h4 style={{ margin: "4px 0", fontSize: "0.875rem", fontWeight: "700", color: "var(--text-primary)" }}>
-                      Focus: {day.focus}
-                    </h4>
-                    <ul style={{ margin: "4px 0 0 0", paddingLeft: "16px", fontSize: "0.78rem", color: "var(--text-secondary)", lineHeight: "1.4" }}>
-                      {day.actions.map((act, aIdx) => (
-                        <li key={aIdx}>{act}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
+              <div style={{ height: "6px", backgroundColor: "var(--bg-primary)", borderRadius: "var(--radius-full)", position: "relative", marginBottom: "var(--space-sm)" }}>
+                <div style={{
+                  height: "100%",
+                  width: `${lexicalScore}%`,
+                  borderRadius: "var(--radius-full)",
+                  backgroundColor: "#6366f1",
+                  transition: "width 0.8s ease"
+                }}></div>
               </div>
+              
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: "500", marginBottom: "var(--space-md)" }}>
+                <span>Standard Vocabulary</span>
+                <span>Principal Level</span>
+              </div>
+
+              <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--text-secondary)", lineHeight: "1.4" }}>
+                {maturityDesc}
+              </p>
+              
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-xs)", marginTop: "var(--space-md)", borderTop: "1px solid var(--border-color)", paddingTop: "var(--space-sm)" }}>
+                <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                  Unique Words: <strong style={{ color: "var(--text-primary)" }}>{uniqueWordsCount}</strong>
+                </div>
+                <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                  Advanced Keywords: <strong style={{ color: "var(--text-primary)" }}>{advancedWordsCount}</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Logical Fallacy & Deflection Alerts Card */}
+            <div className="card" style={{ padding: "var(--space-lg)", textAlign: "left" }}>
+              <h3 style={{ fontSize: "1.05rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
+                Argumentation & Fallacy Diagnostics
+              </h3>
+              <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "var(--space-md)" }}>
+                Lexical deflection scanning and reasoning pattern checks.
+              </p>
+
+              {detectFallacies().length === 0 ? (
+                <div style={{
+                  display: "flex",
+                  gap: "10px",
+                  alignItems: "flex-start",
+                  padding: "12px",
+                  borderRadius: "var(--radius-sm)",
+                  backgroundColor: "var(--color-success-bg)",
+                  border: "1px solid rgba(22, 163, 74, 0.2)",
+                  color: "var(--color-success)"
+                }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" style={{ width: "20px", height: "20px", marginTop: "2px", flexShrink: 0 }}>
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                    <polyline points="22 4 12 14.01 9 11.01"/>
+                  </svg>
+                  <div style={{ fontSize: "0.8rem", lineHeight: "1.4" }}>
+                    <strong>Zero Fallacies Flagged</strong>
+                    <p style={{ margin: "2px 0 0 0", color: "var(--text-secondary)" }}>
+                      Outstanding logical consistency. You avoided vague qualifier patterns, repetitive circularity, and unqualified absolutes.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
+                  {detectFallacies().map((det, dIdx) => (
+                    <div key={dIdx} style={{
+                      padding: "10px var(--space-md)",
+                      border: "1px solid var(--border-color)",
+                      borderRadius: "var(--radius-sm)",
+                      backgroundColor: "var(--bg-primary)"
+                    }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: "0.75rem", fontWeight: "700", color: "var(--color-error)", textTransform: "uppercase" }}>
+                          🚨 {det.type} • Round {det.round}
+                        </span>
+                      </div>
+                      <h4 style={{ margin: "4px 0 2px 0", fontSize: "0.85rem", fontWeight: "700", color: "var(--text-primary)" }}>
+                        Topic: {det.topic}
+                      </h4>
+                      <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--text-muted)", fontStyle: "italic" }}>
+                        Indicator: {det.marker}
+                      </p>
+                      <p style={{ margin: "6px 0 0 0", fontSize: "0.78rem", color: "var(--text-secondary)", lineHeight: "1.4", borderTop: "1px dashed var(--border-color)", paddingTop: "4px" }}>
+                        <strong>Coach Advice</strong>: {det.fix}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
           </div>
