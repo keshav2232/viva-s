@@ -30,69 +30,68 @@ export default function Home() {
 
   // App routing states
   const [activeScreen, setActiveScreen] = useState("dashboard"); // "auth-screen" | "dashboard" | "setup" | "active-viva" | "results"
-  const [isGuest, setIsGuest] = useState(() => {
-    if (typeof window !== "undefined") {
-      return sessionStorage.getItem("vivasim_active_session") === "true";
-    }
-    return false;
-  });
+  const [isGuest, setIsGuest] = useState(false);
   const [syncingGuest, setSyncingGuest] = useState(false);
   const [syncSuccessMsg, setSyncSuccessMsg] = useState("");
   const [currentMode, setCurrentMode] = useState("academic");
 
   // Guest Offline Backup State (mirrors original logic)
-  const [guestUserName, setGuestUserName] = useState(() => {
+  const [guestUserName, setGuestUserName] = useState("Guest Scholar");
+  const [sessions, setSessions] = useState([]);
+  const [stats, setStats] = useState(EMPTY_STATS);
+
+  // Viva run states
+  const [vivaConfig, setVivaConfig] = useState(null);
+  const [resultsData, setResultsData] = useState(null);
+  const [pausedSession, setPausedSession] = useState(null);
+  
+  // Local storage migration alert checker
+  const [hasLocalGuestData, setHasLocalGuestData] = useState(false);
+
+  // Hydration sync for storage-dependent states on mount
+  useEffect(() => {
     if (typeof window !== "undefined") {
-      return localStorage.getItem("vivasim_user") || "Guest Scholar";
-    }
-    return "Guest Scholar";
-  });
-  const [sessions, setSessions] = useState(() => {
-    if (typeof window !== "undefined") {
-      const cached = localStorage.getItem("vivasim_sessions");
-      if (cached) {
+      const activeSession = sessionStorage.getItem("vivasim_active_session") === "true";
+      setIsGuest(activeSession);
+
+      const storedUser = localStorage.getItem("vivasim_user");
+      if (storedUser) {
+        setGuestUserName(storedUser);
+      }
+
+      const cachedSessions = localStorage.getItem("vivasim_sessions");
+      if (cachedSessions) {
         try {
-          return JSON.parse(cached);
+          setSessions(JSON.parse(cachedSessions));
         } catch (e) {
           console.warn("Invalid cached sessions found, resetting:", e);
           localStorage.removeItem("vivasim_sessions");
         }
       }
-    }
-    return [];
-  });
-  const [stats, setStats] = useState(() => {
-    if (typeof window !== "undefined") {
-      const cached = localStorage.getItem("vivasim_stats");
-      if (cached) {
+
+      const cachedStats = localStorage.getItem("vivasim_stats");
+      if (cachedStats) {
         try {
-          return JSON.parse(cached);
+          setStats(JSON.parse(cachedStats));
         } catch (e) {
           console.warn("Invalid cached stats found, resetting:", e);
           localStorage.removeItem("vivasim_stats");
         }
       }
-    }
-    return EMPTY_STATS;
-  });
 
-  // Viva run states
-  const [vivaConfig, setVivaConfig] = useState(null);
-  const [resultsData, setResultsData] = useState(null);
-  const [pausedSession, setPausedSession] = useState(() => {
-    if (typeof window !== "undefined") {
       const paused = localStorage.getItem("vivasim_paused_session");
       if (paused) {
         try {
-          return JSON.parse(paused);
+          setPausedSession(JSON.parse(paused));
         } catch (e) {
           console.warn("Invalid paused session found, removing:", e);
           localStorage.removeItem("vivasim_paused_session");
         }
       }
+
+      setHasLocalGuestData(!!localStorage.getItem("vivasim_sessions"));
     }
-    return null;
-  });
+  }, []);
 
   const saveToStorage = (newSessions, newStats) => {
     if (typeof window !== "undefined") {
@@ -105,9 +104,6 @@ export default function Home() {
   const activeSessions = user ? cloudSessions : sessions;
   const activeStats = user ? cloudStats : stats;
   const activeUserName = user ? (user.displayName || user.email) : (isGuest ? guestUserName : "Guest Scholar");
-
-  // Local storage migration alert checker
-  const hasLocalGuestData = typeof window !== "undefined" && !!localStorage.getItem("vivasim_sessions");
 
   const handleLoginSuccess = (guestName) => {
     if (guestName) {

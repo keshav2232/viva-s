@@ -45,6 +45,31 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
   const [previewMode, setPreviewMode] = useState("map"); // "map" | "list"
   const [hoveredSubtopic, setHoveredSubtopic] = useState(null);
 
+  // Zoom & Pan for Mind Map Preview
+  const [zoomScale, setZoomScale] = useState(1.0);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const canvasContainerRef = React.useRef(null);
+
+  useEffect(() => {
+    if (previewMode !== "map" || currentStep !== 3) return;
+    const element = canvasContainerRef.current;
+    if (!element) return;
+
+    const onWheel = (e) => {
+      e.preventDefault();
+      const zoomIntensity = 0.05;
+      const delta = e.deltaY < 0 ? zoomIntensity : -zoomIntensity;
+      setZoomScale(prev => Math.max(0.4, Math.min(2.5, prev + delta)));
+    };
+
+    element.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      element.removeEventListener("wheel", onWheel);
+    };
+  }, [previewMode, currentStep]);
+
   // Quick Cram Flashcards States
   const [cramMode, setCramMode] = useState(false);
   const [flashcards, setFlashcards] = useState([]);
@@ -65,7 +90,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "generate-flashcards",
-          syllabusStructure: syllabusStructure || SyllabusParserService.getDefaultHierarchy(topic || "Thermodynamics")
+          syllabusStructure: syllabusStructure || SyllabusParserService.getDefaultHierarchy(topic || "Thermodynamics", getActiveDuration())
         })
       });
       if (!response.ok) throw new Error("Failed fetching flashcards");
@@ -133,7 +158,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
         // Expand the topic into a structured tree using Gemini!
         setIsExpandingTopic(true);
         try {
-          const tree = await SyllabusParserService.expandTopicTree(topic.trim(), practiceMode);
+          const tree = await SyllabusParserService.expandTopicTree(topic.trim(), practiceMode, getActiveDuration());
           setSyllabusStructure(tree);
         } catch (e) {
           console.error("Failed expanding topic tree:", e);
@@ -152,14 +177,49 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
         try {
           const parsedTree = await SyllabusParserService.parseSyllabusRemote(
             syllabusText.trim(),
-            practiceMode
+            practiceMode,
+            getActiveDuration()
           );
           setSyllabusStructure(parsedTree);
         } catch (e) {
           console.warn("Syllabus remote parsing error, falling back to local heuristic:", e);
           const parsedTree = SyllabusParserService.parseSyllabus(
             syllabusText || (practiceMode === "academic" ? "Standard Syllabus context loaded." : "Standard Job Description context loaded."),
-            practiceMode === "academic" ? "Custom Syllabus Practice" : "Custom Job Role Practice"
+            practiceMode === "academic" ? "Custom Syllabus Practice" : "Custom Job Role Practice",
+            getActiveDuration()
+          );
+          setSyllabusStructure(parsedTree);
+        } finally {
+          setIsExpandingTopic(false);
+        }
+      }
+    }
+
+    // Step 2 to Step 3 Transition: Scale syllabus units if duration changed
+    if (nextStep === 3 && currentStep === 2) {
+      const targetUnits = SyllabusParserService.getTargetUnitsForDuration(getActiveDuration());
+      const currentUnits = syllabusStructure ? syllabusStructure.units.length : 0;
+
+      if (currentUnits !== targetUnits) {
+        setIsExpandingTopic(true);
+        try {
+          if (sourceType === "topic") {
+            const tree = await SyllabusParserService.expandTopicTree(topic.trim(), practiceMode, getActiveDuration());
+            setSyllabusStructure(tree);
+          } else {
+            const parsedTree = await SyllabusParserService.parseSyllabusRemote(
+              syllabusText.trim(),
+              practiceMode,
+              getActiveDuration()
+            );
+            setSyllabusStructure(parsedTree);
+          }
+        } catch (e) {
+          console.warn("Failed scaling syllabus for new duration, using fallback:", e);
+          const parsedTree = SyllabusParserService.parseSyllabus(
+            syllabusText || (practiceMode === "academic" ? "Standard Syllabus context loaded." : "Standard Job Description context loaded."),
+            practiceMode === "academic" ? "Custom Syllabus Practice" : "Custom Job Role Practice",
+            getActiveDuration()
           );
           setSyllabusStructure(parsedTree);
         } finally {
@@ -280,11 +340,31 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
     return duration;
   };
 
+  const handleMouseDown = (e) => {
+    const isNode = e.target.closest('.mindmap-interactive-subtopic') || e.target.closest('foreignObject');
+    if (!isNode) {
+      setIsDragging(true);
+      setDragStart({ x: e.clientX, y: e.clientY });
+    }
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - dragStart.x;
+    const dy = e.clientY - dragStart.y;
+    setPanOffset(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+    setDragStart({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
   const handleStartExam = () => {
     onBeginViva({
       sourceType,
       topic: syllabusStructure ? syllabusStructure.topic : (topic || (practiceMode === "academic" ? "Custom Syllabus" : "Custom Job Role")),
-      syllabusStructure: syllabusStructure || SyllabusParserService.getDefaultHierarchy(topic || (practiceMode === "academic" ? "Thermodynamics" : "Software Engineer (Backend)")),
+      syllabusStructure: syllabusStructure || SyllabusParserService.getDefaultHierarchy(topic || (practiceMode === "academic" ? "Thermodynamics" : "Software Engineer (Backend)"), isLastMinute ? 5 : getActiveDuration()),
       duration: isLastMinute ? 5 : getActiveDuration(),
       personality: isMockExternal ? "terror" : personality, // Force high stress terror examiner if mock external is on!
       isLastMinute,
@@ -297,31 +377,79 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
   };
 
   const getMindMapNodes = () => {
-    if (!syllabusStructure) return { nodes: [], links: [] };
+    if (!syllabusStructure) return { nodes: [], links: [], svgHeight: 340 };
+
+    const getNodeWidth = (name, type) => {
+      if (type === "subject") {
+        return Math.max(135, Math.min(220, name.length * 7.5 + 24));
+      } else if (type === "unit") {
+        const cleanName = name.replace(/^(unit|competency)\s*\d+\s*:\s*/i, "");
+        return Math.max(130, Math.min(190, cleanName.length * 7 + 24));
+      } else {
+        return Math.max(130, Math.min(230, name.length * 6.5 + 20));
+      }
+    };
 
     const nodes = [];
     const links = [];
 
+    // Pre-calculate subtopic layout and dynamic canvas height sequentially
+    let currentY = 24; // starting padding
+    const subtopicGap = 12; // vertical gap between subtopics inside a unit
+    const unitClusterGap = 32; // vertical gap between unit clusters
+    const cardHeight = 32;
+
+    const unitLayouts = [];
+
+    syllabusStructure.units.forEach((u, uIdx) => {
+      const topicYs = [];
+      u.topics.forEach((t, tIdx) => {
+        topicYs.push(currentY + cardHeight / 2);
+        currentY += cardHeight + subtopicGap;
+      });
+
+      let calculatedUnitY = currentY - cardHeight / 2;
+      if (topicYs.length > 0) {
+        calculatedUnitY = (topicYs[0] + topicYs[topicYs.length - 1]) / 2;
+      } else {
+        // Fallback if no subtopics
+        topicYs.push(currentY + cardHeight / 2);
+        calculatedUnitY = currentY + cardHeight / 2;
+        currentY += cardHeight + subtopicGap;
+      }
+
+      unitLayouts.push({
+        unitY: calculatedUnitY,
+        topicYs: topicYs
+      });
+
+      // Adjust for next cluster gap
+      currentY = currentY - subtopicGap + unitClusterGap;
+    });
+
+    const svgHeight = Math.max(340, currentY - unitClusterGap + 24);
+
     // 1. Subject Node
-    const subjectX = 75;
-    const subjectY = 170;
+    const subjectX = 95;
+    const subjectY = svgHeight / 2;
+    const subjectWidth = getNodeWidth(syllabusStructure.topic, "subject");
+
     nodes.push({
       id: "subject",
       type: "subject",
       name: syllabusStructure.topic,
       x: subjectX,
-      y: subjectY
+      y: subjectY,
+      width: subjectWidth,
+      height: 54
     });
 
-    const totalUnits = syllabusStructure.units.length; // usually 3
     syllabusStructure.units.forEach((u, uIdx) => {
       // 2. Unit Node
-      const unitX = 250;
-      const unitY = totalUnits === 3 
-        ? [65, 170, 275][uIdx] 
-        : (uIdx + 1) * (340 / (totalUnits + 1));
-        
+      const unitX = 295;
+      const { unitY, topicYs } = unitLayouts[uIdx];
       const unitId = `unit_${uIdx}`;
+      const unitWidth = getNodeWidth(u.name, "unit");
       
       nodes.push({
         id: unitId,
@@ -329,32 +457,28 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
         name: u.name,
         x: unitX,
         y: unitY,
-        unitIndex: uIdx
+        unitIndex: uIdx,
+        width: unitWidth,
+        height: 46
       });
 
       links.push({
         source: "subject",
         target: unitId,
-        x1: subjectX + 68, // offset from center node edge
+        type: "unit",
+        unitIndex: uIdx,
+        x1: subjectX + subjectWidth / 2,
         y1: subjectY,
-        x2: unitX - 70,
+        x2: unitX - unitWidth / 2,
         y2: unitY
       });
 
       // 3. Subtopics
-      const totalTopics = u.topics.length;
       u.topics.forEach((t, tIdx) => {
-        const topicX = 470;
-        
-        // Spacing calculations
-        let topicY = unitY;
-        if (totalTopics > 0) {
-          const delta = 35; // vertical gap between topics
-          const startY = unitY - ((totalTopics - 1) * delta) / 2;
-          topicY = startY + tIdx * delta;
-        }
-
+        const topicX = 515;
+        const topicY = topicYs[tIdx];
         const topicId = `topic_${uIdx}_${tIdx}`;
+        const topicWidth = getNodeWidth(t, "subtopic");
         
         nodes.push({
           id: topicId,
@@ -363,21 +487,26 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
           x: topicX,
           y: topicY,
           unitIndex: uIdx,
-          topicIndex: tIdx
+          topicIndex: tIdx,
+          width: topicWidth,
+          height: 32
         });
 
         links.push({
           source: unitId,
           target: topicId,
-          x1: unitX + 70,
+          type: "subtopic",
+          unitIndex: uIdx,
+          topicIndex: tIdx,
+          x1: unitX + unitWidth / 2,
           y1: unitY,
-          x2: topicX - 75,
+          x2: topicX - topicWidth / 2,
           y2: topicY
         });
       });
     });
 
-    return { nodes, links };
+    return { nodes, links, svgHeight };
   };
 
   if (cramMode) {
@@ -1100,12 +1229,18 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
 
             <div className="flow-nav-buttons">
               <button className="btn btn-secondary" onClick={() => handleProceedStep(1)}>Back</button>
-              <button className="btn btn-primary" onClick={() => handleProceedStep(3)}>
-                Next: Preview Screen
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="5" y1="12" x2="19" y2="12"></line>
-                  <polyline points="12 5 19 12 12 19"></polyline>
-                </svg>
+              <button 
+                className="btn btn-primary" 
+                onClick={() => handleProceedStep(3)}
+                disabled={isExpandingTopic}
+              >
+                {isExpandingTopic ? (practiceMode === "academic" ? "Scaling Syllabus..." : "Scaling Competencies...") : "Next: Preview Screen"}
+                {!isExpandingTopic && (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                    <polyline points="12 5 19 12 12 19"></polyline>
+                  </svg>
+                )}
               </button>
             </div>
           </div>
@@ -1158,140 +1293,314 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
 
               {previewMode === "map" ? (
                 /* INTERACTIVE MIND MAP SVG */
-                <div className="mindmap-container-canvas" style={{ position: "relative", overflowX: "auto", border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", backgroundColor: "var(--bg-primary)", padding: "10px 0" }}>
-                  <svg width="640" height="340" viewBox="0 0 640 340" style={{ display: "block", margin: "0 auto" }}>
-                    {/* SVG Filters for glowing drop-shadows */}
-                    <defs>
-                      <filter id="gold-glow" x="-20%" y="-20%" width="140%" height="140%">
-                        <feGaussianBlur stdDeviation="5" result="blur" />
-                        <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                      </filter>
-                    </defs>
-                    
-                    {/* CONNECTOR PATHS */}
-                    {getMindMapNodes().links.map((link, idx) => {
-                      const isHoveredOrSelected = 
-                        (hoveredSubtopic && (link.target === hoveredSubtopic || link.source === hoveredSubtopic)) ||
-                        (selectedSubtopic && (link.target === `topic_${selectedSubtopic.unitIndex}_${selectedSubtopic.topicIndex}` || link.source === `topic_${selectedSubtopic.unitIndex}_${selectedSubtopic.topicIndex}`));
-                      
-                      return (
-                        <path
-                          key={`link_${idx}`}
-                          d={`M ${link.x1} ${link.y1} C ${(link.x1 + link.x2) / 2} ${link.y1}, ${(link.x1 + link.x2) / 2} ${link.y2}, ${link.x2} ${link.y2}`}
-                          fill="none"
-                          stroke={isHoveredOrSelected ? "var(--color-warning)" : "var(--border-color)"}
-                          strokeWidth={isHoveredOrSelected ? "2.5" : "1.25"}
-                          strokeDasharray={isHoveredOrSelected ? "none" : "3,3"}
-                          style={{ transition: "stroke 0.25s, stroke-width 0.25s" }}
-                        />
-                      );
-                    })}
+                <div 
+                  ref={canvasContainerRef}
+                  className="mindmap-container-canvas" 
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={handleMouseUp}
+                  style={{ 
+                    position: "relative", 
+                    overflow: "hidden", 
+                    border: "1px solid var(--border-color)", 
+                    borderRadius: "var(--radius-md)", 
+                    backgroundColor: "var(--bg-primary)", 
+                    padding: "10px 0",
+                    cursor: isDragging ? "grabbing" : "grab",
+                    height: "380px"
+                  }}
+                >
+                  {(() => {
+                    const { nodes, links, svgHeight } = getMindMapNodes();
+                    return (
+                      <>
+                        {/* CSS Injector for keyframe animations */}
+                        <style dangerouslySetInnerHTML={{ __html: `
+                          @keyframes popSubject {
+                            0% { transform: scale(0); opacity: 0; }
+                            80% { transform: scale(1.1); }
+                            100% { transform: scale(1); opacity: 1; }
+                          }
+                          @keyframes popUnit {
+                            0% { transform: scale(0) translate(-30px, 0); opacity: 0; }
+                            80% { transform: scale(1.05) translate(3px, 0); }
+                            100% { transform: scale(1) translate(0, 0); opacity: 1; }
+                          }
+                          @keyframes popSubtopic {
+                            0% { transform: scale(0) translate(-15px, 0); opacity: 0; }
+                            100% { transform: scale(1) translate(0, 0); opacity: 1; }
+                          }
+                          @keyframes drawConnectorSolid {
+                            0% { stroke-dasharray: 400; stroke-dashoffset: 400; }
+                            100% { stroke-dasharray: none; stroke-dashoffset: 0; }
+                          }
+                          @keyframes drawConnectorDashed {
+                            0% { stroke-dasharray: 3 3; stroke-dashoffset: 400; }
+                            100% { stroke-dasharray: 3 3; stroke-dashoffset: 0; }
+                          }
+                          
+                          .animate-subject {
+                            animation: popSubject 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+                            opacity: 0;
+                          }
+                          .animate-unit {
+                            animation: popUnit 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+                            opacity: 0;
+                          }
+                          .animate-subtopic {
+                            animation: popSubtopic 0.4s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+                            opacity: 0;
+                          }
+                          .animate-link-solid {
+                            animation: drawConnectorSolid 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+                          }
+                          .animate-link-dashed {
+                            animation: drawConnectorDashed 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+                          }
+                          
+                          .btn-zoom {
+                            background: none;
+                            border: none;
+                            cursor: pointer;
+                            width: 28px;
+                            height: 28px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            border-radius: 6px;
+                            color: var(--accent-primary);
+                            transition: background-color 0.2s, transform 0.1s;
+                          }
+                          .btn-zoom:hover {
+                            background-color: var(--accent-light);
+                            transform: scale(1.08);
+                          }
+                          .btn-zoom:active {
+                            transform: scale(0.92);
+                          }
+                        `}} />
 
-                    {/* NODE PILLS */}
-                    {getMindMapNodes().nodes.map((node) => {
-                      const isSelected = selectedSubtopic && node.type === "subtopic" && selectedSubtopic.unitIndex === node.unitIndex && selectedSubtopic.topicIndex === node.topicIndex;
-                      
-                      let width = 140;
-                      let height = 46;
-                      if (node.type === "subject") {
-                        width = 135;
-                        height = 54;
-                      } else if (node.type === "subtopic") {
-                        width = 150;
-                        height = 32;
-                      }
-
-                      return (
-                        <foreignObject
-                          key={node.id}
-                          x={node.x - width / 2}
-                          y={node.y - height / 2}
-                          width={width}
-                          height={height}
-                        >
-                          <div
-                            onClick={() => {
-                              if (node.type === "subtopic") {
-                                if (isSelected) {
-                                  setSelectedSubtopic(null);
-                                } else {
-                                  setSelectedSubtopic({
-                                    unitIndex: node.unitIndex,
-                                    topicIndex: node.topicIndex,
-                                    name: node.name
-                                  });
-                                }
-                              }
-                            }}
-                            onMouseEnter={() => {
-                              if (node.type === "subtopic") {
-                                setHoveredSubtopic(node.id);
-                              }
-                            }}
-                            onMouseLeave={() => {
-                              setHoveredSubtopic(null);
-                            }}
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              textAlign: "center",
-                              padding: "4px 8px",
-                              fontSize: node.type === "subject" ? "0.775rem" : "0.725rem",
-                              fontWeight: node.type === "subject" ? "800" : "600",
-                              lineHeight: "1.2",
-                              borderRadius: "var(--radius-sm)",
-                              cursor: node.type === "subtopic" ? "pointer" : "default",
-                              transition: "var(--transition-smooth)",
-                              
-                              // Backgrounds & borders
-                              backgroundColor: node.type === "subject" 
-                                ? "var(--accent-primary)" 
-                                : node.type === "unit" 
-                                  ? "var(--bg-card)" 
-                                  : isSelected 
-                                    ? "var(--color-warning-bg)" 
-                                    : "var(--bg-card)",
-                              color: node.type === "subject" 
-                                ? "white" 
-                                : node.type === "unit" 
-                                  ? "var(--accent-primary)" 
-                                  : isSelected 
-                                    ? "var(--color-warning)" 
-                                    : "var(--text-primary)",
-                              border: node.type === "subject"
-                                ? "1px solid var(--accent-primary)"
-                                : node.type === "unit"
-                                  ? "1.5px solid var(--accent-primary)"
-                                  : isSelected
-                                    ? "2px solid var(--color-warning)"
-                                    : "1px solid var(--border-color)",
-                              boxShadow: isSelected
-                                ? "0 0 10px rgba(161, 107, 21, 0.35)"
-                                : "var(--shadow-subtle)",
-                              userSelect: "none"
-                            }}
-                            className={node.type === "subtopic" ? "mindmap-interactive-subtopic" : ""}
+                        {/* FLOATING ZOOM CONTROLS */}
+                        <div style={{
+                          position: "absolute",
+                          top: "12px",
+                          right: "12px",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "6px",
+                          backgroundColor: "rgba(255, 255, 255, 0.85)",
+                          backdropFilter: "blur(8px)",
+                          border: "1px solid var(--border-color)",
+                          borderRadius: "var(--radius-sm)",
+                          padding: "4px",
+                          boxShadow: "var(--shadow-subtle)",
+                          zIndex: 10
+                        }}>
+                          <button
+                            type="button"
+                            className="btn-zoom"
+                            onClick={() => setZoomScale(prev => Math.min(2.5, prev + 0.15))}
+                            title="Zoom In"
                           >
-                            {node.type === "unit" ? (
-                              <div style={{ fontSize: "0.68rem" }}>
-                                <strong>{practiceMode === "academic" ? `Unit #${node.unitIndex + 1}` : `Competency #${node.unitIndex + 1}`}</strong>
-                                <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "120px" }}>
-                                  {node.name.replace(/^(unit|competency)\s*\d+\s*:\s*/i, "")}
-                                </div>
-                              </div>
-                            ) : (
-                              node.name
-                            )}
-                          </div>
-                        </foreignObject>
-                      );
-                    })}
-                  </svg>
-                </div>
-              ) : (
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <line x1="12" y1="5" x2="12" y2="19"></line>
+                              <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-zoom"
+                            onClick={() => setZoomScale(prev => Math.max(0.4, prev - 0.15))}
+                            title="Zoom Out"
+                          >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-zoom"
+                            onClick={() => {
+                              setZoomScale(1.0);
+                              setPanOffset({ x: 0, y: 0 });
+                            }}
+                            title="Reset View"
+                          >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                              <polyline points="3 3 3 8 8 8"></polyline>
+                            </svg>
+                          </button>
+                        </div>
+
+                        <svg width="640" height={svgHeight} viewBox={`0 0 640 ${svgHeight}`} style={{ display: "block", margin: "0 auto", userSelect: "none" }}>
+                          {/* SVG Filters for glowing drop-shadows */}
+                          <defs>
+                            <filter id="gold-glow" x="-20%" y="-20%" width="140%" height="140%">
+                              <feGaussianBlur stdDeviation="5" result="blur" />
+                              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                            </filter>
+                          </defs>
+                          
+                          <g 
+                            style={{
+                              transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})`,
+                              transformOrigin: `320px ${svgHeight / 2}px`,
+                              transition: isDragging ? "none" : "transform 0.15s cubic-bezier(0.25, 0.8, 0.25, 1)"
+                            }}
+                          >
+                            {/* CONNECTOR PATHS */}
+                            {links.map((link, idx) => {
+                              const isHoveredOrSelected = 
+                                (hoveredSubtopic && (link.target === hoveredSubtopic || link.source === hoveredSubtopic)) ||
+                                (selectedSubtopic && (link.target === `topic_${selectedSubtopic.unitIndex}_${selectedSubtopic.topicIndex}` || link.source === `topic_${selectedSubtopic.unitIndex}_${selectedSubtopic.topicIndex}`));
+                              
+                              let delay = 0;
+                              let animateClass = "animate-link-solid";
+                              
+                              if (link.type === "unit") {
+                                delay = link.unitIndex * 80;
+                                animateClass = "animate-link-solid";
+                              } else {
+                                delay = 250 + link.unitIndex * 100 + link.topicIndex * 40;
+                                animateClass = "animate-link-dashed";
+                              }
+
+                              return (
+                                <path
+                                  key={`link_${idx}`}
+                                  className={animateClass}
+                                  d={`M ${link.x1} ${link.y1} C ${(link.x1 + link.x2) / 2} ${link.y1}, ${(link.x1 + link.x2) / 2} ${link.y2}, ${link.x2} ${link.y2}`}
+                                  fill="none"
+                                  stroke={isHoveredOrSelected ? "var(--color-warning)" : "var(--border-color)"}
+                                  strokeWidth={isHoveredOrSelected ? "2.5" : "1.25"}
+                                  style={{ 
+                                    animationDelay: `${delay}ms`,
+                                    transition: "stroke 0.25s, stroke-width 0.25s" 
+                                  }}
+                                />
+                              );
+                            })}
+
+                            {/* NODE PILLS */}
+                            {nodes.map((node) => {
+                              const isSelected = selectedSubtopic && node.type === "subtopic" && selectedSubtopic.unitIndex === node.unitIndex && selectedSubtopic.topicIndex === node.topicIndex;
+                              
+                              const width = node.width;
+                              const height = node.height;
+
+                              let animationClass = "animate-subject";
+                              let delay = 0;
+                              if (node.type === "subject") {
+                                animationClass = "animate-subject";
+                                delay = 0;
+                              } else if (node.type === "unit") {
+                                animationClass = "animate-unit";
+                                delay = 120 + node.unitIndex * 80;
+                              } else {
+                                animationClass = "animate-subtopic";
+                                delay = 300 + node.unitIndex * 100 + node.topicIndex * 40;
+                              }
+
+                              return (
+                                <foreignObject
+                                  key={node.id}
+                                  x={node.x - width / 2}
+                                  y={node.y - height / 2}
+                                  width={width}
+                                  height={height}
+                                >
+                                  <div
+                                    onClick={() => {
+                                      if (node.type === "subtopic") {
+                                        if (isSelected) {
+                                          setSelectedSubtopic(null);
+                                        } else {
+                                          setSelectedSubtopic({
+                                            unitIndex: node.unitIndex,
+                                            topicIndex: node.topicIndex,
+                                            name: node.name
+                                          });
+                                        }
+                                      }
+                                    }}
+                                    onMouseEnter={() => {
+                                      if (node.type === "subtopic") {
+                                        setHoveredSubtopic(node.id);
+                                      }
+                                    }}
+                                    onMouseLeave={() => {
+                                      setHoveredSubtopic(null);
+                                    }}
+                                    className={`${node.type === "subtopic" ? "mindmap-interactive-subtopic" : ""} ${animationClass}`}
+                                    style={{
+                                      animationDelay: `${delay}ms`,
+                                      width: "100%",
+                                      height: "100%",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      textAlign: "center",
+                                      padding: "4px 8px",
+                                      fontSize: node.type === "subject" ? "0.775rem" : "0.725rem",
+                                      fontWeight: node.type === "subject" ? "800" : "600",
+                                      lineHeight: "1.2",
+                                      borderRadius: "var(--radius-sm)",
+                                      cursor: node.type === "subtopic" ? "pointer" : "default",
+                                      transition: "var(--transition-smooth)",
+                                      whiteSpace: "nowrap",
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      
+                                      // Backgrounds & borders
+                                      backgroundColor: node.type === "subject" 
+                                        ? "var(--accent-primary)" 
+                                        : node.type === "unit" 
+                                          ? "var(--bg-card)" 
+                                          : isSelected 
+                                            ? "var(--color-warning-bg)" 
+                                            : "var(--bg-card)",
+                                      color: node.type === "subject" 
+                                        ? "white" 
+                                        : node.type === "unit" 
+                                          ? "var(--accent-primary)" 
+                                          : isSelected 
+                                            ? "var(--color-warning)" 
+                                            : "var(--text-primary)",
+                                      border: node.type === "subject"
+                                        ? "1px solid var(--accent-primary)"
+                                        : node.type === "unit"
+                                          ? "1.5px solid var(--accent-primary)"
+                                          : isSelected
+                                            ? "2px solid var(--color-warning)"
+                                            : "1px solid var(--border-color)",
+                                      boxShadow: isSelected
+                                        ? "0 0 10px rgba(161, 107, 21, 0.35)"
+                                        : "var(--shadow-subtle)",
+                                      userSelect: "none"
+                                    }}
+                                  >
+                                    {node.type === "unit" ? (
+                                      <div style={{ fontSize: "0.68rem" }}>
+                                        <strong>{practiceMode === "academic" ? `Unit #${node.unitIndex + 1}` : `Competency #${node.unitIndex + 1}`}</strong>
+                                        <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: `${node.width - 20}px` }}>
+                                          {node.name.replace(/^(unit|competency)\s*\d+\s*:\s*/i, "")}
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      node.name
+                                    )}
+                                  </div>
+                                </foreignObject>
+                              );
+                            })}
+                          </g>
+                        </svg>
+                      </>
+                    );
+                  })()}
+                </div>              ) : (
                 /* ACCORDION OUTLINE LIST FALLBACK */
                 <div className="preview-grid" style={{ gridTemplateColumns: "1fr", gap: "var(--space-md)", textAlign: "left", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-md)" }}>
                   {syllabusStructure && syllabusStructure.units.map((u, idx) => (
@@ -1399,7 +1708,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                 <div className="preview-item" style={{ padding: "6px" }}>
                   <span className="preview-label">Scope</span>
                   <span className="preview-value" style={{ fontSize: "0.8rem" }}>
-                    {selectedSubtopic ? "1 Concept" : (practiceMode === "academic" ? "3 Units" : "3 Competencies")}
+                    {selectedSubtopic ? "1 Concept" : (practiceMode === "academic" ? `${syllabusStructure ? syllabusStructure.units.length : 3} Units` : `${syllabusStructure ? syllabusStructure.units.length : 3} Competencies`)}
                   </span>
                 </div>
 

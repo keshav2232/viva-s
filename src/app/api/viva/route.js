@@ -103,9 +103,9 @@ export async function POST(req) {
 
     switch(action) {
       case "expand-topic":
-        return await handleExpandTopic(payload.topic, payload.mode, apiKey);
+        return await handleExpandTopic(payload.topic, payload.mode, payload.duration, apiKey);
       case "parse-syllabus":
-        return await handleParseSyllabus(payload.text, payload.mode, apiKey);
+        return await handleParseSyllabus(payload.text, payload.mode, payload.duration, apiKey);
       case "generate-question":
         return await handleGenerateQuestion(payload, apiKey);
       case "evaluate-answer":
@@ -131,12 +131,110 @@ export async function POST(req) {
 }
 
 // ==========================================
+// DYNAMIC DURATION PARAMETERS HELPERS
+// ==========================================
+function getTargetUnitsForDuration(duration) {
+  const mins = parseInt(duration, 10) || 5;
+  if (mins <= 5) return 2;   // 2 units
+  if (mins <= 10) return 3;  // 3 units
+  if (mins <= 15) return 4;  // 4 units
+  return 5;                  // 5 units (20+ mins)
+}
+
+function getOfflineHierarchy(topic, mode, duration) {
+  const isProfessional = mode === "professional";
+  const numUnits = getTargetUnitsForDuration(duration);
+  const lower = topic.toLowerCase();
+  
+  let resultTopic = topic;
+  let allUnits = [];
+  
+  if (lower.includes("software") || lower.includes("backend") || lower.includes("engineer") || lower.includes("developer")) {
+    resultTopic = "Software Engineer (Backend)";
+    allUnits = [
+      { name: "Competency 1: System Design & Architecture", topics: ["Microservices vs Monoliths", "Scalability & Load Balancing", "Database Replication & Caching", "Message Queuing & Eventual Consistency"] },
+      { name: "Competency 2: Algorithms & Concurrency", topics: ["High-Concurrency Execution", "Thread Pool Deadlocks", "Data Structures Complexity", "Asynchronous Processing Loops"] },
+      { name: "Competency 3: Databases & Integrity", topics: ["SQL Indexing Performance", "NoSQL vs Relational Storage", "Distributed Transaction Sagas", "Cache Invalidation Strategies"] },
+      { name: "Competency 4: Testing & CI/CD Pipelines", topics: ["Unit and Integration Testing", "Automated Build Workflows", "Containerization & Docker", "Blue-Green Deployments"] },
+      { name: "Competency 5: API Security & Protocols", topics: ["OAuth2 & JWT Authentication", "Rate Limiting & Throttling", "HTTPS & TLS Handshakes", "CORS & Security Headers"] }
+    ];
+  } else if (lower.includes("product manager") || lower.includes("pm")) {
+    resultTopic = "Product Manager";
+    allUnits = [
+      { name: "Competency 1: Product Strategy & Prioritization", topics: ["Feature Prioritization Frameworks", "MVP Scope Definition", "Market Opportunity Analysis", "Go-To-Market Plans"] },
+      { name: "Competency 2: Execution Analytics & Funnels", topics: ["A/B Testing Significance", "Funnel Conversion Optimization", "Onboarding Drop-off Diagnostics", "Retention Loop Design"] },
+      { name: "Competency 3: Business & Product Metrics", topics: ["Customer Acquisition Cost", "Customer Lifetime Value", "North Star Metrics", "Churn Rate Analysis"] },
+      { name: "Competency 4: User Research & Personas", topics: ["Qualitative Interview Techniques", "User Journey Mapping", "Usability Test Feedback", "Persona Segmentation Design"] },
+      { name: "Competency 5: Roadmap & Stakeholder Alignment", topics: ["Quarterly OKR Planning", "Cross-Functional Cooperation", "Feature Defending Arguments", "Product Lifecycle Management"] }
+    ];
+  } else if (lower.includes("data scientist") || lower.includes("machine learning") || lower.includes("ml")) {
+    resultTopic = "Data Scientist";
+    allUnits = [
+      { name: "Competency 1: ML Model Fundamentals", topics: ["Supervised vs Unsupervised Models", "Bias-Variance Trade-off", "Regularization L1/L2/Dropout", "Model Overfitting Diagnostics"] },
+      { name: "Competency 2: Data Engineering & Quality", topics: ["Feature Engineering Pipelines", "Imbalanced Class Strategies", "Outlier & Missing Data Handling", "Dimensionality Reduction PCA"] },
+      { name: "Competency 3: Advanced Deep Learning", topics: ["Gradient Vanishing/Explosion", "Residual Connection Functions", "Precision vs Recall Balance", "Evaluation Metrics F1-score"] },
+      { name: "Competency 4: Natural Language Processing", topics: ["Tokenization & Embeddings", "Transformer Self-Attention", "Large Language Model Tuning", "Text Classification Models"] },
+      { name: "Competency 5: Model Deployment & MLOps", topics: ["Real-time Inference APIs", "Model Drift & Monitoring", "Batch Prediction Pipelines", "A/B Testing ML Models"] }
+    ];
+  } else if (lower.includes("data") || lower.includes("structure")) {
+    resultTopic = "Data Structures";
+    allUnits = [
+      { name: "Unit 1: Linear Data Structures", topics: ["Arrays & Arraylists", "Stack LIFO limits", "Queue FIFO indices", "Linked list traversal"] },
+      { name: "Unit 2: Non-Linear Structures", topics: ["Binary Search Trees", "AVL self-balancing balance factor", "Red-black trees", "Graph representations"] },
+      { name: "Unit 3: Algorithms & Hashing", topics: ["Hash collisions buckets", "Probing techniques", "Graph BFS queues", "DFS recursive stacks"] },
+      { name: "Unit 4: Advanced Trees & Tries", topics: ["B-Trees & B+ Trees", "Trie prefix searches", "Segment tree range queries", "Heap priority queues"] },
+      { name: "Unit 5: Dynamic Programming", topics: ["Memoization vs Tabulation", "Knapsack optimization", "Longest common subsequence", "State transition matrices"] }
+    ];
+  } else if (lower.includes("machine") || lower.includes("design")) {
+    resultTopic = "Machine Design";
+    allUnits = [
+      { name: "Unit 1: Structural Static & Fatigue Loading", topics: ["Static stress limits", "Alternating stress fatigue", "Goodman line diagrams", "Soderberg yield boundaries"] },
+      { name: "Unit 2: Shafts & stress Concentrations", topics: ["Torsional stress shafts", "Stress flow singularties", "Fillet radii mitigation", "Shaft keys grooves"] },
+      { name: "Unit 3: Bearings & Gears", topics: ["Sommerfeld lubrication coefficient", "Journal bearings eccentricity", "Spur root teeth bending", "Lewis stress AGMA values"] },
+      { name: "Unit 4: Fasteners & Welded Joints", topics: ["Threaded bolt preloads", "Welded joint throat stresses", "Riveted connection shears", "Eccentric loading limits"] },
+      { name: "Unit 5: Springs & Clutches", topics: ["Helical spring deflection", "Belleville spring stacks", "Uniform wear clutch torque", "Uniform pressure brake capacity"] }
+    ];
+  } else if (lower.includes("thermodynamics") || lower.includes("thermo")) {
+    resultTopic = "Thermodynamics";
+    allUnits = [
+      { name: "Unit 1: Fundamental Laws", topics: ["Energy conservation balances", "Kelvin-Planck statements", "Clausius cyclic inequalities", "Second law limitations"] },
+      { name: "Unit 2: Ideal Cycles & Entropy", topics: ["Carnot thermal boundaries", "Reversible entropy degradation", "Lost exergy work", "Third law absolute zero"] },
+      { name: "Unit 3: Advanced Applications", topics: ["Clapeyron phase slopes", "Maxwell boundary conversions", "Open control masses", "Closed piston borders"] },
+      { name: "Unit 4: Gas Power & Refrigeration", topics: ["Otto and Diesel air standards", "Rankine steam regenerations", "Brayton gas turbine stages", "Vapor compression COP values"] },
+      { name: "Unit 5: Chemical & Phase Equilibrium", topics: ["Gibbs phase rule components", "Chemical potential gradients", "Fugacity activity coefficients", "Combustion stoichiometry balances"] }
+    ];
+  } else {
+    const formalSubject = topic.charAt(0).toUpperCase() + topic.slice(1);
+    resultTopic = formalSubject;
+    allUnits = isProfessional ? [
+      { name: "Competency 1: Foundational Principles", topics: [`Introduction to ${formalSubject}`, "Core terminology", "Basic practical settings"] },
+      { name: "Competency 2: Advanced Design Analysis", topics: ["Secondary parameters", "Detailed operational scenarios", "Engineering trade-offs"] },
+      { name: "Competency 3: Real-world Integrations", topics: ["System optimization limits", "Practical case studies", "Performance analysis"] },
+      { name: "Competency 4: Failure Modes & Debugging", topics: ["Root cause analysis", "System diagnostics", "Troubleshooting procedures"] },
+      { name: "Competency 5: Future Scalability & Architecture", topics: ["Scalability planning", "Alternative designs", "Emerging framework patterns"] }
+    ] : [
+      { name: "Unit 1: Foundational Principles", topics: [`Introduction to ${formalSubject}`, "Core terminology", "Basic boundary conditions"] },
+      { name: "Unit 2: Advanced Conceptual Analysis", topics: ["Secondary parameters", "Detailed structural models", "Analytical derivations"] },
+      { name: "Unit 3: Applied Real-world Scenarios", topics: ["System optimization limits", "Practical integration examples", "Analytical evaluations"] },
+      { name: "Unit 4: Extreme Boundary Conditions", topics: ["Failure conditions", "Stress boundary calculations", "Extreme load models"] },
+      { name: "Unit 5: Advanced Theories & Future Scope", topics: ["Alternative theories", "Emerging methodologies", "Scientific consensus limits"] }
+    ];
+  }
+
+  return {
+    topic: resultTopic,
+    units: allUnits.slice(0, numUnits)
+  };
+}
+
+// ==========================================
 // 1. EXPAND TOPIC TREE
 // ==========================================
-async function handleExpandTopic(topic, mode, apiKey) {
+async function handleExpandTopic(topic, mode, duration, apiKey) {
   const isProfessional = mode === "professional";
+  const numUnits = getTargetUnitsForDuration(duration);
   const prompt = isProfessional
-    ? `Act as an expert recruiter and corporate talent specialist. Expand the job role or domain "${topic}" into a structured competency framework with exactly 3 Competency Areas. Each Area must have a name (e.g. "Competency 1: System Design"), and exactly 3 or 4 concise core skills or subtopics.
+    ? `Act as an expert recruiter and corporate talent specialist. Expand the job role or domain "${topic}" into a structured competency framework with exactly ${numUnits} Competency Areas. Each Area must have a name (e.g. "Competency 1: System Design"), and exactly 3 or 4 concise core skills or subtopics.
   Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown blocks:
   {
     "topic": "${topic}",
@@ -144,7 +242,7 @@ async function handleExpandTopic(topic, mode, apiKey) {
       { "name": "Competency area name", "topics": ["skill 1", "skill 2", "skill 3"] }
     ]
   }`
-    : `Act as an academic curriculum specialist. Expand the topic "${topic}" into a structured syllabus with exactly 3 Units. Each Unit must have a name, and exactly 3 or 4 concise core subtopics. 
+    : `Act as an academic curriculum specialist. Expand the topic "${topic}" into a structured syllabus with exactly ${numUnits} Units. Each Unit must have a name, and exactly 3 or 4 concise core subtopics. 
   Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown blocks:
   {
     "topic": "${topic}",
@@ -160,10 +258,11 @@ async function handleExpandTopic(topic, mode, apiKey) {
 // ==========================================
 // 1.5. PARSE CUSTOM SYLLABUS TEXT WITH GEMINI
 // ==========================================
-async function handleParseSyllabus(rawText, mode, apiKey) {
+async function handleParseSyllabus(rawText, mode, duration, apiKey) {
   const isProfessional = mode === "professional";
+  const numUnits = getTargetUnitsForDuration(duration);
   const prompt = isProfessional
-    ? `Act as an expert recruiter and corporate talent specialist. Analyze the following raw job description, resume, or role requirements, and extract a structured job title and exactly 3 logical Competency Areas. Each Competency Area must have a clean name (e.g. "Competency 1: Backend Engineering"), and exactly 3 or 4 precise, highly concise subtopics/skills directly mentioned or relevant to that competency's scope in the text.
+    ? `Act as an expert recruiter and corporate talent specialist. Analyze the following raw job description, resume, or role requirements, and extract a structured job title and exactly ${numUnits} logical Competency Areas. Each Competency Area must have a clean name (e.g. "Competency 1: Backend Engineering"), and exactly 3 or 4 precise, highly concise subtopics/skills directly mentioned or relevant to that competency's scope in the text.
   
   Raw Text:
   """
@@ -177,7 +276,7 @@ async function handleParseSyllabus(rawText, mode, apiKey) {
       { "name": "Competency area name", "topics": ["skill 1", "skill 2", "skill 3"] }
     ]
   }`
-    : `Act as an academic curriculum specialist. Analyze the following raw course syllabus, lecture notes, or subject outlines, and extract a structured course topic and exactly 3 logical Units. Each Unit must have a clean name (e.g. "Unit 1: Process Scheduling"), and exactly 3 or 4 precise, highly concise technical subtopics directly mentioned or relevant to that unit's scope in the text.
+    : `Act as an academic curriculum specialist. Analyze the following raw course syllabus, lecture notes, or subject outlines, and extract a structured course topic and exactly ${numUnits} logical Units. Each Unit must have a clean name (e.g. "Unit 1: Process Scheduling"), and exactly ${numUnits} precise, highly concise technical subtopics directly mentioned or relevant to that unit's scope in the text.
   
   Raw Syllabus Text:
   """
@@ -594,83 +693,8 @@ function handleOfflineFallback(payload) {
   
   if (action === "expand-topic") {
     const topic = payload.topic || "Thermodynamics";
-    const lower = topic.toLowerCase();
-    
-    // Search pre-loaded mocks first
-    let match = null;
-    for (const key of Object.keys(MOCK_TOPIC_EXPANSIONS)) {
-      if (lower.includes(key)) {
-        match = MOCK_TOPIC_EXPANSIONS[key];
-        break;
-      }
-    }
-    
-    if (match) {
-      return NextResponse.json(match);
-    }
-
-    // Dynamic fallback generation based on standard subjects
-    if (lower.includes("software") || lower.includes("backend") || lower.includes("engineer") || lower.includes("developer")) {
-      return NextResponse.json({
-        topic: "Software Engineer (Backend)",
-        units: [
-          { name: "Competency 1: System Design & Architecture", topics: ["Microservices vs Monoliths", "Scalability & Load Balancing", "Database Replication & Caching", "Message Queuing & Eventual Consistency"] },
-          { name: "Competency 2: Algorithms & Concurrency", topics: ["High-Concurrency Execution", "Thread Pool Deadlocks", "Data Structures Complexity", "Asynchronous Processing Loops"] },
-          { name: "Competency 3: Databases & Integrity", topics: ["SQL Indexing Performance", "NoSQL vs Relational Storage", "Distributed Transaction Sagas", "Cache Invalidation Strategies"] }
-        ]
-      });
-    } else if (lower.includes("product manager") || lower.includes("pm")) {
-      return NextResponse.json({
-        topic: "Product Manager",
-        units: [
-          { name: "Competency 1: Product Strategy & Prioritization", topics: ["Feature Prioritization Frameworks", "MVP Scope Definition", "Market Opportunity Analysis", "Go-To-Market Plans"] },
-          { name: "Competency 2: Execution Analytics & Funnels", topics: ["A/B Testing Significance", "Funnel Conversion Optimization", "Onboarding Drop-off Diagnostics", "Retention Loop Design"] },
-          { name: "Competency 3: Business & Product Metrics", topics: ["Customer Acquisition Cost", "Customer Lifetime Value", "North Star Metrics", "Churn Rate Analysis"] }
-        ]
-      });
-    } else if (lower.includes("data scientist") || lower.includes("machine learning") || lower.includes("ml")) {
-      return NextResponse.json({
-        topic: "Data Scientist",
-        units: [
-          { name: "Competency 1: ML Model Fundamentals", topics: ["Supervised vs Unsupervised Models", "Bias-Variance Trade-off", "Regularization L1/L2/Dropout", "Model Overfitting Diagnostics"] },
-          { name: "Competency 2: Data Engineering & Quality", topics: ["Feature Engineering Pipelines", "Imbalanced Class Strategies", "Outlier & Missing Data Handling", "Dimensionality Reduction PCA"] },
-          { name: "Competency 3: Advanced Deep Learning", topics: ["Gradient Vanishing/Explosion", "Residual Connection Functions", "Precision vs Recall Balance", "Evaluation Metrics F1-score"] }
-        ]
-      });
-    } else if (lower.includes("data") || lower.includes("structure")) {
-      return NextResponse.json({
-        topic: "Data Structures",
-        units: [
-          { name: "Unit 1: Linear Data Structures", topics: ["Arrays & Arraylists", "Stack LIFO limits", "Queue FIFO indices", "Linked list traversal"] },
-          { name: "Unit 2: Non-Linear Structures", topics: ["Binary Search Trees", "AVL self-balancing balance factor", "Red-black trees", "Graph representations"] },
-          { name: "Unit 3: Algorithms & Hashing", topics: ["Hash collisions buckets", "Probing techniques", "Graph BFS queues", "DFS recursive stacks"] }
-        ]
-      });
-    } else if (lower.includes("machine") || lower.includes("design")) {
-      return NextResponse.json({
-        topic: "Machine Design",
-        units: [
-          { name: "Unit 1: Structural Static & Fatigue Loading", topics: ["Static stress limits", "Alternating stress fatigue", "Goodman line diagrams", "Soderberg yield boundaries"] },
-          { name: "Unit 2: Shafts & stress Concentrations", topics: ["Torsional stress shafts", "Stress flow singularties", "Fillet radii mitigation", "Shaft keys grooves"] },
-          { name: "Unit 3: Bearings & Gears", topics: ["Sommerfeld lubrication coefficient", "Journal bearings eccentricity", "Spur root teeth bending", "Lewis stress AGMA values"] }
-        ]
-      });
-    } else {
-      // General dynamic fallback tree
-      const formalSubject = topic.charAt(0).toUpperCase() + topic.slice(1);
-      return NextResponse.json({
-        topic: formalSubject,
-        units: isProfessional ? [
-          { name: "Competency 1: Foundational Principles", topics: [`Introduction to ${formalSubject}`, "Core terminology", "Basic practical settings"] },
-          { name: "Competency 2: Advanced Design Analysis", topics: ["Secondary parameters", "Detailed operational scenarios", "Engineering trade-offs"] },
-          { name: "Competency 3: Real-world Integrations", topics: ["System optimization limits", "Practical case studies", "Performance analysis"] }
-        ] : [
-          { name: "Unit 1: Foundational Principles", topics: [`Introduction to ${formalSubject}`, "Core terminology", "Basic boundary conditions"] },
-          { name: "Unit 2: Advanced Conceptual Analysis", topics: ["Secondary parameters", "Detailed structural models", "Analytical derivations"] },
-          { name: "Unit 3: Applied Real-world Scenarios", topics: ["System optimization limits", "Practical integration examples", "Analytical evaluations"] }
-        ]
-      });
-    }
+    const result = getOfflineHierarchy(topic, mode, payload.duration);
+    return NextResponse.json(result);
   }
   
   if (action === "generate-question") {
