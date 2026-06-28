@@ -30,7 +30,12 @@ export default function Home() {
 
   // App routing states
   const [activeScreen, setActiveScreen] = useState("dashboard"); // "auth-screen" | "dashboard" | "setup" | "active-viva" | "results"
-  const [isGuest, setIsGuest] = useState(false);
+  const [isGuest, setIsGuest] = useState(() => {
+    if (typeof window !== "undefined") {
+      return sessionStorage.getItem("vivasim_active_session") === "true";
+    }
+    return false;
+  });
   const [syncingGuest, setSyncingGuest] = useState(false);
   const [syncSuccessMsg, setSyncSuccessMsg] = useState("");
   const [currentMode, setCurrentMode] = useState("academic");
@@ -111,6 +116,7 @@ export default function Home() {
       setGuestUserName(guestName);
       if (typeof window !== "undefined") {
         localStorage.setItem("vivasim_user", guestName);
+        sessionStorage.setItem("vivasim_active_session", "true");
       }
       setActiveScreen("dashboard");
     } else {
@@ -130,6 +136,7 @@ export default function Home() {
       localStorage.removeItem("vivasim_stats");
       localStorage.removeItem("vivasim_mastery");
       localStorage.removeItem("vivasim_paused_session");
+      sessionStorage.removeItem("vivasim_active_session");
     }
     if (user) {
       await logout();
@@ -173,6 +180,43 @@ export default function Home() {
       setCurrentMode(activeSessions[0].mode || "academic");
     }
   }, [activeSessions]);
+
+  // Handle guest data deletion on website exit / tab close / fresh visit
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const isActiveSession = sessionStorage.getItem("vivasim_active_session") === "true";
+
+    // If this is a fresh entry (not a page refresh) and not logged in, clear guest data
+    if (!isActiveSession && !user) {
+      localStorage.removeItem("vivasim_user");
+      localStorage.removeItem("vivasim_sessions");
+      localStorage.removeItem("vivasim_stats");
+      localStorage.removeItem("vivasim_mastery");
+      localStorage.removeItem("vivasim_paused_session");
+    }
+
+    // Set the sessionStorage marker if they are already logged in as a guest
+    if (isGuest && !isActiveSession) {
+      sessionStorage.setItem("vivasim_active_session", "true");
+    }
+
+    const handleBeforeUnload = () => {
+      // Clear localStorage guest data on unload if user is not signed in
+      if (!user) {
+        localStorage.removeItem("vivasim_user");
+        localStorage.removeItem("vivasim_sessions");
+        localStorage.removeItem("vivasim_stats");
+        localStorage.removeItem("vivasim_mastery");
+        localStorage.removeItem("vivasim_paused_session");
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [user, isGuest]);
 
   const handleBeginViva = (config) => {
     setVivaConfig(config);

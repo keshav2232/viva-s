@@ -20,6 +20,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
   const [syllabusUploaded, setSyllabusUploaded] = useState(false);
   const [uploadStatus, setUploadStatus] = useState("Drag & drop syllabus PDF/TXT here or click to browse");
   const [isExtractingText, setIsExtractingText] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
   
   // Syllabus & Topic Tree structures
   const [syllabusStructure, setSyllabusStructure] = useState(null);
@@ -174,30 +175,71 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = ".pdf,.txt,.md";
+    input.multiple = true;
     input.onchange = (e) => {
       if (e.target.files.length > 0) {
-        handleFileParsing(e.target.files[0]);
+        handleFileParsing(e.target.files);
       }
     };
     input.click();
   };
 
-  const handleFileParsing = async (file) => {
+  const handleFileParsing = async (files) => {
     setIsExtractingText(true);
-    setUploadStatus(`Ingesting ${file.name}...`);
+    setUploadStatus(`Ingesting documents...`);
     
-    try {
-      const extractedText = await PDFExtractionService.extractText(file);
-      
-      setSyllabusText(extractedText);
+    const newFiles = [...uploadedFiles];
+    let errors = [];
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      // Avoid duplicates
+      if (newFiles.some(f => f.name === file.name && f.size === file.size)) {
+        continue;
+      }
+      try {
+        const extractedText = await PDFExtractionService.extractText(file);
+        newFiles.push({
+          name: file.name,
+          size: file.size,
+          text: extractedText
+        });
+      } catch (e) {
+        console.error(e);
+        errors.push(`${file.name}: ${e.message}`);
+      }
+    }
+    
+    setUploadedFiles(newFiles);
+    
+    if (newFiles.length > 0) {
       setSyllabusUploaded(true);
-      setUploadStatus(`${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB) — 100% Calibrated`);
-    } catch (e) {
-      console.error(e);
-      setUploadStatus("Error ingesting document. Click to retry.");
-      alert("Failed to parse document: " + e.message);
-    } finally {
-      setIsExtractingText(false);
+      const combinedText = newFiles.map(f => `--- ${f.name} ---\n${f.text}`).join("\n\n");
+      setSyllabusText(combinedText);
+      setUploadStatus(`${newFiles.length} file(s) uploaded successfully`);
+    } else {
+      setSyllabusUploaded(false);
+      setSyllabusText("");
+      setUploadStatus("Drag & drop syllabus PDF/TXT here or click to browse");
+    }
+    
+    if (errors.length > 0) {
+      alert("Errors occurred while parsing some files:\n" + errors.join("\n"));
+    }
+    setIsExtractingText(false);
+  };
+
+  const handleRemoveFile = (indexToRemove) => {
+    const updated = uploadedFiles.filter((_, idx) => idx !== indexToRemove);
+    setUploadedFiles(updated);
+    if (updated.length > 0) {
+      const combinedText = updated.map(f => `--- ${f.name} ---\n${f.text}`).join("\n\n");
+      setSyllabusText(combinedText);
+      setUploadStatus(`${updated.length} file(s) uploaded successfully`);
+    } else {
+      setSyllabusUploaded(false);
+      setSyllabusText("");
+      setUploadStatus("Drag & drop syllabus PDF/TXT here or click to browse");
     }
   };
 
@@ -216,7 +258,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
     e.preventDefault();
     e.currentTarget.classList.remove("dragover");
     if (e.dataTransfer.files.length > 0) {
-      handleFileParsing(e.dataTransfer.files[0]);
+      handleFileParsing(e.dataTransfer.files);
     }
   };
 
@@ -624,6 +666,32 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                     <p className="form-label" style={{ marginBottom: "2px" }}>{uploadStatus}</p>
                     <p style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Supports PDF, TXT, MD up to 10MB</p>
                   </div>
+
+                  {uploadedFiles.length > 0 && (
+                    <div className="uploaded-files-list" style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                      {uploadedFiles.map((file, index) => (
+                        <div key={index} className="uploaded-file-item" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "8px", fontSize: "0.85rem" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <svg style={{ width: "16px", height: "16px", color: "var(--accent-primary)", flexShrink: 0 }} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                            </svg>
+                            <span style={{ fontWeight: "600", color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "250px" }}>{file.name}</span>
+                            <span style={{ color: "var(--text-muted)", fontSize: "0.75rem", flexShrink: 0 }}>({(file.size / 1024 / 1024).toFixed(2)} MB)</span>
+                          </div>
+                          <button 
+                            type="button" 
+                            onClick={(e) => { e.stopPropagation(); handleRemoveFile(index); }} 
+                            style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", display: "flex", alignItems: "center", padding: "4px" }}
+                            title="Remove file"
+                          >
+                            <svg style={{ width: "16px", height: "16px" }} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="form-group">
