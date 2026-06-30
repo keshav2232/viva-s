@@ -165,6 +165,8 @@ export const SpeechManager = {
     this.onAudioCaptured = callbacks.onAudioCaptured || null;
     this.onVolumeChange = callbacks.onVolumeChange || null;
 
+    const activeAudioCallback = callbacks.onAudioCaptured || null;
+
     this.shouldBeActive = true;
     this.lastError = null;
 
@@ -225,8 +227,8 @@ export const SpeechManager = {
             
             recorder.onstop = () => {
               const blob = new Blob(this.audioChunks, { type: "audio/webm" });
-              if (this.onAudioCaptured && blob.size > 100) {
-                this.onAudioCaptured(blob);
+              if (activeAudioCallback && blob.size > 100) {
+                activeAudioCallback(blob);
               }
               
               // Cleanup stream tracks

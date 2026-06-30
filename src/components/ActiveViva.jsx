@@ -64,6 +64,19 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
   const [liveStatusText, setLiveStatusText] = useState("Calibration active. Ready.");
   const liveTrackerRef = useRef(null);
 
+  // Refs for tracking latest state values in async callbacks
+  const activeQuestionRef = useRef(activeQuestion);
+  const currentQuestionIndexRef = useRef(currentQuestionIndex);
+  const hesitationPenaltiesRef = useRef(hesitationPenalties);
+  const liveMetricsRef = useRef(liveMetrics);
+  const transcriptTextRef = useRef(transcriptText);
+
+  useEffect(() => { activeQuestionRef.current = activeQuestion; }, [activeQuestion]);
+  useEffect(() => { currentQuestionIndexRef.current = currentQuestionIndex; }, [currentQuestionIndex]);
+  useEffect(() => { hesitationPenaltiesRef.current = hesitationPenalties; }, [hesitationPenalties]);
+  useEffect(() => { liveMetricsRef.current = liveMetrics; }, [liveMetrics]);
+  useEffect(() => { transcriptTextRef.current = transcriptText; }, [transcriptText]);
+
   // Main initial hook: starts the stopwatch timer and loads synthesis
   useEffect(() => {
     // 1. VoiceManager Init
@@ -493,6 +506,13 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     setVisualState("speaking");
     startWaveAnimations();
 
+    const currentQ = activeQuestionRef.current;
+    if (!currentQ) {
+      console.warn("Hesitation triggered but activeQuestion is null, aborting.");
+      startListeningMode();
+      return;
+    }
+
     if (persona === "friendly") {
       setStatusText(`${getPersonaTitle("friendly", config.mode)} is offering a hint...`);
       
@@ -505,9 +525,9 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "generate-hint",
-            question: activeQuestion.text,
-            answer: transcriptText === "Speak now. System is listening..." ? "" : transcriptText,
-            topic: activeQuestion.topic,
+            question: currentQ.text,
+            answer: transcriptTextRef.current === "Speak now. System is listening..." ? "" : transcriptTextRef.current,
+            topic: currentQ.topic,
             mode: config.mode
           })
         });
@@ -520,7 +540,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         }
       } catch (err) {
         console.warn("Using offline fallback hint:", err);
-        const fallbackHint = getOfflineHint(activeQuestion.topic, activeQuestion.text);
+        const fallbackHint = getOfflineHint(currentQ.topic, currentQ.text);
         hintText = fallbackHint.hintText;
         hintSpeech = fallbackHint.hintSpeech;
       }
@@ -529,7 +549,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       setIsPlaceholder(false);
 
       VoiceManager.speak(hintSpeech, "friendly", 
-        null,
+          null,
         () => {
           startListeningMode();
         }
@@ -563,7 +583,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       
       setHesitationPenalties(prev => ({
         ...prev,
-        [currentQuestionIndex]: true
+        [currentQuestionIndexRef.current]: true
       }));
 
       let subQuestionText = "";
@@ -575,9 +595,9 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "generate-subquestion",
-            question: activeQuestion.text,
-            answer: transcriptText === "Speak now. System is listening..." ? "" : transcriptText,
-            topic: activeQuestion.topic,
+            question: currentQ.text,
+            answer: transcriptTextRef.current === "Speak now. System is listening..." ? "" : transcriptTextRef.current,
+            topic: currentQ.topic,
             mode: config.mode
           })
         });
@@ -590,15 +610,18 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         }
       } catch (err) {
         console.warn("Using offline subquestion fallback:", err);
-        const fallbackSub = getOfflineSubquestion(activeQuestion.topic, activeQuestion.text);
+        const fallbackSub = getOfflineSubquestion(currentQ.topic, currentQ.text);
         subQuestionText = fallbackSub.subQuestionText;
         subQuestionSpeech = fallbackSub.subQuestionSpeech;
       }
 
-      setActiveQuestion(prev => ({
-        ...prev,
-        text: `${prev.text} (Simplified: ${subQuestionText})`
-      }));
+      setActiveQuestion(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          text: `${prev.text} (Simplified: ${subQuestionText})`
+        };
+      });
       setTranscriptText(config.mode === "professional"
         ? `[Interviewer interrupted to ask a simpler sub-question. Score penalty applied.]`
         : `[Examiner interrupted to ask a simpler sub-question. Score penalty applied.]`
@@ -681,10 +704,15 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
   }
 
   async function processResponse(answerText) {
-    if (!activeQuestion) {
+    const currentQ = activeQuestionRef.current;
+    if (!currentQ) {
       console.warn("Speech input captured before activeQuestion was set, ignoring.");
       return;
     }
+    const qIdxStart = currentQuestionIndexRef.current;
+    const penalties = hesitationPenaltiesRef.current;
+    const metricsVal = liveMetricsRef.current;
+
     if (!answerText || answerText.length < 5) {
       answerText = config.mode === "professional" 
         ? "[Candidate remained silent or provided no substantive answer]" 
@@ -703,14 +731,14 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     const pauseCount = SpeechManager.gapsHistory.length;
 
     try {
-      const hasPenalty = hesitationPenalties[currentQuestionIndex] || false;
+      const hasPenalty = penalties[qIdxStart] || false;
       const resultMetrics = await AnswerEvaluationService.evaluateResponse({
-        question: activeQuestion.text,
+        question: currentQ.text,
         answer: answerText,
         syllabus: config.syllabusStructure,
         speechDurationMs: durationMs,
         pauseCount: pauseCount,
-        liveMetrics: liveMetrics,
+        liveMetrics: metricsVal,
         isHesitationPenalty: hasPenalty,
         mode: config.mode
       });
@@ -720,19 +748,19 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
 
       // Record in SessionContextManager
       SessionContextManager.recordRound({
-        questionText: activeQuestion.text,
+        questionText: currentQ.text,
         answerText: answerText,
         metrics: resultMetrics,
-        questionObj: activeQuestion
+        questionObj: currentQ
       });
 
       // Also record the topic asked for custom strengths computation
-      if (activeQuestion.topic) {
+      if (currentQ.topic) {
         if (!SessionContextManager.askedTopics) {
           SessionContextManager.askedTopics = [];
         }
         SessionContextManager.askedTopics.push({
-          topic: activeQuestion.topic,
+          topic: currentQ.topic,
           metrics: resultMetrics
         });
       }
@@ -758,7 +786,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         setLastEvalRecord(null);
 
         // Progress to next question or end
-        const qIndex = currentQuestionIndex + 1;
+        const qIndex = qIdxStart + 1;
         if (qIndex >= 4) {
           handleFinish(false);
           return;
@@ -778,7 +806,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
             askedList: SessionContextManager.askedQuestions,
             answersList: SessionContextManager.answerTranscripts,
             lastEvaluationTag: resultMetrics.tag,
-            currentTopic: activeQuestion.topic,
+            currentTopic: currentQ.topic,
             nervousness: latestNervousnessRef.current,
             isTargetDrill: config.isTargetDrill || false,
             targetSubtopic: config.targetSubtopic || null,
@@ -807,13 +835,13 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         } catch (nextErr) {
           console.error("Failed to generate next question in delayed block:", nextErr);
           // Catch and handle fallback inside delayed try
-          const qIdx = currentQuestionIndex + 1;
+          const qIdx = qIdxStart + 1;
           setCurrentQuestionIndex(qIdx);
           setVivaState("generating");
           setVisualState("analyzing");
           setStatusText(config.mode === "professional" ? "Formulating next interview question..." : "Formulating next question...");
 
-          const nextQuestion = QuestionGraphEngine.getRuleBasedOfflineFallback(qIdx + 1, config.personality, activeQuestion.topic);
+          const nextQuestion = QuestionGraphEngine.getRuleBasedOfflineFallback(qIdx + 1, config.personality, currentQ.topic);
           setActiveQuestion(nextQuestion);
           VoiceManager.preload(nextQuestion.speech, config.personality);
 
@@ -839,21 +867,21 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       console.error("Failed to process answer evaluation:", err);
       // Heuristic fallback if server error
       const localDelivery = AnswerEvaluationService.calculateLocalDeliveryMetrics(answerText, durationMs, pauseCount);
-      const hasPenalty = hesitationPenalties[currentQuestionIndex] || false;
-      const fallbackMetrics = AnswerEvaluationService.getLocalFallbackMetrics(liveMetrics || localDelivery, answerText, hasPenalty);
+      const hasPenalty = penalties[qIdxStart] || false;
+      const fallbackMetrics = AnswerEvaluationService.getLocalFallbackMetrics(metricsVal || localDelivery, answerText, hasPenalty);
       
       SessionContextManager.recordRound({
-        questionText: activeQuestion.text,
+        questionText: currentQ.text,
         answerText: answerText,
         metrics: fallbackMetrics,
-        questionObj: activeQuestion
+        questionObj: currentQ
       });
 
       if (!SessionContextManager.askedTopics) {
         SessionContextManager.askedTopics = [];
       }
       SessionContextManager.askedTopics.push({
-        topic: activeQuestion.topic || (config.mode === "professional" ? "Role Core Competence" : "Syllabus Fundamentals"),
+        topic: currentQ.topic || (config.mode === "professional" ? "Role Core Competence" : "Syllabus Fundamentals"),
         metrics: fallbackMetrics
       });
 
@@ -877,7 +905,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         // Clear evaluation reaction so face resets
         setLastEvalRecord(null);
 
-        const qIndex = currentQuestionIndex + 1;
+        const qIndex = qIdxStart + 1;
         if (qIndex >= 4) {
           handleFinish(false);
           return;
@@ -889,7 +917,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         setVisualState("analyzing");
         setStatusText(config.mode === "professional" ? "Formulating next interview question..." : "Formulating next question...");
 
-        const nextQuestion = QuestionGraphEngine.getRuleBasedOfflineFallback(qIndex + 1, config.personality, activeQuestion.topic);
+        const nextQuestion = QuestionGraphEngine.getRuleBasedOfflineFallback(qIndex + 1, config.personality, currentQ.topic);
         setActiveQuestion(nextQuestion);
         // Preload next question speech!
         VoiceManager.preload(nextQuestion.speech, config.personality);

@@ -26,6 +26,27 @@ export const VoiceManager = {
     window.speechSynthesis.onvoiceschanged = () => {
       this.loadVoices();
     };
+
+    // Unlock Web Speech API and HTML5 Audio on the first user interaction
+    const unlockAudioAndTTS = () => {
+      try {
+        // Play silent audio to unlock HTML5 Audio
+        const audio = new Audio();
+        audio.play().catch(() => {});
+
+        // Speak a silent utterance to unlock Web Speech Synthesis
+        const silentUtterance = new SpeechSynthesisUtterance("");
+        window.speechSynthesis.speak(silentUtterance);
+      } catch (e) {
+        console.warn("Failed to pre-unlock audio/TTS context:", e);
+      }
+
+      document.removeEventListener("click", unlockAudioAndTTS);
+      document.removeEventListener("keydown", unlockAudioAndTTS);
+    };
+
+    document.addEventListener("click", unlockAudioAndTTS);
+    document.addEventListener("keydown", unlockAudioAndTTS);
   },
 
   /**
@@ -265,7 +286,7 @@ export const VoiceManager = {
 
       this.activeUtterance.onend = handleEnd;
       this.activeUtterance.onerror = (event) => {
-        console.error("Speech Synthesis Error:", event);
+        console.error("Speech Synthesis Error:", event.error || event);
         handleEnd(event);
       };
 
