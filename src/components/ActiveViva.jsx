@@ -1283,77 +1283,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
             )}
           </div>
 
-          {/* Biometric live prosody synchronizer */}
-          {vivaState === "listening" && (
-            <div className="biometric-sync-panel">
-              <div className="biometric-header">
-                <span className="biometric-pulse"></span>
-                <span>{config.mode === "professional" ? "Candidate Biometric Sync" : "Student Biometric Sync"}</span>
-              </div>
-              <div className="biometric-grid">
-                
-                {/* Confidence */}
-                <div className="biometric-metric-row">
-                  <div className="biometric-label-container">
-                    <span className="biometric-label">Vocal Confidence</span>
-                    <span className="biometric-value">{liveMetrics.confidence}%</span>
-                  </div>
-                  <div className="biometric-progress-container">
-                    <div 
-                      className={`biometric-progress-bar biometric-bar-confidence ${liveMetrics.confidence >= 80 ? 'high' : ''}`}
-                      style={{ width: `${liveMetrics.confidence}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Nervousness */}
-                <div className="biometric-metric-row">
-                  <div className="biometric-label-container">
-                    <span className="biometric-label">Nervousness Index</span>
-                    <span className="biometric-value">{liveMetrics.nervousness}%</span>
-                  </div>
-                  <div className="biometric-progress-container">
-                    <div 
-                      className={`biometric-progress-bar biometric-bar-nervousness ${liveMetrics.nervousness >= 50 ? 'high' : ''}`}
-                      style={{ width: `${liveMetrics.nervousness}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Clarity */}
-                <div className="biometric-metric-row">
-                  <div className="biometric-label-container">
-                    <span className="biometric-label">Phonetic Clarity</span>
-                    <span className="biometric-value">{liveMetrics.clarity}%</span>
-                  </div>
-                  <div className="biometric-progress-container">
-                    <div 
-                      className="biometric-progress-bar biometric-bar-clarity"
-                      style={{ width: `${liveMetrics.clarity}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Hesitation */}
-                <div className="biometric-metric-row">
-                  <div className="biometric-label-container">
-                    <span className="biometric-label">Hesitation Rate</span>
-                    <span className="biometric-value">{liveMetrics.hesitation}%</span>
-                  </div>
-                  <div className="biometric-progress-container">
-                    <div 
-                      className="biometric-progress-bar biometric-bar-hesitation"
-                      style={{ width: `${liveMetrics.hesitation}%` }}
-                    />
-                  </div>
-                </div>
-
-              </div>
-              <div className={`biometric-status-chip ${liveMetrics.nervousness >= 45 ? 'alert' : liveMetrics.confidence >= 80 ? 'stable' : ''}`}>
-                {liveStatusText}
-              </div>
-            </div>
-          )}
+          {/* Live biometric tracking calculations run in background for final results page and avatar rendering */}
 
           <div className="transcript-stage-card">
             <span className="transcript-label" id="transcript-speaker-label">
