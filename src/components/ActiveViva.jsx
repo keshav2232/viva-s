@@ -255,7 +255,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
 
     SpeechManager.start({
       onResult: (interim, final) => {
-        const text = (interim || "" + final || "").trim();
+        const text = (final + (interim ? " " + interim : "")).trim();
         // If student spoke more than a few words while examiner was actively speaking
         if (text.length > 8 && VoiceManager.isSpeaking() && !interruptedRef.current) {
           interruptedRef.current = true;

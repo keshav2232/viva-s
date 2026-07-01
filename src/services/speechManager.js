@@ -32,6 +32,7 @@ export const SpeechManager = {
   lastError: null,
   isHotRestarting: false,
   shouldBeActive: false,
+  pendingCallbacks: null,
 
   /**
    * Initializes the browser Speech Recognition Engine. Safe for SSR.
@@ -109,6 +110,18 @@ export const SpeechManager = {
         this.isActive = false;
         this.clearSilenceTimer();
         
+        if (this.pendingCallbacks) {
+          console.log("SpeechManager: Previous session stopped. Starting queued fresh session...");
+          const callbacks = this.pendingCallbacks;
+          this.pendingCallbacks = null;
+          this.interimTranscript = "";
+          this.finalTranscript = "";
+          this.gapsHistory = [];
+          this.isHotRestarting = false;
+          this.start(callbacks);
+          return;
+        }
+        
         // Auto-restart if premature browser termination occurred (exclude fatal permission blocks)
         const isFatalError = ["not-allowed", "service-not-allowed", "language-not-supported"].includes(this.lastError);
         if (this.shouldBeActive && !isFatalError) {
@@ -151,11 +164,32 @@ export const SpeechManager = {
       return;
     }
 
+    if (this.isActive) {
+      console.log("SpeechManager: start() called while active. Queueing start after stopping current session...");
+      this.pendingCallbacks = callbacks;
+      this.shouldBeActive = false;
+      if (this.recognition) {
+        try {
+          this.recognition.stop();
+        } catch (e) {
+          console.warn("SpeechManager: Error stopping during restart:", e);
+        }
+      }
+      return;
+    }
+
     if (!this.recognition && !this.init()) {
       if (callbacks.onError) {
         callbacks.onError("not-supported");
       }
       return;
+    }
+
+    // Reset transcripts and states on a fresh start
+    if (!this.isHotRestarting) {
+      this.interimTranscript = "";
+      this.finalTranscript = "";
+      this.gapsHistory = [];
     }
 
     this.onResult = callbacks.onResult || null;
