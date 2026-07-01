@@ -4577,7 +4577,18 @@ main, header, footer {
   }
 
   .viva-header-bar {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 8px !important;
+    width: 100% !important;
     padding: 0 var(--space-xs) !important;
+  }
+
+  .viva-timer-box {
+    align-self: center !important;
+    margin-top: 0 !important;
   }
 
   .examiner-stage {
@@ -4598,8 +4609,36 @@ main, header, footer {
   }
 
   .biometric-grid {
-    grid-template-columns: 1fr !important;
-    gap: 6px !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: var(--space-sm) var(--space-md) !important;
+  }
+
+  /* Brand logo navbar transformation for login page on mobile */
+  .auth-sidebar {
+    padding: 16px var(--space-md) !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-bottom: 1px solid var(--border-color) !important;
+    background-color: #e6dfca !important;
+    width: 100% !important;
+    min-height: auto !important;
+  }
+  .sidebar-tagline-container,
+  .sidebar-divider,
+  .sidebar-desc,
+  .sidebar-quote-container,
+  .sidebar-image-container-sketch {
+    display: none !important;
+  }
+  .sidebar-logo {
+    margin: 0 auto !important;
+  }
+  .auth-card-custom {
+    padding: 24px 20px !important;
+    border-radius: 12px !important;
+  }
+  .auth-form-viewport {
+    padding: 32px 16px !important;
   }
 
   .biometric-metric-row {
@@ -4703,7 +4742,24 @@ main, header, footer {
 
 @media (max-width: 480px) {
   .stats-grid {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: var(--space-xs) !important;
+  }
+
+  .stat-card {
+    padding: 10px !important;
+  }
+
+  .stat-value {
+    font-size: 1.15rem !important;
+  }
+
+  .stat-label {
+    font-size: 0.72rem !important;
+  }
+
+  .stat-sub {
+    font-size: 0.65rem !important;
   }
 
   .session-card {
@@ -4746,14 +4802,16 @@ main, header, footer {
   }
 
   .viva-header-bar {
-    flex-direction: column !important;
-    align-items: flex-start !important;
-    gap: 4px !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    width: 100% !important;
+    gap: 6px !important;
   }
 
   .viva-timer-box {
-    align-self: flex-end !important;
-    margin-top: -24px !important;
+    align-self: center !important;
+    margin-top: 0 !important;
   }
 
   .transcript-stage-card {
@@ -5375,6 +5433,447 @@ main, header, footer {
   background-size: 12px 12px;
   z-index: 1;
   pointer-events: none;
+}
+
+/* ==========================================
+   Responsive scorecard and revision elements
+   ========================================== */
+.scorecard-details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.suggested-revision-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px var(--space-md);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-primary);
+  gap: 12px;
+}
+
+@media (max-width: 550px) {
+  .scorecard-details-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .suggested-revision-row {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 6px !important;
+  }
+  .suggested-revision-row span:last-child {
+    align-self: flex-end !important;
+  }
+}
+
+/* ==========================================
+   Premium Horizontal Swipeable Carousels on Mobile
+   ========================================== */
+@media (max-width: 640px) {
+  .timeline-cards-row {
+    display: flex !important;
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    scroll-snap-type: x mandatory !important;
+    gap: 16px !important;
+    padding: 8px 4px 16px 4px !important;
+    margin: 0 -16px !important;
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+    scrollbar-width: none !important;
+  }
+  .timeline-cards-row::-webkit-scrollbar {
+    display: none !important;
+  }
+  .timeline-faculty-card {
+    min-width: 280px !important;
+    max-width: 280px !important;
+    flex: 0 0 280px !important;
+    scroll-snap-align: center !important;
+    margin: 0 !important;
+  }
+
+  .pipeline-steps {
+    display: flex !important;
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    scroll-snap-type: x mandatory !important;
+    gap: 16px !important;
+    padding: 8px 4px 16px 4px !important;
+    margin: 0 -16px !important;
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+    scrollbar-width: none !important;
+  }
+  .pipeline-steps::-webkit-scrollbar {
+    display: none !important;
+  }
+  .pipeline-step-card {
+    min-width: 260px !important;
+    max-width: 260px !important;
+    flex: 0 0 260px !important;
+    scroll-snap-align: center !important;
+    margin: 0 !important;
+  }
+}
+
+/* ==========================================================================
+   Mobile-Only Custom UI Adjustments (Header Icons, 2x2 Grid, Upload Layout)
+   ========================================================================== */
+
+/* 1. Mobile-only profile name hiding and icon-only logout */
+@media (max-width: 580px) {
+  #user-display-name {
+    display: none !important;
+  }
+  
+  .user-profile {
+    background: none !important;
+    border: none !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+  }
+  
+  #btn-logout {
+    border-radius: 50% !important;
+    width: 38px !important;
+    height: 38px !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+  
+  .logout-btn-text {
+    display: none !important;
+  }
+  
+  .logout-btn-icon {
+    display: block !important;
+  }
+
+  /* 2. Mobile-only 2x2 Square Grid for Personality/Professor selection cards */
+  .personality-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px !important;
+  }
+
+  .personality-card {
+    padding: 14px 10px !important;
+    min-height: 105px !important;
+    border-radius: 16px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    text-align: center !important;
+    gap: 6px !important;
+    border: 1.5px solid rgba(0, 0, 0, 0.05) !important;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.02) !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    background: rgba(255, 255, 255, 0.4) !important;
+    backdrop-filter: blur(8px) !important;
+  }
+
+  /* Specific color themes for unselected state */
+  .card-personality-friendly {
+    background: linear-gradient(135deg, hsla(145, 60%, 99%, 0.45) 0%, hsla(145, 45%, 96%, 0.6) 100%) !important;
+    border: 1.5px solid hsla(145, 40%, 90%, 0.8) !important;
+    backdrop-filter: blur(8px) !important;
+  }
+  .card-personality-friendly .personality-name {
+    color: hsl(145, 80%, 25%) !important;
+  }
+  .card-personality-friendly .personality-name svg {
+    color: hsl(145, 65%, 45%) !important;
+  }
+
+  .card-personality-strict {
+    background: linear-gradient(135deg, hsla(215, 70%, 99%, 0.45) 0%, hsla(215, 55%, 96%, 0.6) 100%) !important;
+    border: 1.5px solid hsla(215, 50%, 90%, 0.8) !important;
+    backdrop-filter: blur(8px) !important;
+  }
+  .card-personality-strict .personality-name {
+    color: hsl(215, 80%, 25%) !important;
+  }
+  .card-personality-strict .personality-name svg {
+    color: hsl(215, 75%, 50%) !important;
+  }
+
+  .card-personality-brutal {
+    background: linear-gradient(135deg, hsla(38, 80%, 99%, 0.45) 0%, hsla(38, 65%, 95%, 0.6) 100%) !important;
+    border: 1.5px solid hsla(38, 60%, 88%, 0.8) !important;
+    backdrop-filter: blur(8px) !important;
+  }
+  .card-personality-brutal .personality-name {
+    color: hsl(38, 85%, 28%) !important;
+  }
+  .card-personality-brutal .personality-name svg {
+    color: hsl(38, 80%, 46%) !important;
+  }
+
+  .card-personality-terror {
+    background: linear-gradient(135deg, hsla(355, 70%, 99%, 0.45) 0%, hsla(355, 55%, 96%, 0.6) 100%) !important;
+    border: 1.5px solid hsla(355, 50%, 90%, 0.8) !important;
+    backdrop-filter: blur(8px) !important;
+  }
+  .card-personality-terror .personality-name {
+    color: hsl(355, 80%, 30%) !important;
+  }
+  .card-personality-terror .personality-name svg {
+    color: hsl(355, 70%, 50%) !important;
+  }
+
+  /* Selected States with translucent glassmorphic backgrounds and pop scale animations */
+  .card-personality-friendly.selected {
+    background: linear-gradient(135deg, hsla(145, 65%, 42%, 0.15) 0%, hsla(145, 70%, 36%, 0.25) 100%) !important;
+    border: 2px solid hsl(145, 65%, 45%) !important;
+    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.15) !important;
+    transform: scale(1.04) !important;
+    backdrop-filter: blur(12px) !important;
+  }
+  .card-personality-friendly.selected .personality-name {
+    color: hsl(145, 80%, 25%) !important;
+  }
+  .card-personality-friendly.selected .personality-name svg {
+    color: hsl(145, 65%, 45%) !important;
+  }
+
+  .card-personality-strict.selected {
+    background: linear-gradient(135deg, hsla(217, 85%, 52%, 0.15) 0%, hsla(217, 85%, 45%, 0.25) 100%) !important;
+    border: 2px solid hsl(217, 85%, 52%) !important;
+    box-shadow: 0 6px 16px rgba(59, 130, 246, 0.15) !important;
+    transform: scale(1.04) !important;
+    backdrop-filter: blur(12px) !important;
+  }
+  .card-personality-strict.selected .personality-name {
+    color: hsl(217, 80%, 30%) !important;
+  }
+  .card-personality-strict.selected .personality-name svg {
+    color: hsl(217, 85%, 52%) !important;
+  }
+
+  .card-personality-brutal.selected {
+    background: linear-gradient(135deg, hsla(38, 92%, 50%, 0.15) 0%, hsla(38, 95%, 43%, 0.25) 100%) !important;
+    border: 2px solid hsl(38, 92%, 50%) !important;
+    box-shadow: 0 6px 16px rgba(245, 158, 11, 0.15) !important;
+    transform: scale(1.04) !important;
+    backdrop-filter: blur(12px) !important;
+  }
+  .card-personality-brutal.selected .personality-name {
+    color: hsl(38, 85%, 28%) !important;
+  }
+  .card-personality-brutal.selected .personality-name svg {
+    color: hsl(38, 92%, 50%) !important;
+  }
+
+  .card-personality-terror.selected {
+    background: linear-gradient(135deg, hsla(350, 84%, 48%, 0.15) 0%, hsla(350, 85%, 40%, 0.25) 100%) !important;
+    border: 2px solid hsl(350, 84%, 48%) !important;
+    box-shadow: 0 6px 16px rgba(239, 68, 68, 0.15) !important;
+    transform: scale(1.04) !important;
+    backdrop-filter: blur(12px) !important;
+  }
+  .card-personality-terror.selected .personality-name {
+    color: hsl(350, 80%, 30%) !important;
+  }
+  .card-personality-terror.selected .personality-name svg {
+    color: hsl(350, 84%, 48%) !important;
+  }
+
+  .personality-card .personality-name {
+    font-size: 0.85rem !important;
+    font-weight: 850 !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    align-items: center !important;
+    text-align: center !important;
+    width: 100% !important;
+    justify-content: center !important;
+    line-height: 1.25 !important;
+  }
+
+  .personality-card .personality-name svg {
+    width: 28px !important;
+    height: 28px !important;
+    transition: color 0.2s ease !important;
+  }
+
+  /* Hide description and attributes in grid */
+  .personality-card .personality-desc,
+  .personality-card .personality-attributes {
+    display: none !important;
+  }
+
+  /* Mobile-only info (i) button style - sleek floating icon */
+  .info-btn-mobile {
+    display: flex !important;
+    position: absolute !important;
+    top: 8px !important;
+    right: 8px !important;
+    width: 22px !important;
+    height: 22px !important;
+    border: none !important;
+    background: rgba(15, 23, 42, 0.04) !important;
+    border-radius: 50% !important;
+    color: var(--text-muted) !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    padding: 0 !important;
+    z-index: 5 !important;
+    transition: all 0.2s ease !important;
+  }
+
+  .personality-card.selected .info-btn-mobile {
+    background: rgba(255, 255, 255, 0.15) !important;
+    color: rgba(255, 255, 255, 0.85) !important;
+  }
+
+  .info-btn-mobile svg {
+    width: 12px !important;
+    height: 12px !important;
+  }
+
+  .personality-details-overlay {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: rgba(15, 23, 42, 0.76) !important;
+    backdrop-filter: blur(8px) !important;
+    border-radius: inherit !important;
+    padding: 12px 8px !important;
+    font-size: 0.74rem !important;
+    line-height: 1.35 !important;
+    color: #ffffff !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    z-index: 10 !important;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15) !important;
+    animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    box-sizing: border-box !important;
+    text-align: center !important;
+  }
+
+  .personality-details-overlay p {
+    color: rgba(255, 255, 255, 0.9) !important;
+    font-weight: 500 !important;
+  }
+}
+
+/* Fallback hiding of mobile info details overlay and info button on desktop/laptop */
+.info-btn-mobile {
+  display: none;
+}
+.personality-details-overlay {
+  display: none;
+}
+
+/* 3. Mobile-only Side-by-Side Upload Syllabus and Topic-Based cards */
+@media (max-width: 768px) {
+  .source-selection-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: var(--space-sm) !important;
+  }
+  
+  .source-card {
+    padding: var(--space-md) var(--space-sm) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    justify-content: flex-start !important;
+  }
+
+  .source-card h3 {
+    font-size: 0.88rem !important;
+    margin: 0 !important;
+  }
+
+  .source-card p {
+    font-size: 0.72rem !important;
+    line-height: 1.35 !important;
+    margin-top: 4px !important;
+    display: block !important;
+  }
+
+  .source-card-header {
+    gap: 6px !important;
+  }
+
+  .source-card-header svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+}
+
+/* ==========================================================
+   Responsive Scorecard and Evaluation Elements (Results.jsx)
+   ========================================================== */
+
+/* Default layout for desktop/laptop UI (Exactly 1.1fr 1fr and flex-row) */
+.results-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: var(--space-lg);
+  margin-top: var(--space-md);
+}
+
+.scorecard-radial-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+}
+
+.lexical-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-xs);
+  margin-top: var(--space-md);
+  border-top: 1px solid var(--border-color);
+  padding-top: var(--space-sm);
+}
+
+.fluency-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+/* Mobile-only collapsing and stacking */
+@media (max-width: 900px) {
+  .results-grid {
+    grid-template-columns: 1fr !important;
+    gap: var(--space-md) !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .scorecard-radial-row {
+    flex-direction: column !important;
+    text-align: center !important;
+    align-items: center !important;
+    gap: var(--space-md) !important;
+  }
+
+  .fluency-header-row {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+
+  .lexical-stats-grid {
+    grid-template-columns: 1fr !important;
+    gap: 6px !important;
+  }
 }
 
 

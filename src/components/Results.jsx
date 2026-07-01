@@ -732,7 +732,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
         
         {/* ROW 1: Letter Grade and Speedometer Gauge */}
         <div className="card" style={{ padding: "var(--space-lg)", textAlign: "left" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-md)" }}>
+          <div className="fluency-header-row">
             <div>
               <h3 style={{ fontSize: "1.05rem", fontWeight: "700", margin: 0 }}>Vocal Speedometer & Grade</h3>
               <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", margin: "2px 0 0 0" }}>Analysis of verbal velocity and structural clarity.</p>
@@ -1020,7 +1020,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
           </div>
         </div>
 
-        <div className="results-grid" style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: "var(--space-lg)", marginTop: "var(--space-md)" }}>
+        <div className="results-grid">
           
           {/* LEFT PANEL: Academic Scorecard, Emotion Sliders, Bluffing */}
           <div className="performance-left-panel" style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
@@ -1031,7 +1031,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                 Scorecard Breakdown
               </h3>
               
-              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-lg)" }}>
+              <div className="scorecard-radial-row">
                 {/* Radial Score Circle */}
                 <div className="radial-svg-wrapper" style={{ width: "110px", height: "110px", flexShrink: 0 }}>
                   <svg viewBox="0 0 120 120" style={{ width: "100%", height: "100%" }}>
@@ -1065,7 +1065,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
               </div>
 
               {/* Six detailed score fields */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-sm)", marginTop: "var(--space-lg)", borderTop: "1px solid var(--border-color)", paddingTop: "var(--space-md)" }}>
+              <div className="scorecard-details-grid" style={{ gap: "var(--space-sm)", marginTop: "var(--space-lg)", borderTop: "1px solid var(--border-color)", paddingTop: "var(--space-md)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
                   <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Technical/Domain Competence" : "Subject Understanding"}</span>
                   <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{subjectUnderstanding}%</strong>
@@ -1188,7 +1188,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
                 {getSuggestedRevisionPills().map((rev, idx) => (
-                  <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px var(--space-md)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
+                  <div key={idx} className="suggested-revision-row">
                     <span style={{ fontSize: "0.85rem", fontWeight: "600", color: "var(--accent-primary)" }}>
                       {idx + 1}. {rev.topic}
                     </span>
@@ -1250,7 +1250,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                 {maturityDesc}
               </p>
               
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-xs)", marginTop: "var(--space-md)", borderTop: "1px solid var(--border-color)", paddingTop: "var(--space-sm)" }}>
+              <div className="lexical-stats-grid">
                 <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
                   Unique Words: <strong style={{ color: "var(--text-primary)" }}>{uniqueWordsCount}</strong>
                 </div>
