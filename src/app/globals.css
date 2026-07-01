@@ -4241,7 +4241,7 @@ svg path[stroke="var(--color-warning)"] {
   }
   
   .story-section {
-    padding: 100px 24px 60px 24px;
+    padding: 120px 24px 60px 24px !important;
     min-height: auto;
   }
   
@@ -4274,19 +4274,56 @@ svg path[stroke="var(--color-warning)"] {
 
 @media (max-width: 640px) {
   .landing-header {
-    flex-direction: column;
-    gap: 16px;
-    padding: 16px 20px;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 8px !important;
+    padding: 12px 8px !important;
   }
   
   .landing-nav {
-    gap: 16px;
-    flex-wrap: wrap;
-    justify-content: center;
+    display: none !important;
+  }
+
+  .logo-brand-subtitle {
+    display: none !important;
+  }
+
+  .btn-landing-cta {
+    padding: 8px 14px !important;
+    font-size: 0.8rem !important;
+    margin: 0 !important;
   }
   
   .hero-heading {
-    font-size: 2rem;
+    font-size: 1.8rem !important;
+    line-height: 1.3 !important;
+  }
+
+  .story-section {
+    padding: 110px 20px 40px 20px !important;
+  }
+
+  .hero-action-buttons {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+
+  .btn-hero-primary, .btn-hero-secondary {
+    flex: 1 !important;
+    padding: 8px 10px !important;
+    font-size: 0.78rem !important;
+    min-height: 44px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+    white-space: normal !important;
+    line-height: 1.25 !important;
   }
   
   .timeline-cards-row {
@@ -4615,9 +4652,10 @@ main, header, footer {
 
   /* Brand logo navbar transformation for login page on mobile */
   .auth-sidebar {
-    padding: 16px var(--space-md) !important;
+    padding: 12px 16px !important;
+    flex-direction: row !important;
     align-items: center !important;
-    justify-content: center !important;
+    justify-content: flex-start !important;
     border-bottom: 1px solid var(--border-color) !important;
     background-color: #e6dfca !important;
     width: 100% !important;
@@ -4631,14 +4669,36 @@ main, header, footer {
     display: none !important;
   }
   .sidebar-logo {
-    margin: 0 auto !important;
+    margin: 0 !important;
+  }
+  .logo-brand-subtitle {
+    display: none !important;
   }
   .auth-card-custom {
     padding: 24px 20px !important;
     border-radius: 12px !important;
   }
   .auth-form-viewport {
-    padding: 32px 16px !important;
+    padding: 24px 16px !important;
+  }
+  .auth-top-nav {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    flex-wrap: nowrap !important;
+    gap: 8px !important;
+    margin-bottom: 16px !important;
+  }
+  .landing-back-link {
+    font-size: 0.8rem !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+  }
+  .auth-nav-toggle {
+    font-size: 0.78rem !important;
+    text-align: right !important;
+    flex-shrink: 1 !important;
   }
 
   .biometric-metric-row {
@@ -5469,53 +5529,103 @@ main, header, footer {
 }
 
 /* ==========================================
-   Premium Horizontal Swipeable Carousels on Mobile
+   Sections 3 & 4: Box Grid Layout on Mobile (replaces carousel)
    ========================================== */
 @media (max-width: 640px) {
+  /* Section 3: Evaluation Panel - 2x2 grid */
   .timeline-cards-row {
-    display: flex !important;
-    flex-direction: row !important;
-    overflow-x: auto !important;
-    scroll-snap-type: x mandatory !important;
-    gap: 16px !important;
-    padding: 8px 4px 16px 4px !important;
-    margin: 0 -16px !important;
-    padding-left: 20px !important;
-    padding-right: 20px !important;
-    scrollbar-width: none !important;
-  }
-  .timeline-cards-row::-webkit-scrollbar {
-    display: none !important;
-  }
-  .timeline-faculty-card {
-    min-width: 280px !important;
-    max-width: 280px !important;
-    flex: 0 0 280px !important;
-    scroll-snap-align: center !important;
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px !important;
+    overflow-x: unset !important;
+    overflow: visible !important;
+    flex-direction: unset !important;
+    padding: 0 !important;
     margin: 0 !important;
+    scroll-snap-type: unset !important;
   }
 
-  .pipeline-steps {
-    display: flex !important;
-    flex-direction: row !important;
-    overflow-x: auto !important;
-    scroll-snap-type: x mandatory !important;
-    gap: 16px !important;
-    padding: 8px 4px 16px 4px !important;
-    margin: 0 -16px !important;
-    padding-left: 20px !important;
-    padding-right: 20px !important;
-    scrollbar-width: none !important;
+  .timeline-faculty-card {
+    min-width: unset !important;
+    max-width: unset !important;
+    width: 100% !important;
+    flex: unset !important;
+    scroll-snap-align: unset !important;
+    padding: 14px !important;
+    border-radius: 10px !important;
   }
-  .pipeline-steps::-webkit-scrollbar {
+
+  .faculty-card-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 6px !important;
+  }
+
+  .faculty-card-name {
+    font-size: 0.8rem !important;
+  }
+
+  .faculty-card-role {
+    font-size: 0.68rem !important;
+  }
+
+  .faculty-card-desc {
+    font-size: 0.72rem !important;
+    line-height: 1.4 !important;
+    display: -webkit-box !important;
+    -webkit-line-clamp: 3 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+  }
+
+  .faculty-card-quote-box {
     display: none !important;
   }
-  .pipeline-step-card {
-    min-width: 260px !important;
-    max-width: 260px !important;
-    flex: 0 0 260px !important;
-    scroll-snap-align: center !important;
+
+  /* Hide the spectrum bar since it doesn't make sense in grid layout */
+  .timeline-spectrum-bar {
+    display: none !important;
+  }
+
+  /* Section 4: Technology - 2x2 grid (only 3 cards, so 2+1 layout) */
+  .pipeline-steps {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px !important;
+    overflow-x: unset !important;
+    overflow: visible !important;
+    flex-direction: unset !important;
+    padding: 0 !important;
     margin: 0 !important;
+    scroll-snap-type: unset !important;
+  }
+
+  /* Last pipeline card spans full width if there's an odd number */
+  .pipeline-step-card:last-child:nth-child(odd) {
+    grid-column: 1 / -1 !important;
+  }
+
+  .pipeline-step-card {
+    min-width: unset !important;
+    max-width: unset !important;
+    width: 100% !important;
+    flex: unset !important;
+    scroll-snap-align: unset !important;
+    padding: 20px 14px !important;
+    border-radius: 10px !important;
+  }
+
+  .methodology-card-title {
+    font-size: 0.82rem !important;
+  }
+
+  .methodology-card-desc {
+    font-size: 0.72rem !important;
+    line-height: 1.4 !important;
+  }
+
+  .pipeline-connector-line {
+    display: none !important;
   }
 }
 
@@ -5873,6 +5983,22 @@ main, header, footer {
   .lexical-stats-grid {
     grid-template-columns: 1fr !important;
     gap: 6px !important;
+  }
+}
+
+/* Force mobile landing header elements to the absolute left and right edges */
+@media (max-width: 640px) {
+  .landing-header {
+    padding: 12px 16px !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 8px !important;
+    display: flex !important;
+    width: 100% !important;
+    left: 0 !important;
+    right: 0 !important;
+    box-sizing: border-box !important;
   }
 }
 
