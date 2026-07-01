@@ -1136,9 +1136,19 @@ async function handleSynthesizeSpeech(text, personality) {
     };
 
     const voiceId = voiceMap[personality] || voiceMap.friendly;
-    // Lower stability for brutal/terror injects high expression, breathing and unpredictability
-    const stability = (personality === "brutal" || personality === "terror") ? 0.38 : 0.65;
-    const similarity = 0.75;
+    
+    // Configure settings dynamically per personality to fine-tune emotional expression
+    let stability = 0.65;
+    let similarity = 0.75;
+    let style = 0.0;
+    
+    if (personality === "brutal") {
+      stability = 0.38;
+      style = 0.10;
+    } else if (personality === "terror") {
+      stability = 0.22; // lower stability = highly expressive, intense, breathy and dramatic
+      style = 0.25;     // style boost = exaggerates personality/emotions
+    }
 
     const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
     
@@ -1147,7 +1157,9 @@ async function handleSynthesizeSpeech(text, personality) {
       model_id: "eleven_flash_v2_5",
       voice_settings: {
         stability: stability,
-        similarity_boost: similarity
+        similarity_boost: similarity,
+        style: style,
+        use_speaker_boost: true
       }
     };
 

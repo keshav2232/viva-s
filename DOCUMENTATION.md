@@ -948,7 +948,8 @@ Defined in `src/utils/mockData.js`:
 | **Prompt tone** | Warm, supportive, hints | Formal, precise, no hints | Skeptical, challenging | Rapid-fire, logic traps |
 | **Nervousness handling** | Reduces difficulty | Slightly reduces intensity | Increases pressure | Completely unpredictable |
 | **Interruption** | Does not interrupt | Interrupts | Interrupts aggressively | Harsh rebuke |
-| **ElevenLabs stability** | 0.65 | 0.65 | 0.38 | 0.38 |
+| **ElevenLabs stability** | 0.65 | 0.65 | 0.38 | 0.22 (dynamic, intense) |
+| **ElevenLabs style** | 0.00 | 0.00 | 0.10 | 0.25 (exaggerated emotion) |
 | **Web Speech rate** | 0.98 | 0.90 | 1.05 | 0.88 |
 | **Web Speech pitch** | 1.05 | 0.90 | 0.95 | 0.80 |
 
