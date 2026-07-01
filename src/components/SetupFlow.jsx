@@ -34,6 +34,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
   // Personality
   const [personality, setPersonality] = useState("friendly");
   const [isPlayingSample, setIsPlayingSample] = useState(false);
+  const [showDetailsKey, setShowDetailsKey] = useState(null);
 
   // Hackathon differentiator toggles
   const [isLastMinute, setIsLastMinute] = useState(false);
@@ -1108,14 +1109,30 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                   );
                   return (
                     <div 
-                      className={`card personality-card ${personality === key ? "selected" : ""}`} 
+                      className={`card personality-card card-personality-${key} ${personality === key ? "selected" : ""}`} 
                       key={key}
                       onClick={() => {
                         setPersonality(key);
                         VoiceManager.stop();
                         setIsPlayingSample(false);
                       }}
+                      style={{ position: "relative" }}
                     >
+                      <button 
+                        type="button"
+                        className="info-btn-mobile"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowDetailsKey(showDetailsKey === key ? null : key);
+                        }}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10"></circle>
+                          <line x1="12" y1="16" x2="12" y2="12"></line>
+                          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                        </svg>
+                      </button>
+
                       <div className="personality-name">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" dangerouslySetInnerHTML={{ __html: details.icon }} />
                         {displayName}
@@ -1129,6 +1146,15 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                           {key === "friendly" ? (practiceMode === "academic" ? "Hints Included" : "Guiding Hints") : key === "strict" ? "No Hints" : key === "brutal" ? "Rapid-Fire" : "Elite Stress"}
                         </span>
                       </div>
+
+                      {showDetailsKey === key && (
+                        <div className="personality-details-overlay" onClick={(e) => { e.stopPropagation(); setShowDetailsKey(null); }}>
+                          <p style={{ margin: 0, fontWeight: "600", fontSize: "0.78rem", color: "var(--text-primary)" }}>{displayDesc}</p>
+                          <div style={{ fontSize: "0.72rem", fontWeight: "700", marginTop: "6px", color: "var(--accent-primary)" }}>
+                            Patience: {details.attributes.patience} | Grading: {details.attributes.grading}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1434,7 +1460,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                           </button>
                         </div>
 
-                        <svg width="640" height={svgHeight} viewBox={`0 0 640 ${svgHeight}`} style={{ display: "block", margin: "0 auto", userSelect: "none" }}>
+                        <svg width="100%" height="100%" viewBox={`0 0 640 ${svgHeight}`} style={{ display: "block", margin: "0 auto", userSelect: "none", maxWidth: "640px", maxHeight: `${svgHeight}px` }}>
                           {/* SVG Filters for glowing drop-shadows */}
                           <defs>
                             <filter id="gold-glow" x="-20%" y="-20%" width="140%" height="140%">

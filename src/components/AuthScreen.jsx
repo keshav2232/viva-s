@@ -282,6 +282,7 @@ export default function AuthScreen({ onLoginSuccess }) {
             { label: "05. Access Portal", id: "cta" }
           ].map((item, idx) => (
             <button 
+              suppressHydrationWarning={true}
               key={idx}
               className={`story-nav-dot-wrapper ${activeSection === idx ? "active" : ""}`}
               onClick={() => scrollToSection(idx)}
@@ -309,11 +310,11 @@ export default function AuthScreen({ onLoginSuccess }) {
             </div>
           </div>
           <nav className="landing-nav">
-            <button type="button" onClick={() => scrollToSection(1)} className="nav-item-link">Practice Presets</button>
-            <button type="button" onClick={() => scrollToSection(2)} className="nav-item-link">Evaluation Panel</button>
-            <button type="button" onClick={() => scrollToSection(3)} className="nav-item-link">Methodology</button>
+            <button suppressHydrationWarning={true} type="button" onClick={() => scrollToSection(1)} className="nav-item-link">Practice Presets</button>
+            <button suppressHydrationWarning={true} type="button" onClick={() => scrollToSection(2)} className="nav-item-link">Evaluation Panel</button>
+            <button suppressHydrationWarning={true} type="button" onClick={() => scrollToSection(3)} className="nav-item-link">Methodology</button>
           </nav>
-          <button type="button" className="btn-landing-cta" onClick={() => setScreenMode("auth")}>
+          <button suppressHydrationWarning={true} type="button" className="btn-landing-cta" onClick={() => setScreenMode("auth")}>
             Access Portal
           </button>
         </header>
@@ -332,10 +333,10 @@ export default function AuthScreen({ onLoginSuccess }) {
                   The world&apos;s first interactive simulator combining cognitive semantic evaluation with voice-enabled emotional telemetry. Prepare for academic oral exams or professional engineering panels under realistic AI pressure with custom analytics.
                 </p>
                 <div className="hero-action-buttons reveal-element slide-up delay-4">
-                  <button type="button" className="btn-hero-primary" onClick={() => setScreenMode("auth")}>
+                  <button suppressHydrationWarning={true} type="button" className="btn-hero-primary" onClick={() => setScreenMode("auth")}>
                     Access Simulator Portal
                   </button>
-                  <button type="button" className="btn-hero-secondary" onClick={() => scrollToSection(1)}>
+                  <button suppressHydrationWarning={true} type="button" className="btn-hero-secondary" onClick={() => scrollToSection(1)}>
                     Explore Practice Presets
                   </button>
                 </div>
@@ -416,6 +417,7 @@ export default function AuthScreen({ onLoginSuccess }) {
                   <div className="syllabus-selector-grid">
                     {Object.keys(syllabusGuides).map((key) => (
                       <button
+                        suppressHydrationWarning={true}
                         key={key}
                         type="button"
                         className={`syllabus-selector-chip ${selectedSyllabus === key ? "active" : ""}`}
@@ -570,7 +572,7 @@ export default function AuthScreen({ onLoginSuccess }) {
                 Access the secure practice portal immediately to select your evaluation syllabus and record your diagnostic trials.
               </p>
               <div className="cta-buttons-wrapper">
-                <button type="button" className="btn-cta-submit" onClick={() => setScreenMode("auth")}>
+                <button suppressHydrationWarning={true} type="button" className="btn-cta-submit" onClick={() => setScreenMode("auth")}>
                   Access Portal
                 </button>
               </div>
@@ -683,6 +685,7 @@ export default function AuthScreen({ onLoginSuccess }) {
 
                 {/* Google OAuth button */}
                 <button 
+                  suppressHydrationWarning={true}
                   type="button" 
                   className="google-btn-custom" 
                   onClick={handleGoogleAuth}
@@ -717,6 +720,7 @@ export default function AuthScreen({ onLoginSuccess }) {
                             <circle cx="12" cy="7" r="4"></circle>
                           </svg>
                           <input 
+                            suppressHydrationWarning={true}
                             className="input-custom has-icon-both" 
                             type="text" 
                             id="auth-name" 
@@ -733,6 +737,7 @@ export default function AuthScreen({ onLoginSuccess }) {
                       <label className="form-label-custom" htmlFor="auth-email">Email address</label>
                       <div className="input-wrapper-custom">
                         <input 
+                          suppressHydrationWarning={true}
                           className="input-custom has-icon-right" 
                           type="email" 
                           id="auth-email" 
@@ -756,6 +761,7 @@ export default function AuthScreen({ onLoginSuccess }) {
                           <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                         </svg>
                         <input 
+                          suppressHydrationWarning={true}
                           className="input-custom has-icon-both" 
                           type={showPassword ? "text" : "password"} 
                           id="auth-password" 
@@ -765,6 +771,7 @@ export default function AuthScreen({ onLoginSuccess }) {
                           required 
                         />
                         <button 
+                          suppressHydrationWarning={true}
                           type="button" 
                           className="password-toggle-btn"
                           onClick={() => setShowPassword(!showPassword)}
@@ -791,6 +798,7 @@ export default function AuthScreen({ onLoginSuccess }) {
                   <div className="remember-row-custom">
                     <label className="remember-checkbox-label">
                       <input 
+                        suppressHydrationWarning={true}
                         type="checkbox" 
                         checked={rememberMe}
                         onChange={(e) => setRememberMe(e.target.checked)}
@@ -804,6 +812,7 @@ export default function AuthScreen({ onLoginSuccess }) {
 
                   {/* Submit triggers */}
                   <button 
+                    suppressHydrationWarning={true}
                     className="btn-submit-custom" 
                     type="submit" 
                     disabled={loading}
@@ -828,6 +837,7 @@ export default function AuthScreen({ onLoginSuccess }) {
                 </div>
 
                 <button 
+                  suppressHydrationWarning={true}
                   type="button" 
                   className="btn-guest-custom" 
                   onClick={handleGuestSubmit}

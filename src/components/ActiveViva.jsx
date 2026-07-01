@@ -42,6 +42,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
   const [transcriptText, setTranscriptText] = useState(() => config.isResume ? "Resumed session. Speak or type your answer..." : "Waiting to transcribe your response...");
   const [isPlaceholder, setIsPlaceholder] = useState(true);
   const [lastEvalRecord, setLastEvalRecord] = useState(null);
+  const [sessionUnlocked, setSessionUnlocked] = useState(false);
 
   // Fallback and Input values
   const [fallbackMode, setFallbackMode] = useState(false);
@@ -77,17 +78,28 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
   useEffect(() => { liveMetricsRef.current = liveMetrics; }, [liveMetrics]);
   useEffect(() => { transcriptTextRef.current = transcriptText; }, [transcriptText]);
 
-  // Main initial hook: starts the stopwatch timer and loads synthesis
+  // Main initial hook: registers failsafes
   useEffect(() => {
     // 1. VoiceManager Init
     VoiceManager.init();
     
     // Register failsafe callback
-    VoiceManager.onFailsafeActive = (msg) => {
+    VoiceManager.onFailsActive = (msg) => {
       setFailsafeWarning(msg);
     };
 
-    // 2. Stopwatch interval
+    return () => {
+      stopAudioStreams();
+      if (liveTrackerRef.current) clearInterval(liveTrackerRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Stopwatch timer and speech trigger starts upon unlocking
+  useEffect(() => {
+    if (!sessionUnlocked) return;
+
+    // 1. Stopwatch interval
     const timer = setInterval(() => {
       setTimeRemaining(prev => {
         if (prev <= 1) {
@@ -100,7 +112,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       });
     }, 1000);
 
-    // 3. Trigger speech sequence (Intro or Resume)
+    // 2. Trigger speech sequence (Intro or Resume)
     if (config.isResume) {
       // Restore SessionContextManager state
       SessionContextManager.askedQuestions = config.resumeState.askedQuestions || [];
@@ -136,12 +148,9 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
 
     return () => {
       clearInterval(timer);
-      stopAudioStreams();
-      clearInterval(waveIntervalRef.current);
-      if (liveTrackerRef.current) clearInterval(liveTrackerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [sessionUnlocked]);
 
   function stopAudioStreams() {
     VoiceManager.stop();
@@ -1092,6 +1101,69 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     // Pulse animation superseded by live volume physics
   }
 
+  if (!sessionUnlocked) {
+    const titleText = config.mode === "professional" ? "Interactive Mock Interview" : "AI Oral Examination Simulator";
+    const descText = config.mode === "professional"
+      ? `You are about to start a professional technical interview on ${config.topic} with ${getPersonaTitle(config.personality, config.mode)}.`
+      : `You are about to start an oral examination on ${config.topic} with ${getPersonaTitle(config.personality, config.mode)}.`;
+    
+    return (
+      <section id="active-viva-screen" className="screen active" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "80vh", padding: "20px" }}>
+        <div className="card start-simulation-overlay" style={{
+          maxWidth: "480px",
+          width: "100%",
+          padding: "var(--space-xl) var(--space-lg)",
+          textAlign: "center",
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--space-md)",
+          boxShadow: "var(--shadow-lg)"
+        }}>
+          <div style={{ fontSize: "3rem", margin: "10px 0" }}>🎙️</div>
+          <h2 style={{ fontSize: "1.4rem", fontWeight: "800", color: "var(--accent-primary)", margin: 0 }}>{titleText}</h2>
+          <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", lineHeight: 1.5, margin: 0 }}>
+            {descText}
+          </p>
+          <div style={{
+            padding: "12px",
+            borderRadius: "var(--radius-sm)",
+            backgroundColor: "var(--bg-primary)",
+            border: "1px dashed var(--border-color)",
+            fontSize: "0.8rem",
+            color: "var(--text-muted)",
+            textAlign: "left",
+            lineHeight: 1.4
+          }}>
+            <strong>🔊 Audio Safety Check:</strong> Mobile browsers block speech synthesis audio until you interact. Click below to authorize speech audio and start your practice session.
+          </div>
+          <button 
+            type="button" 
+            className="btn btn-primary" 
+            onClick={() => {
+              try {
+                const u = new SpeechSynthesisUtterance("");
+                window.speechSynthesis.speak(u);
+              } catch (e) {
+                console.warn("Speech synthesis pre-unlock failed:", e);
+              }
+              setSessionUnlocked(true);
+            }}
+            style={{
+              padding: "12px 24px",
+              fontSize: "1rem",
+              fontWeight: "700",
+              marginTop: "10px",
+              boxShadow: "0 4px 14px rgba(37, 99, 235, 0.4)",
+              cursor: "pointer"
+            }}
+          >
+            {config.isResume ? "Resume Session" : "Start Session"}
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section id="active-viva-screen" className="screen active" style={{ position: "relative" }}>
       {/* Subtle ElevenLabs failsafe warning banner */}
@@ -1304,7 +1376,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
-                      handleKeyboardSubmit();
+                      handleSubmit();
                     }
                   }}
                   placeholder="Type your answer here..." 
