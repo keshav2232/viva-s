@@ -10,6 +10,9 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
   const [pastSessionsAvg, setPastSessionsAvg] = useState(null);
   const [scoreOffset, setScoreOffset] = useState(314.16);
   const [activeRightTab, setActiveRightTab] = useState("timeline"); // "timeline" | "fluency"
+  const [mobileTab, setMobileTab] = useState("overview"); // "overview" | "metrics" | "qa" | "plan"
+  const [displayedScore, setDisplayedScore] = useState(0);
+
 
   const {
     endedEarly,
@@ -282,6 +285,33 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
       setScoreOffset(offset);
     }, 150);
     return () => clearTimeout(timer);
+  }, [overallScore]);
+
+  // Decryption / Rolling animation for overall score number
+  useEffect(() => {
+    if (overallScore <= 0) {
+      setDisplayedScore(0);
+      return;
+    }
+
+    const duration = 1200; // Animation duration in ms
+    const intervalTime = 30; // Update rate in ms
+    const totalSteps = duration / intervalTime;
+    let step = 0;
+
+    const timer = setInterval(() => {
+      step++;
+      if (step >= totalSteps) {
+        clearInterval(timer);
+        setDisplayedScore(overallScore);
+      } else {
+        // Fast random rolling sequence to simulate decryption scan
+        const randomVal = Math.floor(Math.random() * 90) + 10;
+        setDisplayedScore(randomVal);
+      }
+    }, intervalTime);
+
+    return () => clearInterval(timer);
   }, [overallScore]);
 
   // Load prior average score for historical growth computation
@@ -1019,6 +1049,33 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
             <button className="btn btn-secondary" onClick={onGoDashboard}>Dashboard</button>
           </div>
         </div>
+        {/* Mobile Navigation Tabs Strip (Hidden on Desktop via CSS) */}
+        <div className="mobile-results-nav no-print">
+          <button 
+            className={`mobile-results-tab-btn ${mobileTab === 'overview' ? 'active' : ''}`}
+            onClick={() => setMobileTab('overview')}
+          >
+            📊 Summary
+          </button>
+          <button 
+            className={`mobile-results-tab-btn ${mobileTab === 'metrics' ? 'active' : ''}`}
+            onClick={() => setMobileTab('metrics')}
+          >
+            🧠 Analytics
+          </button>
+          <button 
+            className={`mobile-results-tab-btn ${mobileTab === 'qa' ? 'active' : ''}`}
+            onClick={() => setMobileTab('qa')}
+          >
+            📝 Q&A Replay
+          </button>
+          <button 
+            className={`mobile-results-tab-btn ${mobileTab === 'plan' ? 'active' : ''}`}
+            onClick={() => setMobileTab('plan')}
+          >
+            🗓️ Study Plan
+          </button>
+        </div>
 
         <div className="results-grid">
           
@@ -1026,7 +1083,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
           <div className="performance-left-panel" style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
             
             {/* Scorecard breakdown */}
-            <div className="card" style={{ padding: "var(--space-lg)", position: "relative" }}>
+            <div className={`card ${mobileTab === 'overview' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-lg)", position: "relative" }}>
               <h3 style={{ fontSize: "1.05rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-md)", textAlign: "left" }}>
                 Scorecard Breakdown
               </h3>
@@ -1049,12 +1106,11 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                         strokeWidth: 10,
                         strokeLinecap: "round",
                         transform: "rotate(-90deg)",
-                        transformOrigin: "50% 50%",
-                        transition: "stroke-dashoffset 0.8s ease"
+                        transition: "stroke-dashoffset 1.2s cubic-bezier(0.34, 1.56, 0.64, 1)"
                       }}
                     />
                   </svg>
-                  <div className="radial-score-value" style={{ fontSize: "1.6rem", fontWeight: "800", color: "var(--accent-primary)" }}>{overallScore}%</div>
+                  <div className="radial-score-value" style={{ fontSize: "1.6rem", fontWeight: "800", color: "var(--accent-primary)" }}>{displayedScore}%</div>
                 </div>
 
                 <div style={{ textAlign: "left", flex: 1 }}>
@@ -1093,8 +1149,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
               </div>
             </div>
 
-            {/* Bluff Probability index */}
-            <div className="card" style={{ padding: "var(--space-md) var(--space-lg)" }}>
+            <div className={`card ${mobileTab === 'metrics' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-md) var(--space-lg)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
                 <span style={{ fontSize: "0.95rem", fontWeight: "700", color: "var(--accent-primary)", display: "flex", alignItems: "center", gap: "6px" }}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ width: "16px", height: "16px", color: bluffProb > 40 ? "var(--color-warning)" : "var(--color-success)" }}>
@@ -1122,8 +1177,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
               </p>
             </div>
 
-            {/* Historical Growth Tracker */}
-            <div className="card" style={{ padding: "var(--space-md) var(--space-lg)", textAlign: "left" }}>
+            <div className={`card ${mobileTab === 'overview' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-md) var(--space-lg)", textAlign: "left" }}>
               <h3 style={{ fontSize: "0.95rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
                 Historical Progress Comparison
               </h3>
@@ -1178,8 +1232,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
               )}
             </div>
 
-            {/* Smart Revision planner */}
-            <div className="card suggested-revision-card" style={{ padding: "var(--space-lg)" }}>
+            <div className={`card suggested-revision-card ${mobileTab === 'plan' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-lg)" }}>
               <h3 style={{ fontSize: "1.05rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-sm)", textAlign: "left" }}>
                 {isProfessional ? "Targeted Development Plan" : "Smart Revision Plan"}
               </h3>
@@ -1200,8 +1253,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
               </div>
             </div>
 
-            {/* Lexical Vocabulary Maturity Card */}
-            <div className="card" style={{ padding: "var(--space-lg)", textAlign: "left" }}>
+            <div className={`card ${mobileTab === 'metrics' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-lg)", textAlign: "left" }}>
               <h3 style={{ fontSize: "1.05rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
                 Lexical Range & Vocabulary Maturity
               </h3>
@@ -1260,8 +1312,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
               </div>
             </div>
 
-            {/* Logical Fallacy & Deflection Alerts Card */}
-            <div className="card" style={{ padding: "var(--space-lg)", textAlign: "left" }}>
+            <div className={`card ${mobileTab === 'metrics' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-lg)", textAlign: "left" }}>
               <h3 style={{ fontSize: "1.05rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
                 Argumentation & Fallacy Diagnostics
               </h3>
@@ -1325,8 +1376,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
           {/* RIGHT PANEL: Emotion Timelines, Professor Mode Replay, Recommends */}
           <div className="feedback-right-panel" style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
             
-            {/* TOGGLE TABS */}
-            <div className="no-print" style={{ display: "flex", gap: "8px", borderBottom: "1px solid var(--border-color)", paddingBottom: "12px", marginBottom: "4px" }}>
+            <div className={`no-print ${mobileTab === 'metrics' ? '' : 'mobile-hide'}`} style={{ display: "flex", gap: "8px", borderBottom: "1px solid var(--border-color)", paddingBottom: "12px", marginBottom: "4px" }}>
               <button 
                 className={`btn ${activeRightTab === "timeline" ? "btn-primary" : "btn-secondary"}`} 
                 onClick={() => setActiveRightTab("timeline")}
@@ -1350,8 +1400,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
               </button>
             </div>
 
-            {/* TIMELINE PROGRESSION CHART */}
-            <div className={`card timeline-card ${activeRightTab !== "timeline" ? "screen-hidden" : ""}`} style={{ padding: "var(--space-lg)", textAlign: "left" }}>
+            <div className={`card timeline-card ${mobileTab === 'metrics' ? '' : 'mobile-hide'} ${activeRightTab !== "timeline" ? "screen-hidden" : ""}`} style={{ padding: "var(--space-lg)", textAlign: "left" }}>
               <h3 style={{ fontSize: "1.05rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-xs)", marginBottom: "0" }}>
                 Emotion Timeline
               </h3>
@@ -1393,13 +1442,11 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
               </div>
             </div>
 
-            {/* SPEECH & FLUENCY DIAGNOSTICS */}
-            <div className={activeRightTab !== "fluency" ? "screen-hidden" : ""}>
+            <div className={`${mobileTab === 'metrics' ? '' : 'mobile-hide'} ${activeRightTab !== "fluency" ? "screen-hidden" : ""}`}>
               {renderFluencyDiagnostics()}
             </div>
 
-            {/* PROFESSOR MODE REPLAY */}
-            <div className="card" style={{ padding: "var(--space-lg)", textAlign: "left" }}>
+            <div className={`card ${mobileTab === 'qa' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-lg)", textAlign: "left" }}>
               <h3 style={{ fontSize: "1.05rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-md)" }}>
                 {isProfessional ? "Interviewer Feedback Replay" : "Professor Mode Replay"}
               </h3>
