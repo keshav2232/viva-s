@@ -315,7 +315,7 @@ export default function AuthScreen({ onLoginSuccess }) {
             <button suppressHydrationWarning={true} type="button" onClick={() => scrollToSection(3)} className="nav-item-link">Methodology</button>
           </nav>
           <button suppressHydrationWarning={true} type="button" className="btn-landing-cta" onClick={() => setScreenMode("auth")}>
-            Access Portal
+            Get Started
           </button>
         </header>
 
@@ -334,7 +334,7 @@ export default function AuthScreen({ onLoginSuccess }) {
                 </p>
                 <div className="hero-action-buttons reveal-element slide-up delay-4">
                   <button suppressHydrationWarning={true} type="button" className="btn-hero-primary" onClick={() => setScreenMode("auth")}>
-                    Access Simulator Portal
+                    Get Started
                   </button>
                   <button suppressHydrationWarning={true} type="button" className="btn-hero-secondary" onClick={() => scrollToSection(1)}>
                     Explore Practice Presets
@@ -573,7 +573,7 @@ export default function AuthScreen({ onLoginSuccess }) {
               </p>
               <div className="cta-buttons-wrapper">
                 <button suppressHydrationWarning={true} type="button" className="btn-cta-submit" onClick={() => setScreenMode("auth")}>
-                  Access Portal
+                  Get Started
                 </button>
               </div>
             </div>
@@ -651,14 +651,15 @@ export default function AuthScreen({ onLoginSuccess }) {
               {/* Top Nav link switch */}
               <div className="auth-top-nav">
                 <span className="landing-back-link" onClick={() => { setScreenMode("landing"); setErrorMessage(""); }}>
-                  ← Read Practice Presets
+                  ← Back
                 </span>
-                <span style={{ margin: "0 10px", color: "#cbd5e1" }}>|</span>
-                {authMode === "login" ? (
-                  <>New to PrepSim? <span className="auth-nav-link" onClick={() => { setAuthMode("signup"); setErrorMessage(""); }}>Create account</span></>
-                ) : (
-                  <>Already have an account? <span className="auth-nav-link" onClick={() => { setAuthMode("login"); setErrorMessage(""); }}>Sign in</span></>
-                )}
+                <span className="auth-nav-toggle">
+                  {authMode === "login" ? (
+                    <>New to PrepSim? <span className="auth-nav-link" onClick={() => { setAuthMode("signup"); setErrorMessage(""); }}>Sign up</span></>
+                  ) : (
+                    <>Have an account? <span className="auth-nav-link" onClick={() => { setAuthMode("login"); setErrorMessage(""); }}>Sign in</span></>
+                  )}
+                </span>
               </div>
 
               {/* Frosted Welcome card */}

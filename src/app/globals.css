@@ -4615,9 +4615,10 @@ main, header, footer {
 
   /* Brand logo navbar transformation for login page on mobile */
   .auth-sidebar {
-    padding: 16px var(--space-md) !important;
+    padding: 12px 16px !important;
+    flex-direction: row !important;
     align-items: center !important;
-    justify-content: center !important;
+    justify-content: flex-start !important;
     border-bottom: 1px solid var(--border-color) !important;
     background-color: #e6dfca !important;
     width: 100% !important;
@@ -4631,14 +4632,31 @@ main, header, footer {
     display: none !important;
   }
   .sidebar-logo {
-    margin: 0 auto !important;
+    margin: 0 !important;
+  }
+  .logo-brand-subtitle {
+    display: none !important;
   }
   .auth-card-custom {
     padding: 24px 20px !important;
     border-radius: 12px !important;
   }
   .auth-form-viewport {
-    padding: 32px 16px !important;
+    padding: 24px 16px !important;
+  }
+  .auth-top-nav {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    flex-wrap: nowrap !important;
+    gap: 8px !important;
+    margin-bottom: 16px !important;
+  }
+  .landing-back-link {
+    font-size: 0.8rem !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
   }
 
   .biometric-metric-row {
@@ -5875,7 +5893,13 @@ main, header, footer {
     gap: 6px !important;
   }
 }
-/* Force mobile landing header elements to the absolute left and right edges */
+/* Force mobile landing header elements to the absolute left and right edges and hide navigation links to prevent overlapping */
+@media (max-width: 799px) {
+  .landing-nav {
+    display: none !important;
+  }
+}
+
 @media (max-width: 640px) {
   .landing-header {
     padding: 12px 16px !important;
@@ -5888,6 +5912,9 @@ main, header, footer {
     left: 0 !important;
     right: 0 !important;
     box-sizing: border-box !important;
+  }
+  .logo-brand-subtitle {
+    display: none !important;
   }
 }
 
