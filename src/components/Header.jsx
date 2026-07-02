@@ -11,10 +11,12 @@ export default function Header({ userName, onNavigate, onLogout }) {
     <header id="app-header">
       <nav className="nav-container">
         <div className="logo-wrapper" id="nav-logo" onClick={() => onNavigate("dashboard")}>
-          <svg className="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-            <path d="m22 7-10-4-10 4 10 4Z"/>
-            <path d="M6 9.5V14a6 6 0 0 0 12 0V9.5"/>
+          <svg className="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+            <path d="M12 6v10"></path>
+            <path d="M8 8v6"></path>
+            <path d="M16 9v4"></path>
           </svg>
           <span className="logo-text">PrepSim</span>
         </div>
