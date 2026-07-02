@@ -2274,7 +2274,11 @@ p {
 .auth-top-nav {
   position: absolute;
   top: 40px;
+  left: 48px;
   right: 48px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   font-size: 0.9rem;
   color: #475569;
   font-weight: 500;
@@ -2289,6 +2293,15 @@ p {
 }
 
 .auth-nav-link:hover {
+  text-decoration: underline;
+}
+
+.landing-back-link {
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.landing-back-link:hover {
   text-decoration: underline;
 }
 
@@ -2703,6 +2716,7 @@ p {
     position: relative;
     top: auto;
     right: auto;
+    left: auto;
     margin-bottom: 32px;
     text-align: center;
     width: 100%;
