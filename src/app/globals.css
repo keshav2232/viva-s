@@ -5940,6 +5940,34 @@ main, header, footer {
   .mobile-hide {
     display: none !important;
   }
+
+  /* Make the left/right panels display contents so their child cards direct-flex layout */
+  .results-grid {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .performance-left-panel,
+  .feedback-right-panel {
+    display: contents !important;
+  }
+
+  /* Specific order of cards on mobile results tabs */
+  .scorecard-card { order: 1 !important; }
+  .historical-card { order: 2 !important; }
+  
+  .bluff-card { order: 10 !important; }
+  
+  /* Timeline/Fluency cards placed 2nd inside Analytics */
+  .toggle-tabs-card { order: 11 !important; }
+  .timeline-card { order: 12 !important; }
+  .fluency-card-wrapper { order: 13 !important; }
+  
+  .lexical-card { order: 14 !important; }
+  .fallacies-card { order: 15 !important; }
+
+  .suggested-revision-card { order: 20 !important; }
+  .replay-card { order: 30 !important; }
 }
 
 
