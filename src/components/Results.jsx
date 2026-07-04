@@ -193,10 +193,12 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
       }
       
       if (topicText && topicText.length > 3) {
-        const topicWords = topicText.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+        const cleanTopic = topicText.toLowerCase().replace(/[^\w\s]/g, " ");
+        const topicWords = cleanTopic.split(/\s+/).filter(w => w.length > 3);
         if (topicWords.length > 0) {
           const occurrences = topicWords.reduce((acc, word) => {
-            const regex = new RegExp(`\\b${word}\\b`, "g");
+            const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(`\\b${escapedWord}\\b`, "g");
             return acc + (cleanAns.match(regex) || []).length;
           }, 0);
           

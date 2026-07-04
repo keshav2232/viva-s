@@ -286,7 +286,10 @@ export const VoiceManager = {
 
       this.activeUtterance.onend = handleEnd;
       this.activeUtterance.onerror = (event) => {
-        console.error("Speech Synthesis Error:", event.error || event);
+        // "interrupted" and "canceled" are standard events when window.speechSynthesis.cancel() is called
+        if (event.error && event.error !== "interrupted" && event.error !== "canceled") {
+          console.error("Speech Synthesis Error:", event.error);
+        }
         handleEnd(event);
       };
 

@@ -460,8 +460,9 @@ async function handleGenerateQuestion(payload, apiKey) {
 // 3. EVALUATE TRANSCRIPT ANSWER
 // ==========================================
 async function handleEvaluateAnswer(payload, apiKey) {
-  const { question, answer, syllabus, mode } = payload;
+  const { question, answer, syllabus, mode, audioBase64 } = payload;
   const isProfessional = mode === "professional";
+  const hasAudio = !!audioBase64;
 
   const prompt = isProfessional
     ? `Act as an expert industry interviewer grading a candidate's response in a mock interview.
@@ -469,12 +470,16 @@ async function handleEvaluateAnswer(payload, apiKey) {
   Question Asked: "${question}"
   Candidate Response: "${answer}"
   Job Competency Context: ${JSON.stringify(syllabus)}
+  ${hasAudio ? "An audio recording of the candidate's actual speech is attached to this request. Listen to it carefully to evaluate both content and voice delivery." : "No audio recording is attached. Grade based on the text response."}
   
   Evaluate the response across the following metrics out of 100:
   1. correctness: logical correctness, technical depth, and industry validity of the explanation (0-100)
   2. completeness: coverage of edge cases, trade-offs, and details using the STAR format if applicable (0-100)
   3. accuracy: use of precise engineering terminology, patterns, and architectural accuracy (0-100)
-  4. clarity: structural flow, articulation, and professional delivery (0-100)
+  4. clarity: structural flow, articulation, and professional delivery (0-100) ${hasAudio ? "(based on both text flow and acoustic voice clarity)" : ""}
+  ${hasAudio ? `5. nervousness: level of nervousness, vocal tremors, or jitteriness (0-100)
+  6. confidence: vocal presence, assertiveness, and tone stability (0-100)
+  7. hesitation: frequency of long pauses, silence gaps, and verbal filler words (like "um", "uh", "basically") (0-100)` : ""}
   
   Also select a singular evaluation tag:
   - "Strong": highly correct, technically accurate, confident.
@@ -492,19 +497,26 @@ async function handleEvaluateAnswer(payload, apiKey) {
     "accuracy": 80,
     "clarity": 90,
     "tag": "Strong" | "Weak" | "Partially Correct" | "Bluffing" | "Incomplete" | "Confused",
-    "correctAnswer": "A detailed and professional response showing how a top-tier candidate should answer, outlining key design trade-offs, architecture choices, industry standards, or STAR highlights."
+    "correctAnswer": "A detailed and professional response showing how a top-tier candidate should answer, outlining key design trade-offs, architecture choices, industry standards, or STAR highlights."${hasAudio ? `,
+    "nervousness": 20,
+    "confidence": 85,
+    "hesitation": 10` : ""}
   }`
     : `Act as an academic examiner grading an oral response in a college viva.
   
   Question Asked: "${question}"
   Student Response: "${answer}"
   Syllabus Context: ${JSON.stringify(syllabus)}
+  ${hasAudio ? "An audio recording of the student's actual speech is attached to this request. Listen to it carefully to evaluate both content and voice delivery." : "No audio recording is attached. Grade based on the text response."}
   
   Evaluate the response across the following metrics out of 100:
   1. correctness: general logical correctness (0-100)
   2. completeness: depth, details, and completeness of explanation (0-100)
   3. accuracy: technical formulas, precise keywords, and terminology (0-100)
-  4. clarity: fluency, structural flow (0-100)
+  4. clarity: fluency, structural flow (0-100) ${hasAudio ? "(based on both text flow and acoustic voice clarity)" : ""}
+  ${hasAudio ? `5. nervousness: level of nervousness, vocal tremors, or jitteriness (0-100)
+  6. confidence: vocal presence, assertiveness, and tone stability (0-100)
+  7. hesitation: frequency of long pauses, silence gaps, and verbal filler words (like "um", "uh", "basically") (0-100)` : ""}
   
   Also select a singular evaluation tag:
   - "Strong": highly correct, technically accurate, confident.
@@ -522,10 +534,13 @@ async function handleEvaluateAnswer(payload, apiKey) {
     "accuracy": 80,
     "clarity": 90,
     "tag": "Strong" | "Weak" | "Partially Correct" | "Bluffing" | "Incomplete" | "Confused",
-    "correctAnswer": "A detailed and unique correct answer that fully explains the concept, stating any critical equations/formulas, definitions, and physical parameters."
+    "correctAnswer": "A detailed and unique correct answer that fully explains the concept, stating any critical equations/formulas, definitions, and physical parameters."${hasAudio ? `,
+    "nervousness": 20,
+    "confidence": 85,
+    "hesitation": 10` : ""}
   }`;
 
-  const responseJson = await callGeminiAPI(prompt, apiKey);
+  const responseJson = await callGeminiAPI(prompt, apiKey, audioBase64);
   return NextResponse.json(responseJson);
 }
 
@@ -584,7 +599,7 @@ async function handleGenerateSubquestion(payload, apiKey) {
 // ==========================================
 // GEMINI API CALLER
 // ==========================================
-async function callGeminiAPI(prompt, apiKey) {
+async function callGeminiAPI(prompt, apiKey, audioBase64 = null) {
   const CANDIDATE_MODELS = [
     "gemini-2.5-flash",
     "gemini-2.5-flash-lite",
@@ -599,8 +614,18 @@ async function callGeminiAPI(prompt, apiKey) {
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
       
+      const parts = [{ text: prompt }];
+      if (audioBase64) {
+        parts.push({
+          inlineData: {
+            mimeType: "audio/webm",
+            data: audioBase64
+          }
+        });
+      }
+
       const payload = {
-        contents: [{ parts: [{ text: prompt }] }],
+        contents: [{ parts }],
         generationConfig: {
           responseMimeType: "application/json"
         }
