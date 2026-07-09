@@ -12,6 +12,8 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
   const [activeRightTab, setActiveRightTab] = useState("timeline"); // "timeline" | "fluency"
   const [mobileTab, setMobileTab] = useState("overview"); // "overview" | "metrics" | "qa" | "plan"
   const [displayedScore, setDisplayedScore] = useState(0);
+  const [hindsightData, setHindsightData] = useState(resultsData.hindsightData || null);
+  const [hindsightLoading, setHindsightLoading] = useState(resultsData.hindsightLoading || false);
 
 
   const {
@@ -37,6 +39,29 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
       VoiceManager.stop();
     };
   }, []);
+
+  // Poll for async hindsight data resolution
+  useEffect(() => {
+    if (hindsightData || !resultsData.hindsightLoading) {
+      // Already resolved or never loading
+      if (resultsData.hindsightData && !hindsightData) {
+        setHindsightData(resultsData.hindsightData);
+        setHindsightLoading(false);
+      }
+      return;
+    }
+    const pollInterval = setInterval(() => {
+      if (resultsData.hindsightData) {
+        setHindsightData(resultsData.hindsightData);
+        setHindsightLoading(false);
+        clearInterval(pollInterval);
+      } else if (!resultsData.hindsightLoading) {
+        setHindsightLoading(false);
+        clearInterval(pollInterval);
+      }
+    }, 800);
+    return () => clearInterval(pollInterval);
+  }, [resultsData, hindsightData]);
 
   // 1. Calculate Scorecard Averages
   const totalRounds = detectedEmotions.length;
@@ -199,7 +224,9 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
         const topicWords = topicText.toLowerCase().split(/\s+/).filter(w => w.length > 3);
         if (topicWords.length > 0) {
           const occurrences = topicWords.reduce((acc, word) => {
-            const regex = new RegExp(`\\b${word}\\b`, "g");
+            // Escape any special regex characters to prevent SyntaxError
+            const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(`\\b${escapedWord}\\b`, "g");
             return acc + (cleanAns.match(regex) || []).length;
           }, 0);
           
@@ -1272,6 +1299,218 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* AI Hindsight Retrospective Card */}
+            <div className={`card hindsight-card ${mobileTab === 'plan' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-lg)", textAlign: "left", position: "relative", overflow: "hidden" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-md)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <div style={{
+                    width: "28px", height: "28px", borderRadius: "50%",
+                    background: "linear-gradient(135deg, hsl(258, 80%, 56%), hsl(280, 75%, 50%))",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: "0.85rem", flexShrink: 0
+                  }}>🔍</div>
+                  <h3 style={{ fontSize: "1.05rem", fontWeight: "700", margin: 0 }}>
+                    {isProfessional ? "AI Interview Retrospective" : "AI Session Retrospective"}
+                  </h3>
+                </div>
+                {hindsightData && !hindsightData.isLocalFallback && (
+                  <span style={{
+                    fontSize: "0.65rem", padding: "2px 8px", borderRadius: "var(--radius-full)",
+                    background: "linear-gradient(135deg, hsl(258, 80%, 56%), hsl(280, 75%, 50%))",
+                    color: "#fff", fontWeight: "700", letterSpacing: "0.05em", textTransform: "uppercase"
+                  }}>AI Powered</span>
+                )}
+              </div>
+              <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "var(--space-md)", marginTop: 0 }}>
+                {isProfessional
+                  ? "Cross-question retrospective analysis of your complete interview session, detecting patterns invisible to per-round scoring."
+                  : "Cross-question retrospective analysis of your complete exam session, detecting patterns invisible to per-round scoring."
+                }
+              </p>
+
+              {hindsightLoading && !hindsightData && (
+                <div style={{
+                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                  padding: "var(--space-lg)", gap: "var(--space-sm)"
+                }}>
+                  <div className="hindsight-loading-spinner" style={{
+                    width: "32px", height: "32px", border: "3px solid var(--border-color)",
+                    borderTopColor: "hsl(258, 80%, 56%)", borderRadius: "50%",
+                    animation: "hindsight-spin 0.8s linear infinite"
+                  }}></div>
+                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)", fontWeight: "500" }}>
+                    Analyzing cross-question patterns...
+                  </span>
+                </div>
+              )}
+
+              {!hindsightLoading && !hindsightData && (
+                <div style={{
+                  padding: "var(--space-md)", borderRadius: "var(--radius-sm)",
+                  backgroundColor: "var(--bg-primary)", border: "1px solid var(--border-color)",
+                  fontSize: "0.8rem", color: "var(--text-secondary)", textAlign: "center"
+                }}>
+                  Hindsight analysis unavailable for this session. Answer at least 2 questions to enable cross-question retrospective.
+                </div>
+              )}
+
+              {hindsightData && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
+                  
+                  {/* Session Narrative */}
+                  {hindsightData.sessionNarrative && (
+                    <div style={{
+                      padding: "12px var(--space-md)",
+                      borderLeft: "4px solid hsl(258, 80%, 56%)",
+                      backgroundColor: "hsla(258, 80%, 56%, 0.04)",
+                      borderRadius: "0 var(--radius-sm) var(--radius-sm) 0"
+                    }}>
+                      <span style={{ fontSize: "0.7rem", fontWeight: "700", textTransform: "uppercase", color: "hsl(258, 60%, 45%)", letterSpacing: "0.05em" }}>Performance Arc</span>
+                      <p style={{ margin: "4px 0 0 0", fontSize: "0.85rem", color: "var(--text-primary)", lineHeight: "1.5" }}>
+                        {hindsightData.sessionNarrative}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Trajectory Indicator */}
+                  {hindsightData.trajectoryPattern && (
+                    <div style={{
+                      display: "flex", alignItems: "center", gap: "10px",
+                      padding: "10px var(--space-md)",
+                      borderRadius: "var(--radius-sm)",
+                      backgroundColor: "var(--bg-primary)",
+                      border: "1px solid var(--border-color)"
+                    }}>
+                      <div style={{
+                        width: "36px", height: "36px", borderRadius: "50%",
+                        backgroundColor: hindsightData.trajectoryPattern === "ascending" ? "var(--color-success-bg)" : (hindsightData.trajectoryPattern === "declining" ? "var(--color-error-bg)" : "hsla(38, 85%, 45%, 0.08)"),
+                        display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.1rem", flexShrink: 0
+                      }}>
+                        {hindsightData.trajectoryPattern === "ascending" ? "📈" : (hindsightData.trajectoryPattern === "declining" ? "📉" : "➡️")}
+                      </div>
+                      <div>
+                        <span style={{ fontSize: "0.7rem", fontWeight: "700", textTransform: "uppercase", color: "var(--text-secondary)", letterSpacing: "0.04em" }}>Confidence Trajectory</span>
+                        <p style={{ margin: "2px 0 0 0", fontSize: "0.8rem", color: "var(--text-primary)", lineHeight: "1.4" }}>
+                          {hindsightData.trajectoryDescription}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Contradictions Detected */}
+                  {hindsightData.contradictions && hindsightData.contradictions.length > 0 && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-xs)" }}>
+                      <span style={{ fontSize: "0.7rem", fontWeight: "700", textTransform: "uppercase", color: "var(--color-error)", letterSpacing: "0.05em" }}>⚠️ Contradictions Detected</span>
+                      {hindsightData.contradictions.map((c, cIdx) => (
+                        <div key={cIdx} style={{
+                          padding: "10px var(--space-md)",
+                          borderRadius: "var(--radius-sm)",
+                          backgroundColor: "var(--color-error-bg)",
+                          border: "1px solid hsla(0, 60%, 42%, 0.15)",
+                          fontSize: "0.8rem", color: "var(--text-primary)", lineHeight: "1.4"
+                        }}>
+                          <strong style={{ color: "var(--color-error)", fontSize: "0.75rem" }}>Rounds {c.rounds?.join(" ↔ ") || "—"}</strong>
+                          <p style={{ margin: "4px 0 0 0" }}>{c.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Bluffing Warning */}
+                  {hindsightData.bluffingWarning && (
+                    <div style={{
+                      padding: "10px var(--space-md)",
+                      borderRadius: "var(--radius-sm)",
+                      backgroundColor: "hsla(38, 85%, 45%, 0.06)",
+                      border: "1px solid hsla(38, 85%, 45%, 0.2)",
+                      fontSize: "0.8rem", color: "var(--text-primary)", lineHeight: "1.4"
+                    }}>
+                      <strong style={{ color: "hsl(38, 85%, 35%)", fontSize: "0.75rem", display: "block", marginBottom: "4px" }}>🎭 Bluffing Pattern Detected</strong>
+                      {hindsightData.bluffingWarning}
+                    </div>
+                  )}
+
+                  {/* Strongest & Weakest Round Evidence */}
+                  <div className="hindsight-evidence-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-sm)" }}>
+                    {hindsightData.strongestRound && (
+                      <div style={{
+                        padding: "10px", borderRadius: "var(--radius-sm)",
+                        backgroundColor: "var(--color-success-bg)",
+                        border: "1px solid rgba(22, 163, 74, 0.15)"
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+                          <span style={{ fontSize: "0.95rem" }}>💪</span>
+                          <span style={{ fontSize: "0.7rem", fontWeight: "700", textTransform: "uppercase", color: "var(--color-success)", letterSpacing: "0.04em" }}>Strongest</span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: "0.8rem", fontWeight: "600", color: "var(--text-primary)" }}>
+                          Q{hindsightData.strongestRound.round}: {hindsightData.strongestRound.topic}
+                        </p>
+                        <p style={{ margin: "4px 0 0 0", fontSize: "0.75rem", color: "var(--text-secondary)", lineHeight: "1.35" }}>
+                          {hindsightData.strongestRound.evidence}
+                        </p>
+                      </div>
+                    )}
+                    {hindsightData.weakestRound && (
+                      <div style={{
+                        padding: "10px", borderRadius: "var(--radius-sm)",
+                        backgroundColor: "var(--color-error-bg)",
+                        border: "1px solid hsla(0, 60%, 42%, 0.15)"
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+                          <span style={{ fontSize: "0.95rem" }}>🔻</span>
+                          <span style={{ fontSize: "0.7rem", fontWeight: "700", textTransform: "uppercase", color: "var(--color-error)", letterSpacing: "0.04em" }}>Weakest</span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: "0.8rem", fontWeight: "600", color: "var(--text-primary)" }}>
+                          Q{hindsightData.weakestRound.round}: {hindsightData.weakestRound.topic}
+                        </p>
+                        <p style={{ margin: "4px 0 0 0", fontSize: "0.75rem", color: "var(--text-secondary)", lineHeight: "1.35" }}>
+                          {hindsightData.weakestRound.evidence}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* AI Recommendations */}
+                  {hindsightData.recommendations && hindsightData.recommendations.length > 0 && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-xs)" }}>
+                      <span style={{ fontSize: "0.7rem", fontWeight: "700", textTransform: "uppercase", color: "hsl(258, 60%, 45%)", letterSpacing: "0.05em" }}>💡 AI Recommendations</span>
+                      {hindsightData.recommendations.map((rec, rIdx) => (
+                        <div key={rIdx} style={{
+                          display: "flex", alignItems: "flex-start", gap: "8px",
+                          padding: "8px 12px", borderRadius: "var(--radius-sm)",
+                          backgroundColor: "var(--bg-primary)", border: "1px solid var(--border-color)",
+                          fontSize: "0.8rem", color: "var(--text-primary)", lineHeight: "1.4"
+                        }}>
+                          <span style={{ color: "hsl(258, 80%, 56%)", fontWeight: "700", flexShrink: 0 }}>{rIdx + 1}.</span>
+                          <span>{rec}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* No significant patterns found */}
+                  {!hindsightData.contradictions?.length && !hindsightData.bluffingWarning && hindsightData.sessionNarrative && (
+                    <div style={{
+                      display: "flex", gap: "10px", alignItems: "flex-start",
+                      padding: "10px 12px", borderRadius: "var(--radius-sm)",
+                      backgroundColor: "var(--color-success-bg)",
+                      border: "1px solid rgba(22, 163, 74, 0.2)",
+                      color: "var(--color-success)"
+                    }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" style={{ width: "18px", height: "18px", marginTop: "1px", flexShrink: 0 }}>
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                        <polyline points="22 4 12 14.01 9 11.01"/>
+                      </svg>
+                      <span style={{ fontSize: "0.8rem", lineHeight: "1.4" }}>
+                        <strong>No cross-question contradictions or bluffing patterns detected.</strong> Your answers were internally consistent across all rounds.
+                      </span>
+                    </div>
+                  )}
+
+                </div>
+              )}
             </div>
 
             <div className={`card lexical-card ${mobileTab === 'metrics' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-lg)", textAlign: "left" }}>

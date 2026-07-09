@@ -7,6 +7,7 @@ import { EXAMINER_PERSONALITIES } from "@/utils/mockData";
 import { QuestionGraphEngine } from "@/services/QuestionGraphEngine";
 import { AnswerEvaluationService } from "@/services/AnswerEvaluationService";
 import { SessionContextManager } from "@/services/SessionContextManager";
+import { HindsightEngine } from "@/services/HindsightEngine";
 import ExaminerAvatar from "@/components/ExaminerAvatar";
 
 // Helper to guarantee render purity by getting timestamp outside component scope
@@ -65,6 +66,10 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
   const [liveStatusText, setLiveStatusText] = useState("Calibration active. Ready.");
   const liveTrackerRef = useRef(null);
 
+  const introTimeoutRef = useRef(null);
+  const transitionTimeoutRef = useRef(null);
+  const isMountedRef = useRef(true);
+
   // Refs for tracking latest state values in async callbacks
   const activeQuestionRef = useRef(activeQuestion);
   const currentQuestionIndexRef = useRef(currentQuestionIndex);
@@ -80,17 +85,22 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
 
   // Main initial hook: registers failsafes
   useEffect(() => {
+    isMountedRef.current = true;
     // 1. VoiceManager Init
     VoiceManager.init();
     
     // Register failsafe callback
     VoiceManager.onFailsActive = (msg) => {
-      setFailsafeWarning(msg);
+      if (isMountedRef.current) setFailsafeWarning(msg);
     };
 
     return () => {
+      isMountedRef.current = false;
       stopAudioStreams();
       if (liveTrackerRef.current) clearInterval(liveTrackerRef.current);
+      if (introTimeoutRef.current) clearTimeout(introTimeoutRef.current);
+      if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
+      if (hesitationTimerRef.current) clearTimeout(hesitationTimerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -141,7 +151,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         }
       );
     } else {
-      setTimeout(() => {
+      introTimeoutRef.current = setTimeout(() => {
         triggerIntroduction();
       }, 500);
     }
@@ -155,6 +165,9 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
   function stopAudioStreams() {
     VoiceManager.stop();
     SpeechManager.stop();
+    if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
+    if (introTimeoutRef.current) clearTimeout(introTimeoutRef.current);
+    if (hesitationTimerRef.current) clearTimeout(hesitationTimerRef.current);
   }
 
   // Live Biometric Speech Prosody Estimator
@@ -316,8 +329,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     // Reset Session Context
     SessionContextManager.reset();
     
-    try {
-      const firstQuestion = await QuestionGraphEngine.generateNextQuestion({
+    try {      const firstQuestion = await QuestionGraphEngine.generateNextQuestion({
         syllabus: config.syllabusStructure,
         personality: config.personality,
         duration: config.duration,
@@ -330,6 +342,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         targetSubtopic: config.targetSubtopic || null,
         mode: config.mode
       });
+      
+      if (!isMountedRef.current) return;
       
       setActiveQuestion(firstQuestion);
       
@@ -377,7 +391,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       
       // Preload the intro speech
       VoiceManager.preload(fullSpeech, config.personality);
-
+ 
       setVivaState("speaking");
       VoiceManager.speak(fullSpeech, config.personality,
         // onStart
@@ -397,9 +411,10 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       );
     } catch (err) {
       console.error("Failed to generate first question:", err);
+      if (!isMountedRef.current) return;
       // Fallback
       const fallback = QuestionGraphEngine.getRuleBasedOfflineFallback(1, config.personality, config.topic);
-      setActiveQuestion(fallback);
+      setActiveQuestion(fallback);;
       
       // Preload fallback speech
       VoiceManager.preload(fallback.speech, config.personality);
@@ -790,7 +805,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       setStatusText(reactionText);
 
       // Delay transition to let user register visual reaction
-      setTimeout(async () => {
+      transitionTimeoutRef.current = setTimeout(async () => {
+        if (!isMountedRef.current) return;
         // Clear evaluation reaction so face resets
         setLastEvalRecord(null);
 
@@ -822,6 +838,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
             mode: config.mode
           });
 
+          if (!isMountedRef.current) return;
+
           setActiveQuestion(nextQuestion);
           // Preload next question speech!
           VoiceManager.preload(nextQuestion.speech, config.personality);
@@ -829,6 +847,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
           setVivaState("speaking");
           VoiceManager.speak(nextQuestion.speech, config.personality,
             () => {
+              if (!isMountedRef.current) return;
               setVisualState("speaking");
               setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
               startWaveAnimations();
@@ -837,12 +856,14 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
               }
             },
             () => {
+              if (!isMountedRef.current) return;
               if (interruptedRef.current) return;
               startListeningMode();
             }
           );
         } catch (nextErr) {
           console.error("Failed to generate next question in delayed block:", nextErr);
+          if (!isMountedRef.current) return;
           // Catch and handle fallback inside delayed try
           const qIdx = qIdxStart + 1;
           setCurrentQuestionIndex(qIdx);
@@ -857,6 +878,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
           setVivaState("speaking");
           VoiceManager.speak(nextQuestion.speech, config.personality,
             () => {
+              if (!isMountedRef.current) return;
               setVisualState("speaking");
               setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
               startWaveAnimations();
@@ -865,6 +887,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
               }
             },
             () => {
+              if (!isMountedRef.current) return;
               if (interruptedRef.current) return;
               startListeningMode();
             }
@@ -910,7 +933,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       setStatusText(reactionText);
 
       // Delay transition to let user register visual reaction
-      setTimeout(() => {
+      transitionTimeoutRef.current = setTimeout(() => {
+        if (!isMountedRef.current) return;
         // Clear evaluation reaction so face resets
         setLastEvalRecord(null);
 
@@ -934,6 +958,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         setVivaState("speaking");
         VoiceManager.speak(nextQuestion.speech, config.personality,
           () => {
+            if (!isMountedRef.current) return;
             setVisualState("speaking");
             setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
             startWaveAnimations();
@@ -942,6 +967,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
             }
           },
           () => {
+            if (!isMountedRef.current) return;
             if (interruptedRef.current) return;
             startListeningMode();
           }
@@ -1037,7 +1063,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
 
     clearHesitationTimer();
 
-    onFinishViva({
+    const reportPayload = {
       ...baseReport,
       askedTopics: SessionContextManager.askedTopics || [],
       endedEarly,
@@ -1049,8 +1075,30 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       isMockExternal: config.isMockExternal || false,
       examinerPersonality: config.personality,
       recordedAudios: audioUrls,
+      mode: config.mode,
+      hindsightData: null,
+      hindsightLoading: true
+    };
+
+    // Fire hindsight analysis asynchronously — does NOT block the results screen
+    HindsightEngine.analyze({
+      subjectName: config.topic,
+      askedQuestions: baseReport.askedQuestions,
+      askedQuestionsObjects: baseReport.askedQuestionsObjects,
+      answerTranscripts: baseReport.answerTranscripts,
+      detectedEmotions: baseReport.detectedEmotions,
+      personality: config.personality,
       mode: config.mode
+    }).then(hindsightResult => {
+      // Enrich the report data after hindsight resolves
+      reportPayload.hindsightData = hindsightResult;
+      reportPayload.hindsightLoading = false;
+    }).catch(err => {
+      console.warn("HindsightEngine failed, results will use original data:", err);
+      reportPayload.hindsightLoading = false;
     });
+
+    onFinishViva(reportPayload);
   };
 
   // Unified Submission for Oral & Keyboard Modes

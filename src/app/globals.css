@@ -6009,11 +6009,36 @@ main, header, footer {
 
   .suggested-revision-card { order: 20 !important; }
   .replay-card { order: 30 !important; }
+  .hindsight-card { order: 19 !important; }
 }
 
+/* ==========================================
+   HINDSIGHT RETROSPECTIVE STYLES
+   ========================================== */
 
+@keyframes hindsight-spin {
+  to { transform: rotate(360deg); }
+}
 
+.hindsight-card {
+  transition: var(--transition-smooth);
+}
 
+.hindsight-card:hover {
+  box-shadow: 0 2px 12px hsla(258, 80%, 56%, 0.08);
+}
+
+.hindsight-evidence-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-sm);
+}
+
+@media (max-width: 520px) {
+  .hindsight-evidence-grid {
+    grid-template-columns: 1fr;
+  }
+}
 
 
 

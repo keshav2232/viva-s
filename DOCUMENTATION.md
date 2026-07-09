@@ -28,6 +28,7 @@
 20. [Score Calculation Algorithms](#20-score-calculation-algorithms)
 21. [Examiner Personalities](#21-examiner-personalities)
 22. [Design System & CSS Architecture](#22-design-system--css-architecture)
+23. [Hindsight Retrospective Analysis](#23-hindsight-retrospective-analysis)
 
 ---
 
@@ -740,6 +741,28 @@ Singleton in-memory store (module-level object, not React state):
 | `isSpeaking()` | Checks !audio.paused or speechSynthesis.speaking |
 | `triggerFailsafeFallback(...)` | Browser TTS with personality pacing + forced completion timeout |
 
+### HindsightEngine
+
+| Method | Description |
+|---|---|
+| `analyze(params)` | Sends full session data to `/api/viva` with `action: "hindsight-analyze"`. Returns cross-question retrospective analysis. Params: `{ subjectName, askedQuestions, askedQuestionsObjects, answerTranscripts, detectedEmotions, personality, mode }` |
+| `getLocalFallback(askedQuestions, answerTranscripts, detectedEmotions, mode)` | Rule-based heuristic fallback when API is unavailable. Detects trajectory patterns, contradictions, bluffing via statistical analysis of per-round metrics |
+
+**Return schema:**
+
+| Field | Type | Description |
+|---|---|---|
+| `sessionNarrative` | string | 2-3 sentence narrative of the student's performance arc |
+| `trajectoryPattern` | `"ascending"` \| `"declining"` \| `"steady"` | Direction of confidence over the session |
+| `trajectoryDescription` | string | Explanation of the trajectory pattern |
+| `contradictions` | array | Objects with `{ rounds: [1,3], description }` for detected answer contradictions |
+| `bluffingWarning` | string \| null | Warning if persistent bluffing pattern detected across 2+ rounds |
+| `strongestRound` | object | `{ round, topic, score, evidence }` for the best-performing round |
+| `weakestRound` | object | `{ round, topic, score, evidence }` for the worst-performing round |
+| `recommendations` | string[] | Actionable improvement/revision tips (Gemini only) |
+| `adjustedScores` | null | Reserved for future score adjustment feature |
+| `isLocalFallback` | boolean | `true` if results came from local heuristics rather than Gemini |
+
 ---
 
 ## 16. Components Reference
@@ -970,6 +993,114 @@ Defined in `src/utils/mockData.js`:
 | .filler-bar-fill | Animated lexical filler gauge fill |
 | .no-print | Hidden during print/PDF export |
 | .screen-hidden | Visible only in print mode |
+
+---
+
+## 23. Hindsight Retrospective Analysis
+
+### What Is Hindsight?
+
+Hindsight is a **post-session retrospective analysis pattern** where the AI looks backward at the entire completed exam session to identify cross-question patterns that per-round scoring cannot detect. Unlike real-time evaluation (which scores each answer in isolation as it happens), Hindsight processes all questions and answers **together** after the exam ends, enabling:
+
+- **Contradiction detection**: Finding cases where the student's answer in Round 1 contradicts what they said in Round 3
+- **Bluffing pattern detection**: Identifying persistent high verbal confidence paired with low conceptual accuracy across multiple rounds
+- **Performance arc narrative**: Understanding whether the student started strong and collapsed, warmed up gradually, or maintained steady composure
+- **Evidence-based strongest/weakest identification**: Pinpointing exactly which round was best and worst with detailed reasoning
+
+### Why Hindsight Over Cascade Flow?
+
+VivaSim's existing architecture is already a **cascade flow** — the state machine in `ActiveViva.jsx` chains:
+
+```
+generate-question → speak → listen → evaluate-answer → generate-next-question
+```
+
+Each stage passes accumulated context downstream. Adding more cascade stages would increase latency between questions and require refactoring the state machine. Hindsight was chosen because:
+
+| Factor | Cascade Flow | Hindsight |
+|---|---|---|
+| Latency impact on live exam | 🔴 Adds wait between questions | 🟢 Zero (post-exam only) |
+| Disrupts existing flow? | 🔴 Yes (new stages in state machine) | 🟢 No (additive layer after `handleFinish`) |
+| Implementation risk | 🔴 High (refactor core loop) | 🟢 Low (1 new service, 1 API action, 2 minor edits) |
+| Offline graceful degradation | 🔴 Complex (each stage needs fallback) | 🟢 Simple (skip hindsight, use original data) |
+| Cross-question pattern detection | ❌ Not possible (each stage sees partial data) | ✅ Sees ALL rounds simultaneously |
+
+### Architecture
+
+Hindsight operates as a purely additive layer that runs between `handleFinish()` and the Results screen:
+
+```
+Exam ends → handleFinish() → compileFinalReport()
+                                    ↓
+                        HindsightEngine.analyze()
+                        (async, non-blocking)
+                                    ↓
+                        Results screen loads immediately
+                        with original per-round data
+                                    ↓
+                        When hindsight resolves → UI updates
+                        with retrospective insights
+```
+
+**Key design decisions:**
+
+1. **Non-blocking**: The Results screen renders immediately with original data. Hindsight enriches it asynchronously when ready.
+2. **Graceful degradation**: If the Gemini API fails, `HindsightEngine.getLocalFallback()` provides heuristic-based analysis using the existing per-round metrics.
+3. **Never overwrites**: Hindsight data is stored alongside original scores, never replacing them.
+4. **Single API call**: Only one Gemini request per session (vs 8+ during the live exam), minimal quota impact.
+
+### Files Involved
+
+| File | Role |
+|---|---|
+| `src/services/HindsightEngine.js` | Client-side service that calls the API and provides local fallback |
+| `src/app/api/viva/route.js` | Server-side `handleHindsightAnalyze()` function and offline fallback |
+| `src/components/ActiveViva.jsx` | Fires `HindsightEngine.analyze()` asynchronously in `handleFinish()` |
+| `src/components/Results.jsx` | Renders the "AI Session Retrospective" card with all hindsight insights |
+| `src/app/globals.css` | Spinner animation and responsive styles for the retrospective card |
+
+### API Action: `hindsight-analyze`
+
+Added to the existing `/api/viva` route as a new switch case.
+
+**Request payload:**
+
+```json
+{
+  "action": "hindsight-analyze",
+  "subjectName": "Thermodynamics",
+  "askedQuestions": ["Q1 text", "Q2 text", ...],
+  "askedQuestionsObjects": [{ "text": "...", "topic": "...", "difficulty": "..." }, ...],
+  "answerTranscripts": ["A1 text", "A2 text", ...],
+  "detectedEmotions": [{ "correctness": 85, "confidence": 78, ... }, ...],
+  "personality": "strict",
+  "mode": "academic"
+}
+```
+
+**Response schema:** See [HindsightEngine service reference](#hindsightengine) above.
+
+### Local Fallback Logic
+
+When the API is unavailable, `HindsightEngine.getLocalFallback()` performs heuristic analysis:
+
+1. **Trajectory detection**: Compares average confidence of first-half vs second-half rounds. A difference > 12 points triggers "ascending" or "declining" classification.
+2. **Contradiction detection**: Finds round pairs where one scored ≥ 80% correctness and another scored < 55%, flagging potential knowledge inconsistency.
+3. **Bluffing detection**: Identifies rounds where confidence > 70% but correctness < 55%. Two or more such rounds trigger a bluffing warning.
+4. **Strongest/weakest identification**: Simply finds the round with max and min correctness scores.
+
+### UI: AI Session Retrospective Card
+
+Rendered in the Results screen's left panel (inside the "Plan" mobile tab). Contains:
+
+- **Performance Arc**: Purple-bordered narrative summary of the session trajectory
+- **Confidence Trajectory**: Icon + description showing ascending/declining/steady pattern
+- **Contradictions**: Red-bordered alerts for cross-question inconsistencies
+- **Bluffing Warning**: Amber-bordered alert for detected bluffing patterns
+- **Strongest/Weakest Evidence**: Side-by-side green/red cards with round-specific evidence
+- **AI Recommendations**: Numbered actionable improvement tips (Gemini-powered only)
+- **Loading spinner**: Shown while hindsight is processing
+- **Unavailable state**: Graceful message if < 2 rounds completed
 
 ---
 

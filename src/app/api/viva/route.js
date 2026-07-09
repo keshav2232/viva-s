@@ -120,6 +120,8 @@ export async function POST(req) {
         const humeKey = process.env.HUME_API_KEY || "zxaj1GRdT7kD3G58PEUG3UTGmjHrrofETDKFQAGGmfY4hQtT";
         const humeResult = await handleAnalyzeHumeEmotion(payload.audioBase64, humeKey);
         return NextResponse.json(humeResult);
+      case "hindsight-analyze":
+        return await handleHindsightAnalyze(payload, apiKey);
       default:
         return NextResponse.json({ error: "Invalid action type" }, { status: 400 });
     }
@@ -582,6 +584,96 @@ async function handleGenerateSubquestion(payload, apiKey) {
 }
 
 // ==========================================
+// 6. HINDSIGHT RETROSPECTIVE ANALYSIS
+// ==========================================
+async function handleHindsightAnalyze(payload, apiKey) {
+  const { subjectName, askedQuestions, askedQuestionsObjects, answerTranscripts, detectedEmotions, personality, mode } = payload;
+  const isProfessional = mode === "professional";
+
+  // Build a structured Q&A summary for Gemini to review
+  let roundsSummary = "";
+  const totalRounds = askedQuestions ? askedQuestions.length : 0;
+
+  for (let i = 0; i < totalRounds; i++) {
+    const qObj = askedQuestionsObjects && askedQuestionsObjects[i] ? askedQuestionsObjects[i] : {};
+    const emo = detectedEmotions && detectedEmotions[i] ? detectedEmotions[i] : {};
+    roundsSummary += `\nROUND ${i + 1}:
+  Topic: "${qObj.topic || "Unknown"}" | Difficulty: ${qObj.difficulty || "Medium"}
+  Question: "${askedQuestions[i]}"
+  Student Answer: "${answerTranscripts[i] || "[No answer provided]"}"
+  Per-Round Metrics: Correctness=${emo.correctness || 0}%, Confidence=${emo.confidence || 0}%, Clarity=${emo.clarity || 0}%, Nervousness=${emo.nervousness || 0}%, Hesitation=${emo.hesitation || 0}%, Tag="${emo.tag || "Unknown"}"
+`;
+  }
+
+  const prompt = isProfessional
+    ? `You are an expert interview performance analyst. You have access to a COMPLETE mock interview session that has already been scored per-round. Your job is to perform a RETROSPECTIVE cross-question analysis — looking backward at ALL rounds together to find patterns that per-round scoring missed.
+
+Subject/Role: "${subjectName}"
+Interviewer Personality: "${personality}"
+Total Rounds: ${totalRounds}
+
+COMPLETE SESSION DATA:
+${roundsSummary}
+
+RETROSPECTIVE ANALYSIS TASKS:
+1. Write a 2-3 sentence narrative describing the candidate's overall performance arc (how they started vs how they ended, momentum shifts)
+2. Identify the confidence trajectory pattern: "ascending" (improved over time), "declining" (weakened over time), or "steady"
+3. Detect any CONTRADICTIONS where the candidate's answer in one round contradicts or undermines their answer in another round
+4. Detect BLUFFING PATTERNS where the candidate showed high verbal confidence but low technical accuracy across multiple rounds
+5. Identify the single strongest round (with evidence) and single weakest round (with evidence)
+6. Provide 2-3 specific, actionable improvement recommendations based on cross-session patterns
+
+Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown blocks:
+{
+  "sessionNarrative": "2-3 sentence performance arc narrative",
+  "trajectoryPattern": "ascending" | "declining" | "steady",
+  "trajectoryDescription": "1 sentence explaining the confidence trajectory",
+  "contradictions": [
+    { "rounds": [1, 3], "description": "What was contradicted and why it matters" }
+  ],
+  "bluffingWarning": "string or null — only if persistent bluffing pattern detected across 2+ rounds",
+  "strongestRound": { "round": 1, "topic": "Topic Name", "score": 85, "evidence": "Why this was the strongest" },
+  "weakestRound": { "round": 3, "topic": "Topic Name", "score": 45, "evidence": "Why this was the weakest" },
+  "recommendations": ["Actionable improvement tip 1", "Actionable improvement tip 2"],
+  "adjustedScores": null
+}`
+    : `You are an expert academic examination analyst. You have access to a COMPLETE oral examination (viva) session that has already been scored per-round. Your job is to perform a RETROSPECTIVE cross-question analysis — looking backward at ALL rounds together to find patterns that per-round scoring missed.
+
+Subject: "${subjectName}"
+Examiner Personality: "${personality}"
+Total Rounds: ${totalRounds}
+
+COMPLETE SESSION DATA:
+${roundsSummary}
+
+RETROSPECTIVE ANALYSIS TASKS:
+1. Write a 2-3 sentence narrative describing the student's overall performance arc (how they started vs how they ended, momentum shifts)
+2. Identify the confidence trajectory pattern: "ascending" (improved over time), "declining" (weakened over time), or "steady"
+3. Detect any CONTRADICTIONS where the student's answer in one round contradicts or undermines their answer in another round
+4. Detect BLUFFING PATTERNS where the student showed high verbal confidence but low conceptual accuracy across multiple rounds
+5. Identify the single strongest round (with evidence) and single weakest round (with evidence)
+6. Provide 2-3 specific, actionable revision recommendations based on cross-session patterns
+
+Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown blocks:
+{
+  "sessionNarrative": "2-3 sentence performance arc narrative",
+  "trajectoryPattern": "ascending" | "declining" | "steady",
+  "trajectoryDescription": "1 sentence explaining the confidence trajectory",
+  "contradictions": [
+    { "rounds": [1, 3], "description": "What was contradicted and why it matters" }
+  ],
+  "bluffingWarning": "string or null — only if persistent bluffing pattern detected across 2+ rounds",
+  "strongestRound": { "round": 1, "topic": "Topic Name", "score": 85, "evidence": "Why this was the strongest" },
+  "weakestRound": { "round": 3, "topic": "Topic Name", "score": 45, "evidence": "Why this was the weakest" },
+  "recommendations": ["Actionable revision tip 1", "Actionable revision tip 2"],
+  "adjustedScores": null
+}`;
+
+  const responseJson = await callGeminiAPI(prompt, apiKey);
+  return NextResponse.json(responseJson);
+}
+
+// ==========================================
 // GEMINI API CALLER
 // ==========================================
 async function callGeminiAPI(prompt, apiKey) {
@@ -663,6 +755,14 @@ function handleOfflineFallback(payload) {
   const { action, mode } = payload;
   const isProfessional = mode === "professional";
   
+  if (action === "hindsight-analyze") {
+    // Hindsight gracefully degrades — client-side HindsightEngine has its own local fallback
+    return NextResponse.json({ 
+      sessionNarrative: null, 
+      isOfflineFallback: true 
+    });
+  }
+
   if (action === "generate-hint") {
     const { question, answer, topic } = payload;
     if (isProfessional) {
