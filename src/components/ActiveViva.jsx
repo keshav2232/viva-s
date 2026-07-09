@@ -114,8 +114,10 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       setTimeRemaining(prev => {
         if (prev <= 1) {
           clearInterval(timer);
-          alert("Time is up! Let's proceed to your final evaluation.");
-          handleFinish(false);
+          setTimeout(() => {
+            alert("Time is up! Let's proceed to your final evaluation.");
+            handleFinish(false);
+          }, 0);
           return 0;
         }
         return prev - 1;
