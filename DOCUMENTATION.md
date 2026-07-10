@@ -38,7 +38,7 @@ VivaSim solves a critical gap in academic preparation — students rarely get to
 
 - **Adaptive AI questioning** that branches based on student performance
 - **Four examiner personalities** from friendly to terrifying, with distinct voices and facial expressions
-- **Real-time biometric monitoring** (confidence, nervousness, hesitation, WPM) while you speak
+- **Background biometric monitoring** (confidence, nervousness, hesitation, WPM) calculated in real-time as you speak
 - **Syllabus-grounded questions** from uploaded PDFs, TXT files, or AI-expanded topics
 - **Interactive mind map** for visual curriculum navigation and targeted micro-drills
 - **Post-viva scorecard** with emotion timeline, speech fluency diagnostics, and weakness analysis
@@ -154,6 +154,13 @@ NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=...
 
 When a user logs in, stats are **recalculated from actual session data** (not read from a stored stats doc blindly). This prevents stale or injected mock data from leaking into the cloud stats view. The reconciled stats are then written back to Firestore if different.
 
+### Landing Page & Portal Access UI
+
+The portal access interface (`src/components/AuthScreen.jsx`) serves both as the informative marketing landing page and the entry gate:
+- **Call-to-Action Buttons**: Marketing landing buttons (e.g. hero CTA, sticky header action, bottom section CTA) are labeled as **"Get Started"** for a clear, direct conversion funnel.
+- **Responsive Mobile Layout**: On narrow screens (`max-width: 640px`), the header aligns elements dynamically to the edges, and the top auth navigation links are reorganized:
+  - Replaces the desktop pipe-separated navigation (`← Read Practice Presets | New to PrepSim? Create account`) with a clean, responsive flex row displaying a simple `← Back` link and an `auth-nav-toggle` button aligned side-by-side.
+
 ---
 
 ## 6. Application Routing & State Machine
@@ -221,6 +228,11 @@ Two modes:
 | **Examiner Personality** | Friendly / Strict / Brutal / Viva Terror |
 | **Voice Sample** | Play a personality voice clip via `VoiceManager.speak()` |
 
+#### Examiner Personality Select on Mobile
+- Touch interfaces lack hover states, which previously hid the character descriptions on personality cards.
+- A dedicated **info button** (`.info-btn-mobile`) was added on the top right of each personality card.
+- Tapping this button toggles a glassmorphic overlay (`.personality-details-overlay`) directly on top of the selected card to display its character attributes (Patience, Grading aggressiveness, and detailed profile description).
+
 ### Step 3: Preview — Mind Map & Configuration Review
 
 Shows:
@@ -249,9 +261,16 @@ The exam follows a deterministic state machine with 5 states:
 |---|---|
 | `intro` | SessionContextManager reset; first question generated; examiner greets student |
 | `speaking` | ElevenLabs TTS plays; waveform animates; background STT watches for interruptions (strict/brutal/terror) |
-| `listening` | SpeechManager active; live biometric tracker updates every 350ms; 7.5s silence timer ticking |
+| `listening` | SpeechManager active; background biometric tracker updates metrics every 350ms; 7.5s silence timer ticking |
 | `analyzing` | Answer submitted; Gemini/local evaluator scores response; avatar shows eval reaction |
 | `generating` | Next question fetched from Gemini or fallback; preloaded to cache |
+
+### Audio Safety Pre-Unlock Flow
+Modern mobile and desktop browsers enforce strict autoplay policies that block programmatically triggered text-to-speech (TTS) audio until an explicit user interaction occurs.
+- To prevent silent questions or early failsafe fallbacks, `ActiveViva` implements a gateway state governed by `sessionUnlocked` (boolean).
+- Before entering the `"intro"` state or restoring a paused session, the component renders a full-screen **"Start/Resume Session"** card overlay.
+- Clicking the action button triggers a dummy `SpeechSynthesisUtterance("")` on the `window.speechSynthesis` object, programmatically unlocking the browser's audio channel.
+- Once unlocked (`sessionUnlocked` is set to `true`), the actual viva simulation, timer interval, and voice generation flow automatically launch.
 
 ### Question Flow (4 questions per viva)
 
@@ -478,6 +497,14 @@ grade: A+ (≥90), A (≥82), B+ (≥74), B (≥64), C (≥50)
 - The `screen-hidden` class renders both the Timeline and Fluency panels stacked vertically in print view
 - Students can print-to-PDF for a complete exam report
 
+### Mobile Layout & Grid Responsiveness
+To make the post-viva report fully responsive on mobile devices:
+- Inline grid and flex stylings were refactored into CSS classes inside `globals.css`:
+  - **`.results-grid`**: Replaces the fixed desktop 2-column layout with a single-column layout on screens smaller than `640px`.
+  - **`.scorecard-radial-row`**: Adjusts the score radial circle and summary to display centered and vertically stacked on mobile.
+  - **`.scorecard-details-grid`**: Flexes from a 2-column details display to a neat single-column stack on touch devices.
+  - **`.suggested-revision-row`** & **`.lexical-stats-grid`**: Restructures details text layout constraints so text labels and counts wrap without overflowing container boundaries.
+
 ---
 
 ## 13. Feature 7 — Interactive Syllabus Mind Map & Target Drills
@@ -501,6 +528,10 @@ Computes a Left-to-Right hierarchical SVG node layout dynamically from `syllabus
 - **SVG viewport**: 640×340
 - **Coordinate system**: Root at (70, 170); Units at (220, spread evenly); Subtopics at (430, evenly distributed under unit)
 - **Links**: Cubic Bezier paths `M x1 y1 C midX y1, midX y2, x2 y2`
+
+### Responsive SVG Scaling
+- Rather than using static pixel constraints that would cause clipping on small viewports, the mind map SVG element has its width set to `100%`, max-width bounded to `640px`, and max-height set dynamically based on the height of the units/subtopics node tree.
+- This configuration enables the mind map to shrink and scale down dynamically to match any client viewport width, preventing layout breakages.
 
 ### Node Types & Styles
 
@@ -625,7 +656,7 @@ The current implementation instead runs a **local acoustic estimator**:
 
 Real prosody data is already well-covered by two other systems:
 - **`AnswerEvaluationService.calculateLocalDeliveryMetrics()`** — lexical analysis of filler words, WPM, pause counts from transcript text
-- **Live biometric tracker in `ActiveViva.jsx`** — 350ms polling of `SpeechManager.gapsHistory` and real-time filler detection
+- **Background biometric tracker in `ActiveViva.jsx`** — 350ms polling of `SpeechManager.gapsHistory` and real-time filler detection (not shown on UI to avoid candidate anxiety, but calculated for results page)
 
 ---
 
@@ -940,7 +971,8 @@ Defined in `src/utils/mockData.js`:
 | **Prompt tone** | Warm, supportive, hints | Formal, precise, no hints | Skeptical, challenging | Rapid-fire, logic traps |
 | **Nervousness handling** | Reduces difficulty | Slightly reduces intensity | Increases pressure | Completely unpredictable |
 | **Interruption** | Does not interrupt | Interrupts | Interrupts aggressively | Harsh rebuke |
-| **ElevenLabs stability** | 0.65 | 0.65 | 0.38 | 0.38 |
+| **ElevenLabs stability** | 0.65 | 0.65 | 0.38 | 0.22 (dynamic, intense) |
+| **ElevenLabs style** | 0.00 | 0.00 | 0.10 | 0.25 (exaggerated emotion) |
 | **Web Speech rate** | 0.98 | 0.90 | 1.05 | 0.88 |
 | **Web Speech pitch** | 1.05 | 0.90 | 0.95 | 0.80 |
 
@@ -981,6 +1013,10 @@ Defined in `src/utils/mockData.js`:
 | fadeIn | Screen transition fade |
 | slideIn | Toast/banner slide-in |
 
+### Mobile Grid Layout System
+- **Static Box Grid Overrides**: On screens narrower than `640px`, the horizontal swipeable carousels for the evaluation panels (Section 3) and methodology pipeline steps (Section 4) are replaced by a static box grid (2x2 layout, with the last item spanning full width if odd).
+- **Hiding Decorative Layouts**: The timeline spectrum bar and pipeline connection lines are hidden on mobile layouts, keeping the visual hierarchy simple and legible.
+
 ### Notable Component Classes
 
 | Class | Description |
@@ -991,6 +1027,16 @@ Defined in `src/utils/mockData.js`:
 | .mood-stern.mood-shake | Stern headshake animation trigger |
 | .waveform-bar | Individual audio visualizer bars |
 | .filler-bar-fill | Animated lexical filler gauge fill |
+| .info-btn-mobile | Button on examiner card to toggle details overlay on mobile |
+| .personality-details-overlay| Mobile overlay details for examiner cards on tap |
+| .results-grid | Flexbox/grid wrapper for results cards allowing stacking on mobile |
+| .scorecard-radial-row | Custom flex layout for radial score circle to stack on mobile |
+| .scorecard-details-grid | Flex layout for academic scorecard fields |
+| .suggested-revision-row | Suggested revision container with custom mobile text wrapping |
+| .lexical-stats-grid | Word metric summary details adjusted for mobile screens |
+| .landing-header | Landing page responsive sticky header |
+| .landing-back-link | CTA link for returning to landing page from login |
+| .auth-nav-toggle | Responsive switch for auth sign in / sign up tabs |
 | .no-print | Hidden during print/PDF export |
 | .screen-hidden | Visible only in print mode |
 

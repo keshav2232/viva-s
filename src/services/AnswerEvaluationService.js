@@ -12,7 +12,7 @@ export const AnswerEvaluationService = {
    * @returns {Promise<object>} Combined metrics { confidence, clarity, nervousness, hesitation, correctness, accuracy, completeness, tag }
    */
   async evaluateResponse(params) {
-    const { question, answer, syllabus, speechDurationMs, pauseCount, liveMetrics, isHesitationPenalty, mode } = params;
+    const { question, answer, syllabus, speechDurationMs, pauseCount, liveMetrics, isHesitationPenalty, mode, audioBase64 } = params;
 
     // 1. Calculate local acoustic/delivery metrics (prefer live-tracked metrics)
     const delivery = liveMetrics || this.calculateLocalDeliveryMetrics(answer, speechDurationMs, pauseCount);
@@ -27,21 +27,35 @@ export const AnswerEvaluationService = {
           question,
           answer,
           syllabus,
-          mode
+          mode,
+          audioBase64
         })
       });
 
       if (!response.ok) throw new Error("Evaluation API request failed");
       const semanticGrading = await response.json();
 
-      // Adjust dynamic nervousness and confidence based on AI grading results
+      // Adjust dynamic nervousness and confidence based on AI grading results if Gemini didn't return them directly
       let confAdjustment = 0;
       if (semanticGrading.tag === "Strong") confAdjustment = 10;
       else if (semanticGrading.tag === "Weak") confAdjustment = -15;
       else if (semanticGrading.tag === "Bluffing") confAdjustment = -20;
 
-      const finalConfidence = Math.min(Math.max(delivery.confidence + confAdjustment, 30), 98);
-      const finalClarity = Math.round((delivery.clarity * 0.4) + (semanticGrading.clarity * 0.6));
+      const finalConfidence = semanticGrading.confidence !== undefined
+        ? semanticGrading.confidence
+        : Math.min(Math.max(delivery.confidence + confAdjustment, 30), 98);
+
+      const finalClarity = semanticGrading.clarity !== undefined
+        ? semanticGrading.clarity
+        : Math.round((delivery.clarity * 0.4) + (semanticGrading.clarity * 0.6));
+
+      const finalNervousness = semanticGrading.nervousness !== undefined
+        ? semanticGrading.nervousness
+        : delivery.nervousness;
+
+      const finalHesitation = semanticGrading.hesitation !== undefined
+        ? semanticGrading.hesitation
+        : delivery.hesitation;
 
       if (isHesitationPenalty) {
         semanticGrading.correctness = Math.max(Math.round(semanticGrading.correctness * 0.8), 0);
@@ -53,8 +67,8 @@ export const AnswerEvaluationService = {
         // Combined metrics
         confidence: finalConfidence,
         clarity: finalClarity,
-        nervousness: delivery.nervousness,
-        hesitation: delivery.hesitation,
+        nervousness: finalNervousness,
+        hesitation: finalHesitation,
         wpm: delivery.wpm || 120,
         fillerCount: delivery.fillerCount || 0,
         

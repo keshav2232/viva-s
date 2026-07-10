@@ -69,6 +69,10 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
   const introTimeoutRef = useRef(null);
   const transitionTimeoutRef = useRef(null);
   const isMountedRef = useRef(true);
+  
+  // Refs for tracking background evaluations
+  const pendingAudioEvalRef = useRef(null);
+  const evaluationPromisesRef = useRef([]);
 
   // Refs for tracking latest state values in async callbacks
   const activeQuestionRef = useRef(activeQuestion);
@@ -331,7 +335,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     // Reset Session Context
     SessionContextManager.reset();
     
-    try {      const firstQuestion = await QuestionGraphEngine.generateNextQuestion({
+    try {
+      const firstQuestion = await QuestionGraphEngine.generateNextQuestion({
         syllabus: config.syllabusStructure,
         personality: config.personality,
         duration: config.duration,
@@ -481,6 +486,76 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       };
     } catch (err) {
       console.warn("FileReader error during Hume AI audio capture:", err);
+    }
+  };
+
+  const blobToBase64 = (blob) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result.split(',')[1];
+        resolve(base64String);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  const startBackgroundEvaluation = async (qIdx, answerText, audioBlob, durationMs, pauseCount, liveMetricsVal, hasPenalty) => {
+    try {
+      console.log(`Starting background evaluation for question #${qIdx + 1}...`);
+      let audioBase64 = null;
+      if (audioBlob) {
+        try {
+          audioBase64 = await blobToBase64(audioBlob);
+        } catch (blobErr) {
+          console.warn("Could not encode audio blob to base64:", blobErr);
+        }
+      }
+
+      const currentQ = SessionContextManager.askedQuestionsObjects[qIdx] || activeQuestionRef.current;
+      
+      const resultMetrics = await AnswerEvaluationService.evaluateResponse({
+        question: currentQ.text,
+        answer: answerText,
+        syllabus: config.syllabusStructure,
+        speechDurationMs: durationMs,
+        pauseCount: pauseCount,
+        liveMetrics: liveMetricsVal,
+        isHesitationPenalty: hasPenalty,
+        mode: config.mode,
+        audioBase64
+      });
+
+      console.log(`Background evaluation resolved for question #${qIdx + 1}:`, resultMetrics);
+
+      // Track nervousness for dynamic pressure adaptations
+      latestNervousnessRef.current = resultMetrics.nervousness || 20;
+
+      // Record actual metrics in SessionContextManager
+      SessionContextManager.updateRoundMetrics(qIdx, resultMetrics);
+
+      // Update askedTopics with the real metrics
+      if (currentQ.topic && SessionContextManager.askedTopics) {
+        const topicIdx = SessionContextManager.askedTopics.findIndex(t => t.topic === currentQ.topic);
+        if (topicIdx !== -1) {
+          SessionContextManager.askedTopics[topicIdx].metrics = resultMetrics;
+        }
+      }
+    } catch (err) {
+      console.error(`Background evaluation failed for question #${qIdx + 1}:`, err);
+      // Heuristic fallback if server error
+      const localDelivery = AnswerEvaluationService.calculateLocalDeliveryMetrics(answerText, durationMs, pauseCount);
+      const fallbackMetrics = AnswerEvaluationService.getLocalFallbackMetrics(liveMetricsVal || localDelivery, answerText, hasPenalty);
+      SessionContextManager.updateRoundMetrics(qIdx, fallbackMetrics);
+
+      const currentQ = SessionContextManager.askedQuestionsObjects[qIdx] || activeQuestionRef.current;
+      if (currentQ.topic && SessionContextManager.askedTopics) {
+        const topicIdx = SessionContextManager.askedTopics.findIndex(t => t.topic === currentQ.topic);
+        if (topicIdx !== -1) {
+          SessionContextManager.askedTopics[topicIdx].metrics = fallbackMetrics;
+        }
+      }
     }
   };
 
@@ -702,8 +777,17 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       },
       onAudioCaptured: (audioBlob) => {
         handleHumeEmotionAnalysis(audioBlob, currentQuestionIndex);
+        const qIdx = pendingAudioEvalRef.current ? pendingAudioEvalRef.current.qIdx : currentQuestionIndex;
         if (audioBlob && audioBlob.size > 100) {
-          recordedAudiosRef.current[currentQuestionIndex] = audioBlob;
+          recordedAudiosRef.current[qIdx] = audioBlob;
+        }
+
+        if (pendingAudioEvalRef.current) {
+          const { qIdx: pendingQIdx, answerText, durationMs, pauseCount, liveMetrics: pendingLiveMetrics, hasPenalty } = pendingAudioEvalRef.current;
+          pendingAudioEvalRef.current = null;
+          
+          const evalPromise = startBackgroundEvaluation(pendingQIdx, answerText, audioBlob, durationMs, pauseCount, pendingLiveMetrics, hasPenalty);
+          evaluationPromisesRef.current.push(evalPromise);
         }
       },
       onError: (err) => {
@@ -1110,19 +1194,18 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       const textToSubmit = writtenAnswer.trim();
       setWrittenAnswer("");
       setFallbackMode(false);
-      processResponse(textToSubmit);
+      processResponse(textToSubmit, true);
     } else {
       // Force submit current oral microphone transcript
       SpeechManager.stop();
-      
       let textToSubmit = transcriptText;
-      if (isPlaceholder || !textToSubmit || textToSubmit.includes("Speak now") || textToSubmit.includes("System is listening")) {
-        textToSubmit = config.mode === "professional"
+      if (isPlaceholder || !textToSubmit || textToSubmit.includes("System is listening") || textToSubmit.includes("Speak now")) {
+        textToSubmit = config.mode === "professional" 
           ? "[Candidate force-submitted response early without substantive oral recording]"
           : "[Student force-submitted response early without substantive oral recording]";
       }
       
-      processResponse(textToSubmit);
+      processResponse(textToSubmit, false);
     }
   };
 

@@ -221,7 +221,8 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
       }
       
       if (topicText && topicText.length > 3) {
-        const topicWords = topicText.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+        const cleanTopic = topicText.toLowerCase().replace(/[^\w\s]/g, " ");
+        const topicWords = cleanTopic.split(/\s+/).filter(w => w.length > 3);
         if (topicWords.length > 0) {
           const occurrences = topicWords.reduce((acc, word) => {
             // Escape any special regex characters to prevent SyntaxError
