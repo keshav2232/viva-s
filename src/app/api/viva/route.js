@@ -117,7 +117,7 @@ export async function POST(req) {
       case "generate-flashcards":
         return await handleGenerateFlashcards(payload.syllabusStructure, payload.mode, apiKey);
       case "analyze-hume-emotion":
-        const humeKey = process.env.HUME_API_KEY || "zxaj1GRdT7kD3G58PEUG3UTGmjHrrofETDKFQAGGmfY4hQtT";
+        const humeKey = process.env.HUME_API_KEY;
         const humeResult = await handleAnalyzeHumeEmotion(payload.audioBase64, humeKey);
         return NextResponse.json(humeResult);
       default:
@@ -1150,7 +1150,7 @@ function handleOfflineFallback(payload) {
 // ==========================================
 async function handleSynthesizeSpeech(text, personality) {
   try {
-    const apiKey = process.env.ELEVENLABS_API_KEY || "sk_f62554d4fb66affbb50f3b699c3527f54c7763d3b8fcf99f";
+    const apiKey = process.env.ELEVENLABS_API_KEY;
 
     // Dynamic Voice IDs mapped to personalities
     const voiceMap = {
