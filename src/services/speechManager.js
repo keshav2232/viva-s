@@ -97,7 +97,7 @@ export const SpeechManager = {
       };
 
       this.recognition.onerror = (event) => {
-        console.error("Speech Recognition Error:", event.error);
+        console.warn("Speech Recognition Error:", event.error);
         this.lastError = event.error;
         this.clearSilenceTimer();
         

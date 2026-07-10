@@ -385,10 +385,16 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
         return Math.max(135, Math.min(220, name.length * 7.5 + 24));
       } else if (type === "unit") {
         const cleanName = name.replace(/^(unit|competency)\s*\d+\s*:\s*/i, "");
-        return Math.max(130, Math.min(190, cleanName.length * 7 + 24));
+        return Math.max(130, Math.min(200, cleanName.length * 7 + 24));
       } else {
-        return Math.max(130, Math.min(230, name.length * 6.5 + 20));
+        return Math.max(150, Math.min(300, name.length * 6.5 + 24));
       }
+    };
+
+    const getSubtopicHeight = (name, width) => {
+      const charsPerLine = Math.floor((width - 16) / 6);
+      const lines = Math.ceil(name.length / charsPerLine);
+      return Math.max(32, Math.min(52, lines * 16 + 10));
     };
 
     const nodes = [];
@@ -398,30 +404,36 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
     let currentY = 24; // starting padding
     const subtopicGap = 12; // vertical gap between subtopics inside a unit
     const unitClusterGap = 32; // vertical gap between unit clusters
-    const cardHeight = 32;
+    const defaultCardHeight = 32;
 
     const unitLayouts = [];
 
     syllabusStructure.units.forEach((u, uIdx) => {
       const topicYs = [];
+      const topicHeights = [];
       u.topics.forEach((t, tIdx) => {
-        topicYs.push(currentY + cardHeight / 2);
-        currentY += cardHeight + subtopicGap;
+        const tWidth = getNodeWidth(t, "subtopic");
+        const tHeight = getSubtopicHeight(t, tWidth);
+        topicHeights.push(tHeight);
+        topicYs.push(currentY + tHeight / 2);
+        currentY += tHeight + subtopicGap;
       });
 
-      let calculatedUnitY = currentY - cardHeight / 2;
+      let calculatedUnitY = currentY - defaultCardHeight / 2;
       if (topicYs.length > 0) {
         calculatedUnitY = (topicYs[0] + topicYs[topicYs.length - 1]) / 2;
       } else {
         // Fallback if no subtopics
-        topicYs.push(currentY + cardHeight / 2);
-        calculatedUnitY = currentY + cardHeight / 2;
-        currentY += cardHeight + subtopicGap;
+        topicYs.push(currentY + defaultCardHeight / 2);
+        topicHeights.push(defaultCardHeight);
+        calculatedUnitY = currentY + defaultCardHeight / 2;
+        currentY += defaultCardHeight + subtopicGap;
       }
 
       unitLayouts.push({
         unitY: calculatedUnitY,
-        topicYs: topicYs
+        topicYs: topicYs,
+        topicHeights: topicHeights
       });
 
       // Adjust for next cluster gap
@@ -431,7 +443,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
     const svgHeight = Math.max(340, currentY - unitClusterGap + 24);
 
     // 1. Subject Node
-    const subjectX = 95;
+    const subjectX = 80;
     const subjectY = svgHeight / 2;
     const subjectWidth = getNodeWidth(syllabusStructure.topic, "subject");
 
@@ -447,8 +459,8 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
 
     syllabusStructure.units.forEach((u, uIdx) => {
       // 2. Unit Node
-      const unitX = 295;
-      const { unitY, topicYs } = unitLayouts[uIdx];
+      const unitX = 260;
+      const { unitY, topicYs, topicHeights } = unitLayouts[uIdx];
       const unitId = `unit_${uIdx}`;
       const unitWidth = getNodeWidth(u.name, "unit");
       
@@ -476,10 +488,11 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
 
       // 3. Subtopics
       u.topics.forEach((t, tIdx) => {
-        const topicX = 515;
+        const topicWidth = getNodeWidth(t, "subtopic");
+        const topicHeight = topicHeights[tIdx] || defaultCardHeight;
+        const topicX = unitX + unitWidth / 2 + 20 + topicWidth / 2;
         const topicY = topicYs[tIdx];
         const topicId = `topic_${uIdx}_${tIdx}`;
-        const topicWidth = getNodeWidth(t, "subtopic");
         
         nodes.push({
           id: topicId,
@@ -490,7 +503,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
           unitIndex: uIdx,
           topicIndex: tIdx,
           width: topicWidth,
-          height: 32
+          height: topicHeight
         });
 
         links.push({
@@ -1460,7 +1473,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                           </button>
                         </div>
 
-                        <svg width="100%" height="100%" viewBox={`0 0 640 ${svgHeight}`} style={{ display: "block", margin: "0 auto", userSelect: "none", maxWidth: "640px", maxHeight: `${svgHeight}px` }}>
+                        <svg width="100%" height="100%" viewBox={`0 0 ${Math.max(780, nodes.reduce((max, n) => Math.max(max, n.x + n.width / 2 + 20), 780))} ${svgHeight}`} style={{ display: "block", margin: "0 auto", userSelect: "none", maxHeight: `${svgHeight}px` }}>
                           {/* SVG Filters for glowing drop-shadows */}
                           <defs>
                             <filter id="gold-glow" x="-20%" y="-20%" width="140%" height="140%">
@@ -1575,9 +1588,10 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                                       borderRadius: "var(--radius-sm)",
                                       cursor: node.type === "subtopic" ? "pointer" : "default",
                                       transition: "var(--transition-smooth)",
-                                      whiteSpace: "nowrap",
+                                      whiteSpace: node.type === "subtopic" ? "normal" : "nowrap",
                                       overflow: "hidden",
-                                      textOverflow: "ellipsis",
+                                      textOverflow: node.type === "subtopic" ? "unset" : "ellipsis",
+                                      wordBreak: node.type === "subtopic" ? "break-word" : "normal",
                                       
                                       // Backgrounds & borders
                                       backgroundColor: node.type === "subject" 

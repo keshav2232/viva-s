@@ -7,6 +7,7 @@ import { EXAMINER_PERSONALITIES } from "@/utils/mockData";
 import { QuestionGraphEngine } from "@/services/QuestionGraphEngine";
 import { AnswerEvaluationService } from "@/services/AnswerEvaluationService";
 import { SessionContextManager } from "@/services/SessionContextManager";
+import { HindsightEngine } from "@/services/HindsightEngine";
 import ExaminerAvatar from "@/components/ExaminerAvatar";
 
 // Helper to guarantee render purity by getting timestamp outside component scope
@@ -65,14 +66,20 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
   const [liveStatusText, setLiveStatusText] = useState("Calibration active. Ready.");
   const liveTrackerRef = useRef(null);
 
+  const introTimeoutRef = useRef(null);
+  const transitionTimeoutRef = useRef(null);
+  const isMountedRef = useRef(true);
+  
+  // Refs for tracking background evaluations
+  const pendingAudioEvalRef = useRef(null);
+  const evaluationPromisesRef = useRef([]);
+
   // Refs for tracking latest state values in async callbacks
   const activeQuestionRef = useRef(activeQuestion);
   const currentQuestionIndexRef = useRef(currentQuestionIndex);
   const hesitationPenaltiesRef = useRef(hesitationPenalties);
   const liveMetricsRef = useRef(liveMetrics);
   const transcriptTextRef = useRef(transcriptText);
-  const pendingAudioEvalRef = useRef(null);
-  const evaluationPromisesRef = useRef([]);
 
   useEffect(() => { activeQuestionRef.current = activeQuestion; }, [activeQuestion]);
   useEffect(() => { currentQuestionIndexRef.current = currentQuestionIndex; }, [currentQuestionIndex]);
@@ -82,17 +89,22 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
 
   // Main initial hook: registers failsafes
   useEffect(() => {
+    isMountedRef.current = true;
     // 1. VoiceManager Init
     VoiceManager.init();
     
     // Register failsafe callback
     VoiceManager.onFailsActive = (msg) => {
-      setFailsafeWarning(msg);
+      if (isMountedRef.current) setFailsafeWarning(msg);
     };
 
     return () => {
+      isMountedRef.current = false;
       stopAudioStreams();
       if (liveTrackerRef.current) clearInterval(liveTrackerRef.current);
+      if (introTimeoutRef.current) clearTimeout(introTimeoutRef.current);
+      if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
+      if (hesitationTimerRef.current) clearTimeout(hesitationTimerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -106,8 +118,10 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       setTimeRemaining(prev => {
         if (prev <= 1) {
           clearInterval(timer);
-          alert("Time is up! Let's proceed to your final evaluation.");
-          handleFinish(false);
+          setTimeout(() => {
+            alert("Time is up! Let's proceed to your final evaluation.");
+            handleFinish(false);
+          }, 0);
           return 0;
         }
         return prev - 1;
@@ -143,7 +157,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         }
       );
     } else {
-      setTimeout(() => {
+      introTimeoutRef.current = setTimeout(() => {
         triggerIntroduction();
       }, 500);
     }
@@ -157,6 +171,9 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
   function stopAudioStreams() {
     VoiceManager.stop();
     SpeechManager.stop();
+    if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
+    if (introTimeoutRef.current) clearTimeout(introTimeoutRef.current);
+    if (hesitationTimerRef.current) clearTimeout(hesitationTimerRef.current);
   }
 
   // Live Biometric Speech Prosody Estimator
@@ -257,7 +274,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
 
     SpeechManager.start({
       onResult: (interim, final) => {
-        const text = (final + (interim ? " " + interim : "")).trim();
+        const text = (interim || "" + final || "").trim();
         // If student spoke more than a few words while examiner was actively speaking
         if (text.length > 8 && VoiceManager.isSpeaking() && !interruptedRef.current) {
           interruptedRef.current = true;
@@ -333,6 +350,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         mode: config.mode
       });
       
+      if (!isMountedRef.current) return;
+      
       setActiveQuestion(firstQuestion);
       
       // Dynamic intro speech: combine dynamic introductory greetings based on personality and user name
@@ -379,7 +398,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       
       // Preload the intro speech
       VoiceManager.preload(fullSpeech, config.personality);
-
+ 
       setVivaState("speaking");
       VoiceManager.speak(fullSpeech, config.personality,
         // onStart
@@ -399,9 +418,10 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       );
     } catch (err) {
       console.error("Failed to generate first question:", err);
+      if (!isMountedRef.current) return;
       // Fallback
       const fallback = QuestionGraphEngine.getRuleBasedOfflineFallback(1, config.personality, config.topic);
-      setActiveQuestion(fallback);
+      setActiveQuestion(fallback);;
       
       // Preload fallback speech
       VoiceManager.preload(fallback.speech, config.personality);
@@ -421,6 +441,51 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
           startListeningMode();
         }
       );
+    }
+  };
+
+  const handleHumeEmotionAnalysis = async (audioBlob, questionIndex) => {
+    try {
+      console.log(`Starting background Hume AI emotion analysis for question #${questionIndex + 1}...`);
+      
+      const reader = new FileReader();
+      reader.readAsDataURL(audioBlob);
+      reader.onloadend = async () => {
+        const base64Data = reader.result.split(',')[1];
+        
+        try {
+          const res = await fetch("/api/viva", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "analyze-hume-emotion",
+              audioBase64: base64Data
+            })
+          });
+          
+          if (!res.ok) throw new Error("Hume AI background analysis failed");
+          const humeMetrics = await res.json();
+          
+          console.log(`Hume AI analysis resolved for question #${questionIndex + 1}:`, humeMetrics);
+          
+          if (SessionContextManager.detectedEmotions && SessionContextManager.detectedEmotions[questionIndex]) {
+            const current = SessionContextManager.detectedEmotions[questionIndex];
+            
+            if (humeMetrics.confidence !== undefined) current.confidence = humeMetrics.confidence;
+            if (humeMetrics.clarity !== undefined) current.clarity = humeMetrics.clarity;
+            if (humeMetrics.nervousness !== undefined) current.nervousness = humeMetrics.nervousness;
+            if (humeMetrics.hesitation !== undefined) current.hesitation = humeMetrics.hesitation;
+            
+            if (SessionContextManager.confidenceEvolution && SessionContextManager.confidenceEvolution[questionIndex] !== undefined) {
+              SessionContextManager.confidenceEvolution[questionIndex] = humeMetrics.confidence;
+            }
+          }
+        } catch (apiErr) {
+          console.warn("Hume AI background API error:", apiErr);
+        }
+      };
+    } catch (err) {
+      console.warn("FileReader error during Hume AI audio capture:", err);
     }
   };
 
@@ -707,9 +772,11 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       },
       onSilenceDetected: (finalTranscriptText) => {
         // Hands-free auto submit
-        processResponse(finalTranscriptText, false);
+        SpeechManager.stop();
+        processResponse(finalTranscriptText);
       },
       onAudioCaptured: (audioBlob) => {
+        handleHumeEmotionAnalysis(audioBlob, currentQuestionIndex);
         const qIdx = pendingAudioEvalRef.current ? pendingAudioEvalRef.current.qIdx : currentQuestionIndex;
         if (audioBlob && audioBlob.size > 100) {
           recordedAudiosRef.current[qIdx] = audioBlob;
@@ -746,7 +813,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     setIsPlaceholder(true);
   }
 
-  async function processResponse(answerText, isKeyboard = false) {
+  async function processResponse(answerText) {
     const currentQ = activeQuestionRef.current;
     if (!currentQ) {
       console.warn("Speech input captured before activeQuestion was set, ignoring.");
@@ -762,20 +829,9 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         : "[Student remained silent or provided no substantive answer]";
     }
 
-    // Record the round immediately with pending status
-    SessionContextManager.recordRoundPending(currentQ.text, answerText, currentQ);
-
-    // Record the topic asked for custom strengths computation with placeholder metrics
-    if (currentQ.topic) {
-      if (!SessionContextManager.askedTopics) {
-        SessionContextManager.askedTopics = [];
-      }
-      SessionContextManager.askedTopics.push({
-        topic: currentQ.topic,
-        metrics: { correctness: 50, clarity: 50, confidence: 50, nervousness: 50, hesitation: 50, accuracy: 50, completeness: 50 }
-      });
-    }
-
+    setVivaState("analyzing");
+    setVisualState("analyzing");
+    setStatusText(config.mode === "professional" ? "Interviewer is evaluating your answer..." : "Examiner is evaluating your answer...");
     setTranscriptText(answerText);
     setIsPlaceholder(false);
     clearInterval(waveIntervalRef.current);
@@ -784,100 +840,227 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     const durationMs = getNow() - speechStartTime.current;
     const pauseCount = SpeechManager.gapsHistory.length;
 
-    // Trigger the background evaluation or setup pending references
-    if (isKeyboard) {
-      const evalPromise = startBackgroundEvaluation(qIdxStart, answerText, null, durationMs, pauseCount, metricsVal, penalties[qIdxStart] || false);
-      evaluationPromisesRef.current.push(evalPromise);
-    } else {
-      pendingAudioEvalRef.current = {
-        qIdx: qIdxStart,
-        answerText,
-        durationMs,
-        pauseCount,
-        liveMetrics: metricsVal,
-        hasPenalty: penalties[qIdxStart] || false
-      };
-    }
-
-    // Immediately stop SpeechManager (this will fire onAudioCaptured asynchronously if oral)
-    SpeechManager.stop();
-
-    // Progress to next question or end
-    const qIndex = qIdxStart + 1;
-    if (qIndex >= 4) {
-      handleFinish(false);
-      return;
-    }
-
-    hasHesitatedInCurrentRoundRef.current = false;
-    setCurrentQuestionIndex(qIndex);
-    setVivaState("generating");
-    setVisualState("analyzing");
-    setStatusText(config.mode === "professional" ? "Formulating next interview question..." : "Formulating next question...");
-
     try {
-      const nextQuestion = await QuestionGraphEngine.generateNextQuestion({
+      const hasPenalty = penalties[qIdxStart] || false;
+      const resultMetrics = await AnswerEvaluationService.evaluateResponse({
+        question: currentQ.text,
+        answer: answerText,
         syllabus: config.syllabusStructure,
-        personality: config.personality,
-        duration: config.duration,
-        askedList: SessionContextManager.askedQuestions,
-        answersList: SessionContextManager.answerTranscripts,
-        lastEvaluationTag: null, // Asynchronous grading: last tag is not immediately known
-        currentTopic: currentQ.topic,
-        nervousness: latestNervousnessRef.current,
-        isTargetDrill: config.isTargetDrill || false,
-        targetSubtopic: config.targetSubtopic || null,
+        speechDurationMs: durationMs,
+        pauseCount: pauseCount,
+        liveMetrics: metricsVal,
+        isHesitationPenalty: hasPenalty,
         mode: config.mode
       });
 
-      setActiveQuestion(nextQuestion);
-      // Preload next question speech!
-      VoiceManager.preload(nextQuestion.speech, config.personality);
+      // Track nervousness for dynamic pressure adaptations
+      latestNervousnessRef.current = resultMetrics.nervousness || 20;
 
-      setVivaState("speaking");
-      VoiceManager.speak(nextQuestion.speech, config.personality,
-        () => {
-          setVisualState("speaking");
-          setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
-          startWaveAnimations();
-          if (config.personality !== "friendly" && config.enableInterruption !== false) {
-            startBackgroundListeningForInterruptions(nextQuestion);
-          }
-        },
-        () => {
-          if (interruptedRef.current) return;
-          startListeningMode();
+      // Record in SessionContextManager
+      SessionContextManager.recordRound({
+        questionText: currentQ.text,
+        answerText: answerText,
+        metrics: resultMetrics,
+        questionObj: currentQ
+      });
+
+      // Also record the topic asked for custom strengths computation
+      if (currentQ.topic) {
+        if (!SessionContextManager.askedTopics) {
+          SessionContextManager.askedTopics = [];
         }
-      );
-    } catch (nextErr) {
-      console.error("Failed to generate next question in continuous block:", nextErr);
-      const qIdx = qIdxStart + 1;
-      setCurrentQuestionIndex(qIdx);
-      setVivaState("generating");
-      setVisualState("analyzing");
-      setStatusText(config.mode === "professional" ? "Formulating next interview question..." : "Formulating next question...");
+        SessionContextManager.askedTopics.push({
+          topic: currentQ.topic,
+          metrics: resultMetrics
+        });
+      }
 
-      const nextQuestion = QuestionGraphEngine.getRuleBasedOfflineFallback(qIdx + 1, config.personality, currentQ.topic);
-      setActiveQuestion(nextQuestion);
-      VoiceManager.preload(nextQuestion.speech, config.personality);
+      // Save visual reaction state
+      setLastEvalRecord({
+        correctness: resultMetrics.correctness,
+        tag: resultMetrics.tag
+      });
 
-      setVivaState("speaking");
-      VoiceManager.speak(nextQuestion.speech, config.personality,
-        () => {
-          setVisualState("speaking");
-          setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
-          startWaveAnimations();
-          if (config.personality !== "friendly" && config.enableInterruption !== false) {
-            startBackgroundListeningForInterruptions(nextQuestion);
-          }
-        },
-        () => {
-          if (interruptedRef.current) return;
-          startListeningMode();
+      // Update status text based on reaction
+      let reactionText = config.mode === "professional" ? "Interviewer is noting your response..." : "Professor is noting your response...";
+      if (resultMetrics.correctness >= 75) {
+        reactionText = `${getPersonaTitle(config.personality, config.mode)} is pleased with your answer.`;
+      } else if (resultMetrics.correctness < 55 || resultMetrics.tag === "Bluffing" || resultMetrics.tag === "Incorrect") {
+        reactionText = `${getPersonaTitle(config.personality, config.mode)} looks skeptical.`;
+      }
+      setStatusText(reactionText);
+
+      // Delay transition to let user register visual reaction
+      transitionTimeoutRef.current = setTimeout(async () => {
+        if (!isMountedRef.current) return;
+        // Clear evaluation reaction so face resets
+        setLastEvalRecord(null);
+
+        // Progress to next question or end
+        const qIndex = qIdxStart + 1;
+        if (qIndex >= 4) {
+          handleFinish(false);
+          return;
         }
-      );
+
+        hasHesitatedInCurrentRoundRef.current = false;
+        setCurrentQuestionIndex(qIndex);
+        setVivaState("generating");
+        setVisualState("analyzing");
+        setStatusText(config.mode === "professional" ? "Formulating next interview question..." : "Formulating next question...");
+
+        try {
+          const nextQuestion = await QuestionGraphEngine.generateNextQuestion({
+            syllabus: config.syllabusStructure,
+            personality: config.personality,
+            duration: config.duration,
+            askedList: SessionContextManager.askedQuestions,
+            answersList: SessionContextManager.answerTranscripts,
+            lastEvaluationTag: resultMetrics.tag,
+            currentTopic: currentQ.topic,
+            nervousness: latestNervousnessRef.current,
+            isTargetDrill: config.isTargetDrill || false,
+            targetSubtopic: config.targetSubtopic || null,
+            mode: config.mode
+          });
+
+          if (!isMountedRef.current) return;
+
+          setActiveQuestion(nextQuestion);
+          // Preload next question speech!
+          VoiceManager.preload(nextQuestion.speech, config.personality);
+
+          setVivaState("speaking");
+          VoiceManager.speak(nextQuestion.speech, config.personality,
+            () => {
+              if (!isMountedRef.current) return;
+              setVisualState("speaking");
+              setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
+              startWaveAnimations();
+              if (config.personality !== "friendly" && config.enableInterruption !== false) {
+                startBackgroundListeningForInterruptions(nextQuestion);
+              }
+            },
+            () => {
+              if (!isMountedRef.current) return;
+              if (interruptedRef.current) return;
+              startListeningMode();
+            }
+          );
+        } catch (nextErr) {
+          console.error("Failed to generate next question in delayed block:", nextErr);
+          if (!isMountedRef.current) return;
+          // Catch and handle fallback inside delayed try
+          const qIdx = qIdxStart + 1;
+          setCurrentQuestionIndex(qIdx);
+          setVivaState("generating");
+          setVisualState("analyzing");
+          setStatusText(config.mode === "professional" ? "Formulating next interview question..." : "Formulating next question...");
+
+          const nextQuestion = QuestionGraphEngine.getRuleBasedOfflineFallback(qIdx + 1, config.personality, currentQ.topic);
+          setActiveQuestion(nextQuestion);
+          VoiceManager.preload(nextQuestion.speech, config.personality);
+
+          setVivaState("speaking");
+          VoiceManager.speak(nextQuestion.speech, config.personality,
+            () => {
+              if (!isMountedRef.current) return;
+              setVisualState("speaking");
+              setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
+              startWaveAnimations();
+              if (config.personality !== "friendly" && config.enableInterruption !== false) {
+                startBackgroundListeningForInterruptions(nextQuestion);
+              }
+            },
+            () => {
+              if (!isMountedRef.current) return;
+              if (interruptedRef.current) return;
+              startListeningMode();
+            }
+          );
+        }
+      }, 3200);
+
+    } catch (err) {
+      console.error("Failed to process answer evaluation:", err);
+      // Heuristic fallback if server error
+      const localDelivery = AnswerEvaluationService.calculateLocalDeliveryMetrics(answerText, durationMs, pauseCount);
+      const hasPenalty = penalties[qIdxStart] || false;
+      const fallbackMetrics = AnswerEvaluationService.getLocalFallbackMetrics(metricsVal || localDelivery, answerText, hasPenalty);
+      
+      SessionContextManager.recordRound({
+        questionText: currentQ.text,
+        answerText: answerText,
+        metrics: fallbackMetrics,
+        questionObj: currentQ
+      });
+
+      if (!SessionContextManager.askedTopics) {
+        SessionContextManager.askedTopics = [];
+      }
+      SessionContextManager.askedTopics.push({
+        topic: currentQ.topic || (config.mode === "professional" ? "Role Core Competence" : "Syllabus Fundamentals"),
+        metrics: fallbackMetrics
+      });
+
+      // Save visual reaction state
+      setLastEvalRecord({
+        correctness: fallbackMetrics.correctness,
+        tag: fallbackMetrics.tag
+      });
+
+      // Update status text based on reaction
+      let reactionText = config.mode === "professional" ? "Interviewer is noting your response..." : "Professor is noting your response...";
+      if (fallbackMetrics.correctness >= 75) {
+        reactionText = `${getPersonaTitle(config.personality, config.mode)} is pleased with your answer.`;
+      } else if (fallbackMetrics.correctness < 55 || fallbackMetrics.tag === "Bluffing" || fallbackMetrics.tag === "Incorrect") {
+        reactionText = `${getPersonaTitle(config.personality, config.mode)} looks skeptical.`;
+      }
+      setStatusText(reactionText);
+
+      // Delay transition to let user register visual reaction
+      transitionTimeoutRef.current = setTimeout(() => {
+        if (!isMountedRef.current) return;
+        // Clear evaluation reaction so face resets
+        setLastEvalRecord(null);
+
+        const qIndex = qIdxStart + 1;
+        if (qIndex >= 4) {
+          handleFinish(false);
+          return;
+        }
+
+        hasHesitatedInCurrentRoundRef.current = false;
+        setCurrentQuestionIndex(qIndex);
+        setVivaState("generating");
+        setVisualState("analyzing");
+        setStatusText(config.mode === "professional" ? "Formulating next interview question..." : "Formulating next question...");
+
+        const nextQuestion = QuestionGraphEngine.getRuleBasedOfflineFallback(qIndex + 1, config.personality, currentQ.topic);
+        setActiveQuestion(nextQuestion);
+        // Preload next question speech!
+        VoiceManager.preload(nextQuestion.speech, config.personality);
+
+        setVivaState("speaking");
+        VoiceManager.speak(nextQuestion.speech, config.personality,
+          () => {
+            if (!isMountedRef.current) return;
+            setVisualState("speaking");
+            setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
+            startWaveAnimations();
+            if (config.personality !== "friendly" && config.enableInterruption !== false) {
+              startBackgroundListeningForInterruptions(nextQuestion);
+            }
+          },
+          () => {
+            if (!isMountedRef.current) return;
+            if (interruptedRef.current) return;
+            startListeningMode();
+          }
+        );
+      }, 3200);
     }
-  }
+  };
 
   const handlePauseSession = () => {
     stopAudioStreams();
@@ -903,28 +1086,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     onFinishViva(null); // Return directly to dashboard
   };
 
-  async function handleFinish(endedEarly = false) {
-    if (endedEarly) {
-      stopAudioStreams();
-      clearInterval(waveIntervalRef.current);
-      onFinishViva(null); // Return directly to dashboard
-      return;
-    }
-
-    setVivaState("analyzing");
-    setVisualState("analyzing");
-    setStatusText("Finalizing your performance scorecard and compiling diagnostics...");
-
-    // Wait for all background evaluations to finish
-    if (evaluationPromisesRef.current.length > 0) {
-      console.log("Waiting for pending background evaluations to resolve...");
-      try {
-        await Promise.all(evaluationPromisesRef.current);
-      } catch (err) {
-        console.warn("One or more background evaluations failed, proceeding with fallbacks:", err);
-      }
-    }
-
+  function handleFinish(endedEarly = false) {
     stopAudioStreams();
     clearInterval(waveIntervalRef.current);
     
@@ -987,7 +1149,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
 
     clearHesitationTimer();
 
-    onFinishViva({
+    const reportPayload = {
       ...baseReport,
       askedTopics: SessionContextManager.askedTopics || [],
       endedEarly,
@@ -999,9 +1161,31 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       isMockExternal: config.isMockExternal || false,
       examinerPersonality: config.personality,
       recordedAudios: audioUrls,
+      mode: config.mode,
+      hindsightData: null,
+      hindsightLoading: true
+    };
+
+    // Fire hindsight analysis asynchronously — does NOT block the results screen
+    HindsightEngine.analyze({
+      subjectName: config.topic,
+      askedQuestions: baseReport.askedQuestions,
+      askedQuestionsObjects: baseReport.askedQuestionsObjects,
+      answerTranscripts: baseReport.answerTranscripts,
+      detectedEmotions: baseReport.detectedEmotions,
+      personality: config.personality,
       mode: config.mode
+    }).then(hindsightResult => {
+      // Enrich the report data after hindsight resolves
+      reportPayload.hindsightData = hindsightResult;
+      reportPayload.hindsightLoading = false;
+    }).catch(err => {
+      console.warn("HindsightEngine failed, results will use original data:", err);
+      reportPayload.hindsightLoading = false;
     });
-  }
+
+    onFinishViva(reportPayload);
+  };
 
   // Unified Submission for Oral & Keyboard Modes
   const handleSubmit = () => {
@@ -1014,10 +1198,9 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     } else {
       // Force submit current oral microphone transcript
       SpeechManager.stop();
-      
       let textToSubmit = transcriptText;
-      if (isPlaceholder || !textToSubmit || textToSubmit.includes("Speak now") || textToSubmit.includes("System is listening")) {
-        textToSubmit = config.mode === "professional"
+      if (isPlaceholder || !textToSubmit || textToSubmit.includes("System is listening") || textToSubmit.includes("Speak now")) {
+        textToSubmit = config.mode === "professional" 
           ? "[Candidate force-submitted response early without substantive oral recording]"
           : "[Student force-submitted response early without substantive oral recording]";
       }
@@ -1233,7 +1416,77 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
             )}
           </div>
 
-          {/* Live biometric tracking calculations run in background for final results page and avatar rendering */}
+          {/* Biometric live prosody synchronizer */}
+          {vivaState === "listening" && (
+            <div className="biometric-sync-panel">
+              <div className="biometric-header">
+                <span className="biometric-pulse"></span>
+                <span>{config.mode === "professional" ? "Candidate Biometric Sync" : "Student Biometric Sync"}</span>
+              </div>
+              <div className="biometric-grid">
+                
+                {/* Confidence */}
+                <div className="biometric-metric-row">
+                  <div className="biometric-label-container">
+                    <span className="biometric-label">Vocal Confidence</span>
+                    <span className="biometric-value">{liveMetrics.confidence}%</span>
+                  </div>
+                  <div className="biometric-progress-container">
+                    <div 
+                      className={`biometric-progress-bar biometric-bar-confidence ${liveMetrics.confidence >= 80 ? 'high' : ''}`}
+                      style={{ width: `${liveMetrics.confidence}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Nervousness */}
+                <div className="biometric-metric-row">
+                  <div className="biometric-label-container">
+                    <span className="biometric-label">Nervousness Index</span>
+                    <span className="biometric-value">{liveMetrics.nervousness}%</span>
+                  </div>
+                  <div className="biometric-progress-container">
+                    <div 
+                      className={`biometric-progress-bar biometric-bar-nervousness ${liveMetrics.nervousness >= 50 ? 'high' : ''}`}
+                      style={{ width: `${liveMetrics.nervousness}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Clarity */}
+                <div className="biometric-metric-row">
+                  <div className="biometric-label-container">
+                    <span className="biometric-label">Phonetic Clarity</span>
+                    <span className="biometric-value">{liveMetrics.clarity}%</span>
+                  </div>
+                  <div className="biometric-progress-container">
+                    <div 
+                      className="biometric-progress-bar biometric-bar-clarity"
+                      style={{ width: `${liveMetrics.clarity}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Hesitation */}
+                <div className="biometric-metric-row">
+                  <div className="biometric-label-container">
+                    <span className="biometric-label">Hesitation Rate</span>
+                    <span className="biometric-value">{liveMetrics.hesitation}%</span>
+                  </div>
+                  <div className="biometric-progress-container">
+                    <div 
+                      className="biometric-progress-bar biometric-bar-hesitation"
+                      style={{ width: `${liveMetrics.hesitation}%` }}
+                    />
+                  </div>
+                </div>
+
+              </div>
+              <div className={`biometric-status-chip ${liveMetrics.nervousness >= 45 ? 'alert' : liveMetrics.confidence >= 80 ? 'stable' : ''}`}>
+                {liveStatusText}
+              </div>
+            </div>
+          )}
 
           <div className="transcript-stage-card">
             <span className="transcript-label" id="transcript-speaker-label">
