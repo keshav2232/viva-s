@@ -12,6 +12,22 @@ export const VoiceManager = {
   // Preload Cache
   preloadedCache: {}, // Maps text string to object URL
   
+  // Helper to add to cache and revoke oldest to prevent memory leaks
+  addToCache(text, url) {
+    this.preloadedCache[text] = url;
+    const keys = Object.keys(this.preloadedCache);
+    if (keys.length > 20) {
+      const oldestKey = keys[0];
+      const oldestUrl = this.preloadedCache[oldestKey];
+      try {
+        URL.revokeObjectURL(oldestUrl);
+      } catch (e) {
+        console.warn("Failed to revoke object URL:", e);
+      }
+      delete this.preloadedCache[oldestKey];
+    }
+  },
+  
   // Callback for failsafe state shifts
   onFailsafeActive: null,
   isFailsafeMode: false,
@@ -110,7 +126,7 @@ export const VoiceManager = {
 
       const blob = await response.blob();
       const objectUrl = URL.createObjectURL(blob);
-      this.preloadedCache[cleanText] = objectUrl;
+      this.addToCache(cleanText, objectUrl);
     } catch (err) {
       console.warn(`ElevenLabs speech preload failed for: "${cleanText.substring(0, 20)}...". ${err.message}`);
     }
@@ -169,7 +185,7 @@ export const VoiceManager = {
           }
 
           objectUrl = URL.createObjectURL(blob);
-          this.preloadedCache[cleanText] = objectUrl; // Cache it
+          this.addToCache(cleanText, objectUrl); // Cache it
         }
 
         // Final check before creating Audio and playing

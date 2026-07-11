@@ -105,11 +105,17 @@ export default function AuthScreen({ onLoginSuccess }) {
   useEffect(() => {
     if (screenMode === "auth") return;
 
+    let totalHeight = 0;
+    const updateDimensions = () => {
+      totalHeight = document.documentElement.scrollHeight - window.innerHeight;
+    };
+
+    updateDimensions();
+
     let ticking = false;
     const handleScroll = () => {
       if (!ticking) {
         window.requestAnimationFrame(() => {
-          const totalHeight = document.documentElement.scrollHeight - window.innerHeight;
           if (totalHeight > 0 && progressBarRef.current) {
             const progress = (window.scrollY / totalHeight) * 100;
             progressBarRef.current.style.transform = `translateX(${-100 + progress}%)`;
@@ -138,6 +144,7 @@ export default function AuthScreen({ onLoginSuccess }) {
 
     sections.forEach((section) => observer.observe(section));
     window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", updateDimensions);
     
     // Set initial width on load/mount
     handleScroll();
@@ -145,6 +152,7 @@ export default function AuthScreen({ onLoginSuccess }) {
     return () => {
       sections.forEach((section) => observer.unobserve(section));
       window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", updateDimensions);
     };
   }, [screenMode]);
 

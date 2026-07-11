@@ -1,3 +1,5 @@
+import { getFallbackSyllabus } from "../utils/mockData";
+
 /**
  * VivaSim - Syllabus Mastery Tracker Service
  * Manages loading, saving, updating, and initializing syllabus mastery data in localStorage.
@@ -29,15 +31,16 @@ export const SyllabusMasteryService = {
   },
 
   /**
-   * Updates subtopic mastery dynamically following a completed viva session.
-   * Uses a rolling average formula favoring the latest performance.
+   * Updates mastery score for topics asked in the current session.
+   * Decrements mastery slightly on poor performance (e.g. dynamic grades/confidence drops),
+   * and increments mastery on high-quality responses (tags A, A+, B).
    */
   updateMastery(subjectName, syllabusStructure, askedTopics) {
     if (!syllabusStructure) return this.getMasteryData();
     const data = this.getMasteryData();
-    
+
+    // Ensure the subject structure is initialized in local storage
     if (!data[subjectName]) {
-      // Initialize subject structure if not existing
       data[subjectName] = {
         topic: subjectName,
         units: syllabusStructure.units.map(u => ({
@@ -47,7 +50,6 @@ export const SyllabusMasteryService = {
         mastery: {}
       };
       
-      // Set initial mastery of all topics to 0
       syllabusStructure.units.forEach(u => {
         u.topics.forEach(t => {
           data[subjectName].mastery[t] = 0;
@@ -55,18 +57,22 @@ export const SyllabusMasteryService = {
       });
     }
 
-    // Update tested subtopics
-    const subjectMastery = data[subjectName].mastery;
+    // Process each topic with dynamic feedback adjustments
     askedTopics.forEach(item => {
       const topicName = item.topic;
-      const correctness = item.metrics?.correctness || 0;
-      if (topicName && subjectMastery[topicName] !== undefined) {
-        const oldScore = subjectMastery[topicName];
-        if (oldScore === 0) {
-          subjectMastery[topicName] = correctness;
+      const score = item.score || 0;
+      
+      if (topicName && data[subjectName].mastery[topicName] !== undefined) {
+        const current = data[subjectName].mastery[topicName];
+        if (score >= 80) {
+          // strong answer increases mastery (capped at 100)
+          data[subjectName].mastery[topicName] = Math.min(current + Math.round((score - 70) / 3), 100);
+        } else if (score < 50) {
+          // weak response penalizes topic mastery (minimum 0)
+          data[subjectName].mastery[topicName] = Math.max(current - 5, 0);
         } else {
-          // Dynamic rolling average (30% historical weight, 70% current performance)
-          subjectMastery[topicName] = Math.round(oldScore * 0.3 + correctness * 0.7);
+          // mediocre answer provides slight increase
+          data[subjectName].mastery[topicName] = Math.min(current + 2, 100);
         }
       }
     });
@@ -84,50 +90,19 @@ export const SyllabusMasteryService = {
     if (Object.keys(data).length > 0) return data;
     if (!defaultSessions || defaultSessions.length === 0) return {};
 
-    const thermoSyllabus = {
-      topic: "Thermodynamics",
-      units: [
-        { name: "Unit 1: Fundamental Laws", topics: ["Energy conservation balances", "Kelvin-Planck statements", "Clausius cyclic inequalities", "Second law limitations"] },
-        { name: "Unit 2: Ideal Cycles & Entropy", topics: ["Carnot thermal boundaries", "Reversible entropy degradation", "Lost exergy work", "Third law absolute zero"] },
-        { name: "Unit 3: Advanced Applications", topics: ["Clapeyron phase slopes", "Maxwell boundary conversions", "Open control masses", "Closed piston borders"] }
-      ]
+    const getThreeUnits = (subject) => {
+      const syl = getFallbackSyllabus(subject);
+      return {
+        topic: syl.topic,
+        units: syl.units.slice(0, 3)
+      };
     };
 
-    const dsSyllabus = {
-      topic: "Data Structures",
-      units: [
-        { name: "Unit 1: Linear Data Structures", topics: ["Arrays & Arraylists", "Stack LIFO limits", "Queue FIFO indices", "Linked list traversal"] },
-        { name: "Unit 2: Non-Linear Structures", topics: ["Binary Search Trees", "AVL self-balancing balance factor", "Red-black trees", "Graph representations"] },
-        { name: "Unit 3: Algorithms & Hashing", topics: ["Hash collisions buckets", "Probing techniques", "Graph BFS queues", "DFS recursive stacks"] }
-      ]
-    };
-
-    const seSyllabus = {
-      topic: "Software Engineer (Backend)",
-      units: [
-        { name: "Competency 1: System Design & Architecture", topics: ["Microservices vs Monoliths", "Scalability & Load Balancing", "Database Replication & Caching", "Message Queuing & Eventual Consistency"] },
-        { name: "Competency 2: Algorithms & Concurrency", topics: ["High-Concurrency Execution", "Thread Pool Deadlocks", "Data Structures Complexity", "Asynchronous Processing Loops"] },
-        { name: "Competency 3: Databases & Integrity", topics: ["SQL Indexing Performance", "NoSQL vs Relational Storage", "Distributed Transaction Sagas", "Cache Invalidation Strategies"] }
-      ]
-    };
-
-    const pmSyllabus = {
-      topic: "Product Manager",
-      units: [
-        { name: "Competency 1: Product Strategy & Prioritization", topics: ["Feature Prioritization Frameworks", "MVP Scope Definition", "Market Opportunity Analysis", "Go-To-Market Plans"] },
-        { name: "Competency 2: Execution Analytics & Funnels", topics: ["A/B Testing Significance", "Funnel Conversion Optimization", "Onboarding Drop-off Diagnostics", "Retention Loop Design"] },
-        { name: "Competency 3: Business & Product Metrics", topics: ["Customer Acquisition Cost", "Customer Lifetime Value", "North Star Metrics", "Churn Rate Analysis"] }
-      ]
-    };
-
-    const dataSciSyllabus = {
-      topic: "Data Scientist",
-      units: [
-        { name: "Competency 1: ML Model Fundamentals", topics: ["Supervised vs Unsupervised Models", "Bias-Variance Trade-off", "Regularization L1/L2/Dropout", "Model Overfitting Diagnostics"] },
-        { name: "Competency 2: Data Engineering & Quality", topics: ["Feature Engineering Pipelines", "Imbalanced Class Strategies", "Outlier & Missing Data Handling", "Dimensionality Reduction PCA"] },
-        { name: "Competency 3: Advanced Deep Learning", topics: ["Gradient Vanishing/Explosion", "Residual Connection Functions", "Precision vs Recall Balance", "Evaluation Metrics F1-score"] }
-      ]
-    };
+    const thermoSyllabus = getThreeUnits("Thermodynamics");
+    const dsSyllabus = getThreeUnits("Data Structures");
+    const seSyllabus = getThreeUnits("Software Engineer (Backend)");
+    const pmSyllabus = getThreeUnits("Product Manager");
+    const dataSciSyllabus = getThreeUnits("Data Scientist");
 
     const populate = (syllabus, score) => {
       const subject = syllabus.topic;

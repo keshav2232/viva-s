@@ -250,7 +250,30 @@ export const SpeechManager = {
             }
 
             this.audioChunks = [];
-            const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+            let options = {};
+            let mimeType = "audio/webm";
+            
+            try {
+              if (typeof MediaRecorder.isTypeSupported === "function") {
+                if (MediaRecorder.isTypeSupported("audio/webm")) {
+                  options = { mimeType: "audio/webm" };
+                  mimeType = "audio/webm";
+                } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
+                  options = { mimeType: "audio/mp4" };
+                  mimeType = "audio/mp4";
+                } else if (MediaRecorder.isTypeSupported("audio/ogg")) {
+                  options = { mimeType: "audio/ogg" };
+                  mimeType = "audio/ogg";
+                } else if (MediaRecorder.isTypeSupported("audio/wav")) {
+                  options = { mimeType: "audio/wav" };
+                  mimeType = "audio/wav";
+                }
+              }
+            } catch (mimeErr) {
+              console.warn("MediaRecorder.isTypeSupported check failed:", mimeErr);
+            }
+
+            const recorder = new MediaRecorder(stream, options);
             this.mediaRecorder = recorder;
             
             recorder.ondataavailable = (event) => {
@@ -260,7 +283,7 @@ export const SpeechManager = {
             };
             
             recorder.onstop = () => {
-              const blob = new Blob(this.audioChunks, { type: "audio/webm" });
+              const blob = new Blob(this.audioChunks, { type: mimeType });
               if (activeAudioCallback && blob.size > 100) {
                 activeAudioCallback(blob);
               }
@@ -302,6 +325,16 @@ export const SpeechManager = {
         console.warn("Error closing AudioContext:", err);
       }
       this.audioCtx = null;
+    }
+
+    // Stop Media Stream Tracks immediately to release mic indicator
+    if (this.mediaStream) {
+      try {
+        this.mediaStream.getTracks().forEach(track => track.stop());
+      } catch (err) {
+        console.warn("Error stopping media stream tracks on stop:", err);
+      }
+      this.mediaStream = null;
     }
 
     // Stop MediaRecorder

@@ -94,7 +94,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     VoiceManager.init();
     
     // Register failsafe callback
-    VoiceManager.onFailsActive = (msg) => {
+    VoiceManager.onFailsafeActive = (msg) => {
       if (isMountedRef.current) setFailsafeWarning(msg);
     };
 
@@ -430,7 +430,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       console.error("Failed to generate first question:", err);
       if (!isMountedRef.current) return;
       // Fallback
-      const fallback = QuestionGraphEngine.getRuleBasedOfflineFallback(1, config.personality, config.topic);
+      const fallback = QuestionGraphEngine.getRuleBasedOfflineFallback(1, config.personality, config.topic, config.syllabusStructure);
       setActiveQuestion(fallback);;
       
       // Preload fallback speech
@@ -981,7 +981,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
           setVisualState("analyzing");
           setStatusText(config.mode === "professional" ? "Formulating next interview question..." : "Formulating next question...");
 
-          const nextQuestion = QuestionGraphEngine.getRuleBasedOfflineFallback(qIdx + 1, config.personality, currentQ.topic);
+          const nextQuestion = QuestionGraphEngine.getRuleBasedOfflineFallback(qIdx + 1, config.personality, currentQ.topic, config.syllabusStructure);
           setActiveQuestion(nextQuestion);
           VoiceManager.preload(nextQuestion.speech, config.personality);
 
@@ -1061,7 +1061,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         setVisualState("analyzing");
         setStatusText(config.mode === "professional" ? "Formulating next interview question..." : "Formulating next question...");
 
-        const nextQuestion = QuestionGraphEngine.getRuleBasedOfflineFallback(qIndex + 1, config.personality, currentQ.topic);
+        const nextQuestion = QuestionGraphEngine.getRuleBasedOfflineFallback(qIndex + 1, config.personality, currentQ.topic, config.syllabusStructure);
         setActiveQuestion(nextQuestion);
         // Preload next question speech!
         VoiceManager.preload(nextQuestion.speech, config.personality);

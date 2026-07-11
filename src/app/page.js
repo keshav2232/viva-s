@@ -196,22 +196,6 @@ export default function Home() {
     if (isGuest && !isActiveSession) {
       sessionStorage.setItem("vivasim_active_session", "true");
     }
-
-    const handleBeforeUnload = () => {
-      // Clear localStorage guest data on unload if user is not signed in
-      if (!user) {
-        localStorage.removeItem("vivasim_user");
-        localStorage.removeItem("vivasim_sessions");
-        localStorage.removeItem("vivasim_stats");
-        localStorage.removeItem("vivasim_mastery");
-        localStorage.removeItem("vivasim_paused_session");
-      }
-    };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
   }, [user, isGuest]);
 
   const handleBeginViva = (config) => {

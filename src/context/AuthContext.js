@@ -43,7 +43,7 @@ export const useAuth = () => useContext(AuthContext);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(!isFirebaseConfigured);
+  const [loading, setLoading] = useState(isFirebaseConfigured);
   const [stats, setStats] = useState(EMPTY_STATS);
   const [sessions, setSessions] = useState([]);
 
