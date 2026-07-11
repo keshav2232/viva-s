@@ -15,7 +15,8 @@ export const AnswerEvaluationService = {
     const { question, answer, syllabus, speechDurationMs, pauseCount, liveMetrics, isHesitationPenalty, mode, audioBase64 } = params;
 
     // 1. Calculate local acoustic/delivery metrics (prefer live-tracked metrics)
-    const delivery = liveMetrics || this.calculateLocalDeliveryMetrics(answer, speechDurationMs, pauseCount);
+    const local = this.calculateLocalDeliveryMetrics(answer, speechDurationMs, pauseCount);
+    const delivery = liveMetrics ? { ...local, ...liveMetrics } : local;
 
     try {
       // 2. Call server-side Gemini AI for semantic evaluations
@@ -82,7 +83,7 @@ export const AnswerEvaluationService = {
 
     } catch (e) {
       console.warn("AnswerEvaluationService API error. Falling back to clean local calculations:", e);
-      return this.getLocalFallbackMetrics(delivery, answer);
+      return this.getLocalFallbackMetrics(delivery, answer, isHesitationPenalty);
     }
   },
 
@@ -95,7 +96,7 @@ export const AnswerEvaluationService = {
     const wordCount = words.length;
 
     // Hesitation
-    const fillers = ["umm", "uhm", "uh", "like", "basically", "actually", "maybe", "sort of", "kind of"];
+    const fillers = ["um", "umm", "uhm", "uh", "ah", "ahh", "like", "basically", "actually", "you know", "maybe", "sort of", "kind of"];
     let fillerCount = 0;
     fillers.forEach(f => {
       const matches = textLower.match(new RegExp(`\\b${f}\\b`, 'g'));

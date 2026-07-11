@@ -195,10 +195,20 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         const gapsCount = SpeechManager.gapsHistory ? SpeechManager.gapsHistory.length : 0;
 
         // Count fillers
-        const fillers = ["umm", "uhm", "uh", "like", "basically", "actually"];
         let fillerCount = 0;
+        const singleFillers = ["um", "umm", "uhm", "uh", "ah", "ahh", "like", "basically", "actually", "maybe"];
         words.forEach(w => {
-          if (fillers.includes(w)) fillerCount++;
+          if (singleFillers.includes(w)) fillerCount++;
+        });
+        
+        // Count multi-word fillers
+        const multiFillers = ["you know", "sort of", "kind of"];
+        multiFillers.forEach(phrase => {
+          let idx = currentText.toLowerCase().indexOf(phrase);
+          while (idx !== -1) {
+            fillerCount++;
+            idx = currentText.toLowerCase().indexOf(phrase, idx + phrase.length);
+          }
         });
 
         // Compute live values
@@ -546,7 +556,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       console.error(`Background evaluation failed for question #${qIdx + 1}:`, err);
       // Heuristic fallback if server error
       const localDelivery = AnswerEvaluationService.calculateLocalDeliveryMetrics(answerText, durationMs, pauseCount);
-      const fallbackMetrics = AnswerEvaluationService.getLocalFallbackMetrics(liveMetricsVal || localDelivery, answerText, hasPenalty);
+      const delivery = liveMetricsVal ? { ...localDelivery, ...liveMetricsVal } : localDelivery;
+      const fallbackMetrics = AnswerEvaluationService.getLocalFallbackMetrics(delivery, answerText, hasPenalty);
       SessionContextManager.updateRoundMetrics(qIdx, fallbackMetrics);
 
       const currentQ = SessionContextManager.askedQuestionsObjects[qIdx] || activeQuestionRef.current;
@@ -839,9 +850,21 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
 
     const durationMs = getNow() - speechStartTime.current;
     const pauseCount = SpeechManager.gapsHistory.length;
+    const hasPenalty = penalties[qIdxStart] || false;
+
+    // Queue for background audio analysis if we are in oral mode (not keyboard fallback)
+    if (!fallbackMode) {
+      pendingAudioEvalRef.current = {
+        qIdx: qIdxStart,
+        answerText,
+        durationMs,
+        pauseCount,
+        liveMetrics: metricsVal,
+        hasPenalty: hasPenalty
+      };
+    }
 
     try {
-      const hasPenalty = penalties[qIdxStart] || false;
       const resultMetrics = await AnswerEvaluationService.evaluateResponse({
         question: currentQ.text,
         answer: answerText,
@@ -986,7 +1009,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       // Heuristic fallback if server error
       const localDelivery = AnswerEvaluationService.calculateLocalDeliveryMetrics(answerText, durationMs, pauseCount);
       const hasPenalty = penalties[qIdxStart] || false;
-      const fallbackMetrics = AnswerEvaluationService.getLocalFallbackMetrics(metricsVal || localDelivery, answerText, hasPenalty);
+      const delivery = metricsVal ? { ...localDelivery, ...metricsVal } : localDelivery;
+      const fallbackMetrics = AnswerEvaluationService.getLocalFallbackMetrics(delivery, answerText, hasPenalty);
       
       SessionContextManager.recordRound({
         questionText: currentQ.text,
