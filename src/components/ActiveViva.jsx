@@ -825,6 +825,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
   }
 
   async function processResponse(answerText) {
+    VoiceManager.stop();
     const currentQ = activeQuestionRef.current;
     if (!currentQ) {
       console.warn("Speech input captured before activeQuestion was set, ignoring.");
