@@ -11,8 +11,8 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
   const [pastSessionsAvg, setPastSessionsAvg] = useState(null);
   const [activeRightTab, setActiveRightTab] = useState("timeline"); // "timeline" | "fluency"
   const [mobileTab, setMobileTab] = useState("overview"); // "overview" | "metrics" | "qa" | "plan"
-  const [hindsightData, setHindsightData] = useState(resultsData.hindsightData || null);
-  const [hindsightLoading, setHindsightLoading] = useState(resultsData.hindsightLoading || false);
+  const hindsightData = resultsData.hindsightData || null;
+  const hindsightLoading = false;
 
 
   const {
@@ -39,30 +39,9 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     };
   }, []);
 
-  // Poll for async hindsight data resolution
-  useEffect(() => {
-    if (hindsightData || !resultsData.hindsightLoading) {
-      // Already resolved or never loading
-      if (resultsData.hindsightData && !hindsightData) {
-        setHindsightData(resultsData.hindsightData);
-        setHindsightLoading(false);
-      }
-      return;
-    }
-    const pollInterval = setInterval(() => {
-      if (resultsData.hindsightData) {
-        setHindsightData(resultsData.hindsightData);
-        setHindsightLoading(false);
-        clearInterval(pollInterval);
-      } else if (!resultsData.hindsightLoading) {
-        setHindsightLoading(false);
-        clearInterval(pollInterval);
-      }
-    }, 800);
-    return () => clearInterval(pollInterval);
-  }, [resultsData, hindsightData]);
-
-  // 1. Calculate Scorecard Averages
+  // 1. Calculate Scorecard Averages (Filtering out ungraded rounds)
+  const gradedEmotions = detectedEmotions.filter(emo => !emo.isUngraded && emo.gradingSource !== "offline");
+  const gradedRounds = gradedEmotions.length;
   const totalRounds = detectedEmotions.length;
   
   let subjectUnderstanding = 0;
@@ -72,30 +51,53 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
   let handlingPressure = 0;
   let consistency = 0;
 
-  if (detectedEmotions.length > 0) {
+  if (gradedRounds > 0) {
     let correctnessSum = 0, confSum = 0, clarSum = 0, depthSum = 0, pressureSum = 0;
-    detectedEmotions.forEach(emo => {
-      correctnessSum += emo.correctness || 80;
-      confSum += emo.confidence || 80;
-      clarSum += emo.clarity || 80;
-      depthSum += emo.completeness || 75;
-      pressureSum += (100 - (emo.nervousness || 20));
+    let validCorrectness = 0, validConf = 0, validClar = 0, validDepth = 0, validPressure = 0;
+
+    gradedEmotions.forEach(emo => {
+      if (emo.correctness !== undefined && emo.correctness !== null) {
+        correctnessSum += emo.correctness;
+        validCorrectness++;
+      }
+      if (emo.confidence !== undefined && emo.confidence !== null) {
+        confSum += emo.confidence;
+        validConf++;
+      }
+      if (emo.clarity !== undefined && emo.clarity !== null) {
+        clarSum += emo.clarity;
+        validClar++;
+      }
+      if (emo.completeness !== undefined && emo.completeness !== null) {
+        depthSum += emo.completeness;
+        validDepth++;
+      }
+      if (emo.nervousness !== undefined && emo.nervousness !== null) {
+        pressureSum += (100 - emo.nervousness);
+        validPressure++;
+      }
     });
     
-    subjectUnderstanding = Math.round(correctnessSum / totalRounds);
-    vocalConfidence = Math.round(confSum / totalRounds);
-    clarityOfComm = Math.round(clarSum / totalRounds);
-    conceptualDepth = Math.round(depthSum / totalRounds);
-    handlingPressure = Math.round(pressureSum / totalRounds);
+    subjectUnderstanding = validCorrectness > 0 ? Math.round(correctnessSum / validCorrectness) : 0;
+    vocalConfidence = validConf > 0 ? Math.round(confSum / validConf) : 0;
+    clarityOfComm = validClar > 0 ? Math.round(clarSum / validClar) : 0;
+    conceptualDepth = validDepth > 0 ? Math.round(depthSum / validDepth) : 0;
+    handlingPressure = validPressure > 0 ? Math.round(pressureSum / validPressure) : 0;
     
     // Consistency is calculated based on correctness variation (higher consistency = smaller differences)
-    let differences = 0;
-    const avgCorrectness = correctnessSum / totalRounds;
-    detectedEmotions.forEach(emo => {
-      differences += Math.pow((emo.correctness || 80) - avgCorrectness, 2);
-    });
-    const standardDev = Math.sqrt(differences / totalRounds);
-    consistency = Math.round(Math.max(100 - (standardDev * 2.2), 58));
+    if (validCorrectness > 1) {
+      let differences = 0;
+      const avgCorrectness = correctnessSum / validCorrectness;
+      gradedEmotions.forEach(emo => {
+        if (emo.correctness !== undefined && emo.correctness !== null) {
+          differences += Math.pow(emo.correctness - avgCorrectness, 2);
+        }
+      });
+      const standardDev = Math.sqrt(differences / validCorrectness);
+      consistency = Math.round(Math.max(100 - (standardDev * 2.2), 0));
+    } else {
+      consistency = 100;
+    }
   }
 
   // Lexical Speech Diagnostics Calculations
@@ -258,22 +260,27 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     return detections;
   };
 
-  let avgWpm = 0;
+  let avgWpm = null;
+  let validWpmCount = 0;
   if (detectedEmotions.length > 0) {
     let wpmSum = 0;
-    detectedEmotions.forEach((emo, idx) => {
-      const answer = answerTranscripts[idx] || "";
-      const wordCount = answer.split(/\s+/).filter(w => w.length > 0).length;
-      const wpmVal = emo.wpm || Math.round(wordCount / 0.4); // assume 24s answers as fallback
-      wpmSum += wpmVal;
+    detectedEmotions.forEach((emo) => {
+      if (emo.wpm !== undefined && emo.wpm !== null) {
+        wpmSum += emo.wpm;
+        validWpmCount++;
+      }
     });
-    avgWpm = Math.round(wpmSum / totalRounds);
+    avgWpm = validWpmCount > 0 ? Math.round(wpmSum / validWpmCount) : null;
   }
 
   let pacingCategory = "Optimal Professional";
   let pacingColor = "var(--color-success)";
   let pacingBg = "var(--color-success-bg)";
-  if (avgWpm < 90) {
+  if (avgWpm === null) {
+    pacingCategory = "No Data";
+    pacingColor = "var(--text-muted)";
+    pacingBg = "var(--bg-primary)";
+  } else if (avgWpm < 90) {
     pacingCategory = "Hesitant & Slow";
     pacingColor = "hsl(0, 60%, 42%)";
     pacingBg = "hsl(0, 50%, 93%)";
@@ -291,7 +298,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     pacingBg = "hsl(38, 70%, 93%)";
   }
 
-  const needleAngle = Math.min(Math.max((avgWpm / 240) * 180 - 90, -90), 90);
+  const needleAngle = avgWpm === null ? -90 : Math.min(Math.max((avgWpm / 240) * 180 - 90, -90), 90);
   
   let overallScore = Math.round(
     (subjectUnderstanding * 0.35) + 
@@ -300,8 +307,8 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     (conceptualDepth * 0.2) + 
     (handlingPressure * 0.1)
   );
-  overallScore = totalRounds > 0 ? Math.min(Math.max(overallScore, 40), 99) : 0;
-  if (endedEarly && totalRounds > 0) {
+  overallScore = gradedRounds > 0 ? Math.min(overallScore, 99) : 0;
+  if (endedEarly && gradedRounds > 0) {
     overallScore = Math.round(overallScore * 0.6);
   }
 
@@ -493,6 +500,9 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     evaluationVerdict = isProfessional
       ? "The mock interview session was terminated before any questions were answered. No metrics or diagnostics could be recorded."
       : "The oral examination was terminated before any questions were answered. No metrics or diagnostics could be recorded.";
+  } else if (gradedRounds === 0) {
+    gradeLabel = "Ungraded Session";
+    evaluationVerdict = "No valid evaluation metrics could be parsed for this session. Please check your Gemini API key configuration and microphone/audio settings.";
   } else if (overallScore >= 80) {
     gradeLabel = isProfessional ? "Recommended Hire" : "First Class Honor (Distinction)";
     evaluationVerdict = isProfessional
@@ -573,6 +583,9 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     const topicText = qObj ? qObj.topic : "Syllabus Concept";
     
     if (!emotion) return "Loading timeline logs...";
+    if (emotion.isUngraded) {
+      return `Round #${idx + 1} (${topicText}): This round was not evaluated by Gemini due to an offline network fallback.`;
+    }
     
     let commentary = `Round #${idx + 1} (${topicText}): Solid semantic response. Articulated the primary definitions with standard pacing.`;
     
@@ -581,7 +594,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     } else if (emotion.nervousness > 45) {
       commentary = `Round #${idx + 1} (${topicText}): The examiner pressed heavily on this topic. You experienced elevated anxiety levels; speaking rate shifted rapidly but logical accuracy remained stable.`;
     } else if (emotion.hesitation > 40) {
-      commentary = `Round #${idx + 1} (${topicText}): Long pause blocks and lexical hesitation markers ('umm', 'uh') occurred. Response lacked structural velocity.`;
+      commentary = `Round #${idx + 1} (${topicText}): Long pause blocks and lexical hesitation markers occurred. Response lacked structural velocity.`;
     } else if (emotion.correctness >= 80) {
       commentary = `Round #${idx + 1} (${topicText}): Outstanding cognitive clarity. Precision phrasing, strict technical nomenclature, and absolute zero vocal hesitation.`;
     }
@@ -590,11 +603,14 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
 
   // 6. Confidence Coaching Tips
   const getConfidenceCoachingTip = (emotion, answer, idx) => {
-    const WPM = Math.round((answer || "").split(/\s+/).length / 0.5); // assume 30 secs WPM
+    if (emotion.isUngraded) {
+      return "Coaching: This round was not graded by Gemini because the API was offline. No vocal delivery metrics were computed.";
+    }
+    const WPM = emotion.wpm ?? null;
     
     if (emotion.tag === "Bluffing") {
       return "Coaching: You spoke with strong confidence but lacked technical formulas. Focus strictly on governing equations rather than descriptive, general paragraphs.";
-    } else if (emotion.nervousness > 40 && WPM > 170) {
+    } else if (emotion.nervousness > 40 && WPM !== null && WPM > 170) {
       return `Coaching: You spoke very rapidly (${WPM} WPM) when experiencing nervousness. Intentionally insert slow, deliberate silence pauses to collect your thoughts.`;
     } else if (emotion.hesitation > 35) {
       return "Coaching: Autonomic speech gaps detected. Take a deep breath before answering and map out three core keywords in your mind before speaking.";
@@ -719,10 +735,12 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     const fillerRatio = parseFloat(fillerConcentration);
     fluencyBase -= (fillerRatio * 4);
     
-    if (avgWpm < 90 || avgWpm > 170) {
-      fluencyBase -= 25;
-    } else if (avgWpm < 110 || avgWpm > 150) {
-      fluencyBase -= 10;
+    if (avgWpm !== null) {
+      if (avgWpm < 90 || avgWpm > 170) {
+        fluencyBase -= 25;
+      } else if (avgWpm < 110 || avgWpm > 150) {
+        fluencyBase -= 10;
+      }
     }
     
     const fluencyScore = Math.min(Math.max(Math.round(fluencyBase), 45), 99);
@@ -789,7 +807,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                 <line x1="100" y1="20" x2="100" y2="30" stroke="var(--border-color)" strokeWidth="2" />
                 <line x1="180" y1="100" x2="170" y2="100" stroke="var(--border-color)" strokeWidth="2" />
 
-                <g transform="translate(100, 100)">
+                <g transform="translate(100, 100)" style={{ opacity: avgWpm === null ? 0 : 0.85 }}>
                   <line x1="0" y1="0" x2="0" y2="-72" stroke="var(--accent-primary)" strokeWidth="3.5" strokeLinecap="round" style={{ transform: `rotate(${needleAngle}deg)`, transformOrigin: "0% 0%", transition: "transform 1.5s cubic-bezier(0.25, 0.8, 0.25, 1)" }} />
                   <circle cx="0" cy="0" r="7" fill="var(--accent-primary)" />
                   <circle cx="0" cy="0" r="3.5" fill="var(--bg-card)" />
@@ -799,9 +817,15 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                 <text x="175" y="108" textAnchor="middle" fontSize="8px" fontWeight="600" fill="var(--text-muted)">240+</text>
               </svg>
               <div style={{ marginTop: "4px", textAlign: "center" }}>
-                <span style={{ fontSize: "0.85rem", fontWeight: "700", color: pacingColor, backgroundColor: pacingBg, padding: "2px 8px", borderRadius: "var(--radius-full)" }}>
-                  {avgWpm} WPM ({pacingCategory})
-                </span>
+                {avgWpm === null ? (
+                  <span style={{ fontSize: "0.85rem", fontWeight: "700", color: pacingColor, backgroundColor: pacingBg, padding: "2px 8px", borderRadius: "var(--radius-full)" }}>
+                    No pacing data available
+                  </span>
+                ) : (
+                  <span style={{ fontSize: "0.85rem", fontWeight: "700", color: pacingColor, backgroundColor: pacingBg, padding: "2px 8px", borderRadius: "var(--radius-full)" }}>
+                    {avgWpm} WPM ({pacingCategory})
+                  </span>
+                )}
               </div>
             </div>
 
@@ -903,31 +927,35 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
       return height - paddingY - pct * (height - paddingY * 2);
     };
 
-    let confidencePath = "";
-    let nervousnessPath = "";
-    let hesitationPath = "";
+    let confidencePoints = [];
+    let nervousnessPoints = [];
+    let hesitationPoints = [];
     const nodes = [];
 
     for (let i = 0; i < totalRounds; i++) {
-      const emo = detectedEmotions[i] || { confidence: 80, nervousness: 20, hesitation: 15 };
+      const emo = detectedEmotions[i] || {};
       const cx = paddingX + i * stepX;
       
-      const cyConf = mapY(emo.confidence || 80);
-      const cyNerv = mapY(100 - (emo.nervousness || 20)); // Inverse so high value is good/calm
-      const cyHes = mapY(100 - (emo.hesitation || 15));
-
-      if (i === 0) {
-        confidencePath = `M ${cx} ${cyConf}`;
-        nervousnessPath = `M ${cx} ${cyNerv}`;
-        hesitationPath = `M ${cx} ${cyHes}`;
+      const hasDelivery = emo.confidence !== undefined && emo.confidence !== null;
+      
+      if (hasDelivery) {
+        const cyConf = mapY(emo.confidence);
+        const cyNerv = mapY(100 - emo.nervousness);
+        const cyHes = mapY(100 - emo.hesitation);
+        
+        confidencePoints.push(`${cx},${cyConf}`);
+        nervousnessPoints.push(`${cx},${cyNerv}`);
+        hesitationPoints.push(`${cx},${cyHes}`);
+        
+        nodes.push({ index: i, cx, cyConf, cyNerv, cyHes, ...emo, hasDelivery: true });
       } else {
-        confidencePath += ` L ${cx} ${cyConf}`;
-        nervousnessPath += ` L ${cx} ${cyNerv}`;
-        hesitationPath += ` L ${cx} ${cyHes}`;
+        nodes.push({ index: i, cx, cyConf: null, cyNerv: null, cyHes: null, ...emo, hasDelivery: false });
       }
-
-      nodes.push({ index: i, cx, cyConf, cyNerv, cyHes, ...emo });
     }
+
+    const confidencePath = confidencePoints.length > 0 ? "M " + confidencePoints.join(" L ") : "";
+    const nervousnessPath = nervousnessPoints.length > 0 ? "M " + nervousnessPoints.join(" L ") : "";
+    const hesitationPath = hesitationPoints.length > 0 ? "M " + hesitationPoints.join(" L ") : "";
 
     return (
       <div className="graph-canvas-box" style={{ width: "100%", height: "180px", position: "relative" }}>
@@ -943,23 +971,43 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
           {hesitationPath && <path d={hesitationPath} fill="none" stroke="hsl(0, 60%, 42%)" strokeWidth="1.5" strokeDasharray="1 3" strokeLinecap="round" strokeLinejoin="round" />}
 
           {/* Grid nodes */}
-          {nodes.map((node) => (
-            <g key={node.index}>
-              <circle 
-                cx={node.cx} 
-                cy={node.cyConf} 
-                r={activeTimelineIndex === node.index ? 7 : 4} 
-                fill={activeTimelineIndex === node.index ? "hsl(215, 35%, 26%)" : "var(--bg-card)"} 
-                stroke="hsl(215, 35%, 26%)" 
-                strokeWidth="2" 
-                style={{ cursor: "pointer", transition: "var(--transition-smooth)" }}
-                onClick={() => setActiveTimelineIndex(node.index)}
-              />
-              <text x={node.cx} y={height - 5} textAnchor="middle" fontSize="9px" fontWeight="600" fill="var(--text-muted)">
-                Q{node.index + 1}
-              </text>
-            </g>
-          ))}
+          {nodes.map((node) => {
+            if (!node.hasDelivery) {
+              return (
+                <g key={node.index}>
+                  <circle 
+                    cx={node.cx} 
+                    cy={mapY(50)} 
+                    r={3} 
+                    fill="var(--border-color)" 
+                    stroke="var(--border-color)" 
+                    style={{ cursor: "pointer" }}
+                    onClick={() => setActiveTimelineIndex(node.index)}
+                  />
+                  <text x={node.cx} y={height - 5} textAnchor="middle" fontSize="9px" fontWeight="600" fill="var(--text-muted)">
+                    Q{node.index + 1}
+                  </text>
+                </g>
+              );
+            }
+            return (
+              <g key={node.index}>
+                <circle 
+                  cx={node.cx} 
+                  cy={node.cyConf} 
+                  r={activeTimelineIndex === node.index ? 7 : 4} 
+                  fill={activeTimelineIndex === node.index ? "hsl(215, 35%, 26%)" : "var(--bg-card)"} 
+                  stroke="hsl(215, 35%, 26%)" 
+                  strokeWidth="2" 
+                  style={{ cursor: "pointer", transition: "var(--transition-smooth)" }}
+                  onClick={() => setActiveTimelineIndex(node.index)}
+                />
+                <text x={node.cx} y={height - 5} textAnchor="middle" fontSize="9px" fontWeight="600" fill="var(--text-muted)">
+                  Q{node.index + 1}
+                </text>
+              </g>
+            );
+          })}
         </svg>
       </div>
     );
@@ -1646,11 +1694,20 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                 ) : (
                   askedQuestions.map((qText, idx) => {
                   const isExpanded = expandedReplayIndex === idx;
-                  const emotion = detectedEmotions[idx] || { correctness: 80, confidence: 80 };
+                  const emotion = detectedEmotions[idx] || {};
                   const answer = answerTranscripts[idx] || "";
                   const qObj = askedQuestionsObjects && askedQuestionsObjects[idx] ? askedQuestionsObjects[idx] : null;
                   const topicText = qObj ? qObj.topic : (isProfessional ? "Competency Skill" : "Syllabus Concept");
                   
+                  // Setup clean colors based on score, or grey for ungraded fallback
+                  let tagBg = "var(--bg-primary)";
+                  let tagColor = "var(--text-muted)";
+                  if (!emotion.isUngraded) {
+                    const isGood = (emotion.correctness ?? 0) >= 75;
+                    tagBg = isGood ? "var(--color-success-bg)" : "var(--color-error-bg)";
+                    tagColor = isGood ? "var(--color-success)" : "var(--color-error)";
+                  }
+
                   return (
                     <div key={idx} style={{ border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", overflow: "hidden", transition: "var(--transition-smooth)" }}>
                       
@@ -1677,10 +1734,10 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                             padding: "2px 8px",
                             borderRadius: "var(--radius-full)",
                             fontWeight: "600",
-                            backgroundColor: emotion.correctness >= 75 ? "var(--color-success-bg)" : "var(--color-error-bg)",
-                            color: emotion.correctness >= 75 ? "var(--color-success)" : "var(--color-error)"
+                            backgroundColor: tagBg,
+                            color: tagColor
                           }}>
-                            {emotion.tag || "Correct"}
+                            {emotion.isUngraded ? "Ungraded" : (emotion.tag || "Correct")}
                           </span>
                           <svg 
                             width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" 
@@ -1717,15 +1774,15 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                           {/* Local Audio Recording Replay */}
                           {resultsData.recordedAudios && resultsData.recordedAudios[idx] && (
                             <div className="audio-replay-container" style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "var(--space-sm)",
-                              backgroundColor: "var(--bg-primary)",
-                              padding: "8px 12px",
-                              borderRadius: "var(--radius-xs)",
-                              border: "1px solid var(--border-color)",
-                              marginBottom: "var(--space-sm)"
-                            }}>
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "var(--space-sm)",
+                                backgroundColor: "var(--bg-primary)",
+                                padding: "8px 12px",
+                                borderRadius: "var(--radius-xs)",
+                                border: "1px solid var(--border-color)",
+                                marginBottom: "var(--space-sm)"
+                              }}>
                               <span style={{ fontSize: "0.75rem", fontWeight: "600", color: "var(--text-secondary)", flexShrink: 0 }}>
                                 Listen back:
                               </span>
@@ -1757,9 +1814,9 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
 
                           {/* Performance tags, WPM pacing */}
                           <div style={{ display: "flex", gap: "var(--space-sm)", flexWrap: "wrap", fontSize: "0.75rem", color: "var(--text-secondary)", marginBottom: "var(--space-sm)" }}>
-                            <span>Lexical correctness: <strong>{emotion.correctness}%</strong></span>
+                            <span>Lexical correctness: <strong>{emotion.isUngraded ? "N/A" : `${emotion.correctness}%`}</strong></span>
                             <span>•</span>
-                            <span>Tempo: <strong>{Math.round(answer.split(/\s+/).length / 0.5)} WPM</strong></span>
+                            <span>Tempo: <strong>{emotion.wpm ? `${emotion.wpm} WPM` : "N/A"}</strong></span>
                           </div>
 
                           {/* Confidence coaching tip */}

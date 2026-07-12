@@ -307,6 +307,92 @@ export const SpeechManager = {
     }
   },
 
+  /**
+   * Stops recording and returns a Promise that resolves with the final
+   * { transcript, audioBlob, durationMs, gapsCount } bundle atomically.
+   * This is the primary stop path for evaluated rounds — it eliminates
+   * the old race condition where transcript and audio arrived separately.
+   * @param {number} speechStartTime - Date.now() value from when listening started
+   * @returns {Promise<{ transcript: string, audioBlob: Blob|null, durationMs: number, gapsCount: number }>}
+   */
+  stopAndCapture(speechStartTime) {
+    return new Promise((resolve) => {
+      const durationMs = speechStartTime ? (Date.now() - speechStartTime) : 0;
+      const transcript = this.finalTranscript.trim();
+      const gapsCount = this.gapsHistory.length;
+
+      this.shouldBeActive = false;
+      this.clearSilenceTimer();
+
+      // Cleanup volume analyser
+      if (this.volumeInterval) {
+        clearInterval(this.volumeInterval);
+        this.volumeInterval = null;
+      }
+      if (this.audioCtx) {
+        try {
+          if (this.audioCtx.state !== "closed") this.audioCtx.close();
+        } catch (err) {
+          console.warn("Error closing AudioContext in stopAndCapture:", err);
+        }
+        this.audioCtx = null;
+      }
+
+      // Stop speech recognition
+      if (this.recognition && this.isActive) {
+        try { this.recognition.stop(); } catch (e) { /* ignore */ }
+      }
+
+      // Wait for MediaRecorder onstop to get the blob, then resolve
+      if (this.mediaRecorder && this.mediaRecorder.state !== "inactive") {
+        // Override onstop to capture blob and resolve the promise
+        const originalMimeType = this.mediaRecorder.mimeType || "audio/webm";
+        const chunks = [...(this.audioChunks || [])];
+
+        this.mediaRecorder.addEventListener("dataavailable", (e) => {
+          if (e.data && e.data.size > 0) chunks.push(e.data);
+        }, { once: true });
+
+        this.mediaRecorder.addEventListener("stop", () => {
+          const blob = new Blob(chunks, { type: originalMimeType });
+
+          // Cleanup stream tracks
+          if (this.mediaStream) {
+            this.mediaStream.getTracks().forEach(track => track.stop());
+            this.mediaStream = null;
+          }
+          this.mediaRecorder = null;
+
+          resolve({
+            transcript,
+            audioBlob: blob.size > 100 ? blob : null,
+            durationMs,
+            gapsCount
+          });
+        }, { once: true });
+
+        try {
+          this.mediaRecorder.stop();
+        } catch (err) {
+          console.warn("MediaRecorder stop error in stopAndCapture:", err);
+          if (this.mediaStream) {
+            this.mediaStream.getTracks().forEach(track => track.stop());
+            this.mediaStream = null;
+          }
+          this.mediaRecorder = null;
+          resolve({ transcript, audioBlob: null, durationMs, gapsCount });
+        }
+      } else {
+        // No active recorder — resolve immediately with transcript only
+        if (this.mediaStream) {
+          this.mediaStream.getTracks().forEach(track => track.stop());
+          this.mediaStream = null;
+        }
+        resolve({ transcript, audioBlob: null, durationMs, gapsCount });
+      }
+    });
+  },
+
   stop() {
     this.shouldBeActive = false;
     this.clearSilenceTimer();
