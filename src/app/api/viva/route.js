@@ -1137,7 +1137,10 @@ function handleOfflineFallback(payload) {
 // ==========================================
 async function handleSynthesizeSpeech(text, personality) {
   try {
-    const apiKey = process.env.ELEVENLABS_API_KEY || "sk_f62554d4fb66affbb50f3b699c3527f54c7763d3b8fcf99f";
+    const apiKey = process.env.ELEVENLABS_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json({ error: "ElevenLabs is not configured on the server." }, { status: 503 });
+    }
 
     // Dynamic Voice IDs mapped to personalities
     const voiceMap = {

@@ -11,8 +11,8 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
   const [pastSessionsAvg, setPastSessionsAvg] = useState(null);
   const [activeRightTab, setActiveRightTab] = useState("timeline"); // "timeline" | "fluency"
   const [mobileTab, setMobileTab] = useState("overview"); // "overview" | "metrics" | "qa" | "plan"
-  const [hindsightData, setHindsightData] = useState(resultsData.hindsightData || null);
-  const [hindsightLoading, setHindsightLoading] = useState(resultsData.hindsightLoading || false);
+  const hindsightData = resultsData.hindsightData || null;
+  const hindsightLoading = false;
 
 
   const {
@@ -38,29 +38,6 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
       VoiceManager.stop();
     };
   }, []);
-
-  // Poll for async hindsight data resolution
-  useEffect(() => {
-    if (hindsightData || !resultsData.hindsightLoading) {
-      // Already resolved or never loading
-      if (resultsData.hindsightData && !hindsightData) {
-        setHindsightData(resultsData.hindsightData);
-        setHindsightLoading(false);
-      }
-      return;
-    }
-    const pollInterval = setInterval(() => {
-      if (resultsData.hindsightData) {
-        setHindsightData(resultsData.hindsightData);
-        setHindsightLoading(false);
-        clearInterval(pollInterval);
-      } else if (!resultsData.hindsightLoading) {
-        setHindsightLoading(false);
-        clearInterval(pollInterval);
-      }
-    }, 800);
-    return () => clearInterval(pollInterval);
-  }, [resultsData, hindsightData]);
 
   // 1. Calculate Scorecard Averages (Filtering out ungraded rounds)
   const gradedEmotions = detectedEmotions.filter(emo => !emo.isUngraded && emo.gradingSource !== "offline");
@@ -283,31 +260,27 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     return detections;
   };
 
-  let avgWpm = 0;
+  let avgWpm = null;
   let validWpmCount = 0;
   if (detectedEmotions.length > 0) {
     let wpmSum = 0;
-    detectedEmotions.forEach((emo, idx) => {
+    detectedEmotions.forEach((emo) => {
       if (emo.wpm !== undefined && emo.wpm !== null) {
         wpmSum += emo.wpm;
         validWpmCount++;
-      } else {
-        const answer = answerTranscripts[idx] || "";
-        const words = answer.split(/\s+/).filter(w => w.length > 0);
-        if (words.length > 0 && !answer.includes("remained silent") && !answer.includes("substantive answer")) {
-          const wpmVal = Math.round(words.length / 0.4); // fallback text-only rate calculation
-          wpmSum += wpmVal;
-          validWpmCount++;
-        }
       }
     });
-    avgWpm = validWpmCount > 0 ? Math.round(wpmSum / validWpmCount) : 0;
+    avgWpm = validWpmCount > 0 ? Math.round(wpmSum / validWpmCount) : null;
   }
 
   let pacingCategory = "Optimal Professional";
   let pacingColor = "var(--color-success)";
   let pacingBg = "var(--color-success-bg)";
-  if (avgWpm < 90) {
+  if (avgWpm === null) {
+    pacingCategory = "No Data";
+    pacingColor = "var(--text-muted)";
+    pacingBg = "var(--bg-primary)";
+  } else if (avgWpm < 90) {
     pacingCategory = "Hesitant & Slow";
     pacingColor = "hsl(0, 60%, 42%)";
     pacingBg = "hsl(0, 50%, 93%)";
@@ -325,7 +298,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     pacingBg = "hsl(38, 70%, 93%)";
   }
 
-  const needleAngle = Math.min(Math.max((avgWpm / 240) * 180 - 90, -90), 90);
+  const needleAngle = avgWpm === null ? -90 : Math.min(Math.max((avgWpm / 240) * 180 - 90, -90), 90);
   
   let overallScore = Math.round(
     (subjectUnderstanding * 0.35) + 
@@ -334,7 +307,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     (conceptualDepth * 0.2) + 
     (handlingPressure * 0.1)
   );
-  overallScore = gradedRounds > 0 ? Math.min(Math.max(overallScore, 40), 99) : 0;
+  overallScore = gradedRounds > 0 ? Math.min(overallScore, 99) : 0;
   if (endedEarly && gradedRounds > 0) {
     overallScore = Math.round(overallScore * 0.6);
   }
@@ -633,11 +606,11 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     if (emotion.isUngraded) {
       return "Coaching: This round was not graded by Gemini because the API was offline. No vocal delivery metrics were computed.";
     }
-    const WPM = emotion.wpm || Math.round((answer || "").split(/\s+/).length / 0.5); // assume 30 secs WPM
+    const WPM = emotion.wpm ?? null;
     
     if (emotion.tag === "Bluffing") {
       return "Coaching: You spoke with strong confidence but lacked technical formulas. Focus strictly on governing equations rather than descriptive, general paragraphs.";
-    } else if (emotion.nervousness > 40 && WPM > 170) {
+    } else if (emotion.nervousness > 40 && WPM !== null && WPM > 170) {
       return `Coaching: You spoke very rapidly (${WPM} WPM) when experiencing nervousness. Intentionally insert slow, deliberate silence pauses to collect your thoughts.`;
     } else if (emotion.hesitation > 35) {
       return "Coaching: Autonomic speech gaps detected. Take a deep breath before answering and map out three core keywords in your mind before speaking.";
@@ -762,10 +735,12 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     const fillerRatio = parseFloat(fillerConcentration);
     fluencyBase -= (fillerRatio * 4);
     
-    if (avgWpm < 90 || avgWpm > 170) {
-      fluencyBase -= 25;
-    } else if (avgWpm < 110 || avgWpm > 150) {
-      fluencyBase -= 10;
+    if (avgWpm !== null) {
+      if (avgWpm < 90 || avgWpm > 170) {
+        fluencyBase -= 25;
+      } else if (avgWpm < 110 || avgWpm > 150) {
+        fluencyBase -= 10;
+      }
     }
     
     const fluencyScore = Math.min(Math.max(Math.round(fluencyBase), 45), 99);
@@ -832,7 +807,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                 <line x1="100" y1="20" x2="100" y2="30" stroke="var(--border-color)" strokeWidth="2" />
                 <line x1="180" y1="100" x2="170" y2="100" stroke="var(--border-color)" strokeWidth="2" />
 
-                <g transform="translate(100, 100)">
+                <g transform="translate(100, 100)" style={{ opacity: avgWpm === null ? 0 : 0.85 }}>
                   <line x1="0" y1="0" x2="0" y2="-72" stroke="var(--accent-primary)" strokeWidth="3.5" strokeLinecap="round" style={{ transform: `rotate(${needleAngle}deg)`, transformOrigin: "0% 0%", transition: "transform 1.5s cubic-bezier(0.25, 0.8, 0.25, 1)" }} />
                   <circle cx="0" cy="0" r="7" fill="var(--accent-primary)" />
                   <circle cx="0" cy="0" r="3.5" fill="var(--bg-card)" />
@@ -842,9 +817,15 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                 <text x="175" y="108" textAnchor="middle" fontSize="8px" fontWeight="600" fill="var(--text-muted)">240+</text>
               </svg>
               <div style={{ marginTop: "4px", textAlign: "center" }}>
-                <span style={{ fontSize: "0.85rem", fontWeight: "700", color: pacingColor, backgroundColor: pacingBg, padding: "2px 8px", borderRadius: "var(--radius-full)" }}>
-                  {avgWpm} WPM ({pacingCategory})
-                </span>
+                {avgWpm === null ? (
+                  <span style={{ fontSize: "0.85rem", fontWeight: "700", color: pacingColor, backgroundColor: pacingBg, padding: "2px 8px", borderRadius: "var(--radius-full)" }}>
+                    No pacing data available
+                  </span>
+                ) : (
+                  <span style={{ fontSize: "0.85rem", fontWeight: "700", color: pacingColor, backgroundColor: pacingBg, padding: "2px 8px", borderRadius: "var(--radius-full)" }}>
+                    {avgWpm} WPM ({pacingCategory})
+                  </span>
+                )}
               </div>
             </div>
 

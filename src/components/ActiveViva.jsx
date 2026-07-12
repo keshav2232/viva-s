@@ -969,8 +969,11 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     onFinishViva(null); // Return directly to dashboard
   };
 
-  function handleFinish(endedEarly = false) {
+  async function handleFinish(endedEarly = false) {
     stopAudioStreams();
+    setVivaState("analyzing");
+    setVisualState("analyzing");
+    setStatusText("Finalizing your report...");
     
     // Compile final report using SessionContextManager
     const baseReport = SessionContextManager.compileFinalReport(config.topic);
@@ -1031,6 +1034,21 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
 
     clearHesitationTimer();
 
+    let hindsightResult = null;
+    try {
+      hindsightResult = await HindsightEngine.analyze({
+        subjectName: config.topic,
+        askedQuestions: baseReport.askedQuestions,
+        askedQuestionsObjects: baseReport.askedQuestionsObjects,
+        answerTranscripts: baseReport.answerTranscripts,
+        detectedEmotions: baseReport.detectedEmotions,
+        personality: config.personality,
+        mode: config.mode
+      });
+    } catch (err) {
+      console.warn("HindsightEngine failed, results will use original data:", err);
+    }
+
     const reportPayload = {
       ...baseReport,
       askedTopics: SessionContextManager.askedTopics || [],
@@ -1044,27 +1062,9 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       examinerPersonality: config.personality,
       recordedAudios: audioUrls,
       mode: config.mode,
-      hindsightData: null,
-      hindsightLoading: true
+      hindsightData: hindsightResult,
+      hindsightLoading: false
     };
-
-    // Fire hindsight analysis asynchronously — does NOT block the results screen
-    HindsightEngine.analyze({
-      subjectName: config.topic,
-      askedQuestions: baseReport.askedQuestions,
-      askedQuestionsObjects: baseReport.askedQuestionsObjects,
-      answerTranscripts: baseReport.answerTranscripts,
-      detectedEmotions: baseReport.detectedEmotions,
-      personality: config.personality,
-      mode: config.mode
-    }).then(hindsightResult => {
-      // Enrich the report data after hindsight resolves
-      reportPayload.hindsightData = hindsightResult;
-      reportPayload.hindsightLoading = false;
-    }).catch(err => {
-      console.warn("HindsightEngine failed, results will use original data:", err);
-      reportPayload.hindsightLoading = false;
-    });
 
     onFinishViva(reportPayload);
   };
