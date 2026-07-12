@@ -2,16 +2,15 @@
 
 import React, { useState, useEffect } from "react";
 import { VoiceManager } from "@/services/voiceManager";
+import GaugeMetric from "./GaugeMetric";
 
 export default function Results({ resultsData, onRestart, onGoDashboard }) {
   const [activeTimelineIndex, setActiveTimelineIndex] = useState(0);
   const [expandedReplayIndex, setExpandedReplayIndex] = useState(null);
   const [playingReplayIndex, setPlayingReplayIndex] = useState(null);
   const [pastSessionsAvg, setPastSessionsAvg] = useState(null);
-  const [scoreOffset, setScoreOffset] = useState(314.16);
   const [activeRightTab, setActiveRightTab] = useState("timeline"); // "timeline" | "fluency"
   const [mobileTab, setMobileTab] = useState("overview"); // "overview" | "metrics" | "qa" | "plan"
-  const [displayedScore, setDisplayedScore] = useState(0);
   const [hindsightData, setHindsightData] = useState(resultsData.hindsightData || null);
   const [hindsightLoading, setHindsightLoading] = useState(resultsData.hindsightLoading || false);
 
@@ -306,41 +305,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     overallScore = Math.round(overallScore * 0.6);
   }
 
-  // Radial score stroke offset animation
-  useEffect(() => {
-    const offset = 314.16 - (314.16 * overallScore) / 100;
-    const timer = setTimeout(() => {
-      setScoreOffset(offset);
-    }, 150);
-    return () => clearTimeout(timer);
-  }, [overallScore]);
 
-  // Decryption / Rolling animation for overall score number
-  useEffect(() => {
-    if (overallScore <= 0) {
-      setDisplayedScore(0);
-      return;
-    }
-
-    const duration = 1200; // Animation duration in ms
-    const intervalTime = 30; // Update rate in ms
-    const totalSteps = duration / intervalTime;
-    let step = 0;
-
-    const timer = setInterval(() => {
-      step++;
-      if (step >= totalSteps) {
-        clearInterval(timer);
-        setDisplayedScore(overallScore);
-      } else {
-        // Fast random rolling sequence to simulate decryption scan
-        const randomVal = Math.floor(Math.random() * 90) + 10;
-        setDisplayedScore(randomVal);
-      }
-    }, intervalTime);
-
-    return () => clearInterval(timer);
-  }, [overallScore]);
 
   // Load prior average score for historical growth computation
   useEffect(() => {
@@ -1139,28 +1104,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
               
               <div className="scorecard-radial-row">
                 {/* Radial Score Circle */}
-                <div className="radial-svg-wrapper" style={{ width: "110px", height: "110px", flexShrink: 0 }}>
-                  <svg viewBox="0 0 120 120" style={{ width: "100%", height: "100%" }}>
-                    <circle className="radial-svg-circle-bg" cx="60" cy="60" r="50" />
-                    <circle 
-                      className="radial-svg-circle-fill" 
-                      cx="60" 
-                      cy="60" 
-                      r="50" 
-                      strokeDasharray="314.16" 
-                      strokeDashoffset={scoreOffset}
-                      style={{
-                        fill: "none",
-                        stroke: "var(--accent-primary)",
-                        strokeWidth: 10,
-                        strokeLinecap: "round",
-                        transform: "rotate(-90deg)",
-                        transition: "stroke-dashoffset 1.2s cubic-bezier(0.34, 1.56, 0.64, 1)"
-                      }}
-                    />
-                  </svg>
-                  <div className="radial-score-value" style={{ fontSize: "1.6rem", fontWeight: "800", color: "var(--accent-primary)" }}>{displayedScore}%</div>
-                </div>
+                <GaugeMetric percentage={overallScore} isLarge={true} />
 
                 <div style={{ textAlign: "left", flex: 1 }}>
                   <span style={{ fontSize: "0.8rem", textTransform: "uppercase", fontWeight: "600", color: "var(--text-secondary)", letterSpacing: "0.05em" }}>Overall Standing</span>
@@ -1171,30 +1115,12 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
 
               {/* Six detailed score fields */}
               <div className="scorecard-details-grid" style={{ gap: "var(--space-sm)", marginTop: "var(--space-lg)", borderTop: "1px solid var(--border-color)", paddingTop: "var(--space-md)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Technical/Domain Competence" : "Subject Understanding"}</span>
-                  <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{subjectUnderstanding}%</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Communication Confidence" : "Speaking Confidence"}</span>
-                  <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{vocalConfidence}%</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Clarity & Delivery" : "Speaking Clarity"}</span>
-                  <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{clarityOfComm}%</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Problem-Solving Depth" : "Conceptual Depth"}</span>
-                  <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{conceptualDepth}%</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Stress Tolerance" : "Handling Pressure"}</span>
-                  <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{handlingPressure}%</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Role Consistency" : "Consistency"}</span>
-                  <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{consistency}%</strong>
-                </div>
+                <GaugeMetric percentage={subjectUnderstanding} label={isProfessional ? "Technical/Domain Competence" : "Subject Understanding"} />
+                <GaugeMetric percentage={vocalConfidence} label={isProfessional ? "Communication Confidence" : "Speaking Confidence"} />
+                <GaugeMetric percentage={clarityOfComm} label={isProfessional ? "Clarity & Delivery" : "Speaking Clarity"} />
+                <GaugeMetric percentage={conceptualDepth} label={isProfessional ? "Problem-Solving Depth" : "Conceptual Depth"} />
+                <GaugeMetric percentage={handlingPressure} label={isProfessional ? "Stress Tolerance" : "Handling Pressure"} />
+                <GaugeMetric percentage={consistency} label={isProfessional ? "Role Consistency" : "Consistency"} />
               </div>
             </div>
 

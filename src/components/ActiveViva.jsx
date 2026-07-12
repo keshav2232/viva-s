@@ -9,6 +9,7 @@ import { AnswerEvaluationService } from "@/services/AnswerEvaluationService";
 import { SessionContextManager } from "@/services/SessionContextManager";
 import { HindsightEngine } from "@/services/HindsightEngine";
 import ExaminerAvatar from "@/components/ExaminerAvatar";
+import WaveformVisualizer from "./WaveformVisualizer";
 
 // Helper to guarantee render purity by getting timestamp outside component scope
 function getNow() {
@@ -50,7 +51,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
   const [writtenAnswer, setWrittenAnswer] = useState("");
   
   const speechStartTime = useRef(0);
-  const waveIntervalRef = useRef(null);
+  const [liveVolume, setLiveVolume] = useState(0);
   const [failsafeWarning, setFailsafeWarning] = useState(null);
   const interruptedRef = useRef(false);
   const latestNervousnessRef = useRef(20);
@@ -146,7 +147,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         () => {
           setVisualState("speaking");
           setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
-          startWaveAnimations();
           if (config.personality !== "friendly" && config.enableInterruption !== false) {
             startBackgroundListeningForInterruptions(config.resumeState.activeQuestion);
           }
@@ -415,7 +415,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         () => {
           setVisualState("speaking");
           setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
-          startWaveAnimations();
           if (config.personality !== "friendly" && config.enableInterruption !== false) {
             startBackgroundListeningForInterruptions(firstQuestion);
           }
@@ -441,7 +440,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         () => {
           setVisualState("speaking");
           setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
-          startWaveAnimations();
           if (config.personality !== "friendly" && config.enableInterruption !== false) {
             startBackgroundListeningForInterruptions(fallback);
           }
@@ -616,7 +614,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     
     setVivaState("speaking");
     setVisualState("speaking");
-    startWaveAnimations();
 
     const currentQ = activeQuestionRef.current;
     if (!currentQ) {
@@ -758,7 +755,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     setIsPlaceholder(true);
     
     speechStartTime.current = getNow();
-    startListeningWaveAnimations();
     resetHesitationTimer();
 
     SpeechManager.start({
@@ -773,13 +769,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         }
       },
       onVolumeChange: (volPct) => {
-        const bars = document.querySelectorAll("#viva-waveform .waveform-bar");
-        bars.forEach((bar, index) => {
-          const multiplier = 0.35 + (index % 3 === 0 ? 0.55 : index % 3 === 1 ? 0.85 : 0.35);
-          const rawHeight = Math.round(volPct * 0.45 * multiplier);
-          const barHeight = Math.min(Math.max(rawHeight, 4), 38);
-          bar.style.height = `${barHeight}px`;
-        });
+        setLiveVolume(volPct);
       },
       onSilenceDetected: (finalTranscriptText) => {
         // Hands-free auto submit
@@ -846,7 +836,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     setStatusText(config.mode === "professional" ? "Interviewer is evaluating your answer..." : "Examiner is evaluating your answer...");
     setTranscriptText(answerText);
     setIsPlaceholder(false);
-    clearInterval(waveIntervalRef.current);
     clearHesitationTimer();
 
     const durationMs = getNow() - speechStartTime.current;
@@ -960,7 +949,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
               if (!isMountedRef.current) return;
               setVisualState("speaking");
               setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
-              startWaveAnimations();
               if (config.personality !== "friendly" && config.enableInterruption !== false) {
                 startBackgroundListeningForInterruptions(nextQuestion);
               }
@@ -991,7 +979,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
               if (!isMountedRef.current) return;
               setVisualState("speaking");
               setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
-              startWaveAnimations();
               if (config.personality !== "friendly" && config.enableInterruption !== false) {
                 startBackgroundListeningForInterruptions(nextQuestion);
               }
@@ -1072,7 +1059,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
             if (!isMountedRef.current) return;
             setVisualState("speaking");
             setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
-            startWaveAnimations();
             if (config.personality !== "friendly" && config.enableInterruption !== false) {
               startBackgroundListeningForInterruptions(nextQuestion);
             }
@@ -1089,7 +1075,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
 
   const handlePauseSession = () => {
     stopAudioStreams();
-    clearInterval(waveIntervalRef.current);
     clearHesitationTimer();
     
     const pauseState = {
@@ -1113,7 +1098,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
 
   function handleFinish(endedEarly = false) {
     stopAudioStreams();
-    clearInterval(waveIntervalRef.current);
     
     // Compile final report using SessionContextManager
     const baseReport = SessionContextManager.compileFinalReport(config.topic);
@@ -1234,30 +1218,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     }
   };
 
-  // Wave Animations
-  function startWaveAnimations() {
-    clearInterval(waveIntervalRef.current);
-    waveIntervalRef.current = setInterval(() => {
-      const bars = document.querySelectorAll("#viva-waveform .waveform-bar");
-      bars.forEach(bar => {
-        const height = Math.floor(Math.random() * 26) + 6;
-        bar.style.height = `${height}px`;
-      });
-    }, 150);
-  }
 
-  function startListeningWaveAnimations() {
-    clearInterval(waveIntervalRef.current);
-    // Initialize bars at baseline flat level (4px)
-    const bars = document.querySelectorAll("#viva-waveform .waveform-bar");
-    bars.forEach(bar => {
-      bar.style.height = "4px";
-    });
-  }
-
-  function triggerSpeechWavePulse() {
-    // Pulse animation superseded by live volume physics
-  }
 
   if (!sessionUnlocked) {
     const titleText = config.mode === "professional" ? "Interactive Mock Interview" : "AI Oral Examination Simulator";
@@ -1400,19 +1361,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
           </div>
 
           {/* wave audio rendering */}
-          <div className="waveform-container" id="viva-waveform">
-            <div className="waveform-bar" style={{ height: "12px" }}></div>
-            <div className="waveform-bar" style={{ height: "24px" }}></div>
-            <div className="waveform-bar" style={{ height: "8px" }}></div>
-            <div className="waveform-bar" style={{ height: "18px" }}></div>
-            <div className="waveform-bar" style={{ height: "32px" }}></div>
-            <div className="waveform-bar" style={{ height: "14px" }}></div>
-            <div className="waveform-bar" style={{ height: "20px" }}></div>
-            <div className="waveform-bar" style={{ height: "8px" }}></div>
-            <div className="waveform-bar" style={{ height: "28px" }}></div>
-            <div className="waveform-bar" style={{ height: "16px" }}></div>
-            <div className="waveform-bar" style={{ height: "10px" }}></div>
-          </div>
+          <WaveformVisualizer status={vivaState} volume={liveVolume} />
 
           <div className="microphone-box" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
             <button className="btn-mic" id="btn-microphone" disabled={vivaState !== "listening" || fallbackMode}>
