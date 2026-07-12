@@ -385,88 +385,94 @@ async function handleGenerateQuestion(payload, apiKey) {
 }
 
 // ==========================================
-// 3. EVALUATE TRANSCRIPT ANSWER
+// 3. EVALUATE TRANSCRIPT ANSWER (GEMINI-FIRST UNIFIED PROMPT)
 // ==========================================
 async function handleEvaluateAnswer(payload, apiKey) {
   const { question, answer, syllabus, mode, audioBase64 } = payload;
   const isProfessional = mode === "professional";
   const hasAudio = !!audioBase64;
 
+  // Unified prompt — always requests all 8 metrics.
+  // Gemini evaluates audio delivery when audio is present; sets delivery fields to null for text-only.
+  const audioInstruction = hasAudio
+    ? "An audio recording of the speaker's actual voice is attached. Listen carefully and evaluate BOTH the spoken content (correctness, logic, accuracy) AND the vocal delivery (clarity, confidence, nervousness, hesitation) from the audio."
+    : "No audio is attached. Evaluate based on the text transcript only. For confidence, nervousness, hesitation, and clarity: set them to null since there is no audio to assess delivery.";
+
   const prompt = isProfessional
     ? `Act as an expert industry interviewer grading a candidate's response in a mock interview.
-  
-  Question Asked: "${question}"
-  Candidate Response: "${answer}"
-  Job Competency Context: ${JSON.stringify(syllabus)}
-  ${hasAudio ? "An audio recording of the candidate's actual speech is attached to this request. Listen to it carefully to evaluate both content and voice delivery." : "No audio recording is attached. Grade based on the text response."}
-  
-  Evaluate the response across the following metrics out of 100:
-  1. correctness: logical correctness, technical depth, and industry validity of the explanation (0-100)
-  2. completeness: coverage of edge cases, trade-offs, and details using the STAR format if applicable (0-100)
-  3. accuracy: use of precise engineering terminology, patterns, and architectural accuracy (0-100)
-  4. clarity: structural flow, articulation, and professional delivery (0-100) ${hasAudio ? "(based on both text flow and acoustic voice clarity)" : ""}
-  ${hasAudio ? `5. nervousness: level of nervousness, vocal tremors, or jitteriness (0-100)
-  6. confidence: vocal presence, assertiveness, and tone stability (0-100)
-  7. hesitation: frequency of long pauses, silence gaps, and verbal filler words (like "um", "uh", "basically") (0-100)` : ""}
-  
-  Also select a singular evaluation tag:
-  - "Strong": highly correct, technically accurate, confident.
-  - "Weak": incorrect, extremely short, or blank.
-  - "Partially Correct": correct direction but lacks precise design trade-offs/STAR details.
-  - "Bluffing": uses lots of general filler words or corporate buzzwords but has near-zero real competence.
-  - "Incomplete": correct direction but way too brief (no depth/examples).
-  - "Confused": contradicts itself or completely lost.
-  
-  Response Format:
-  Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown:
-  {
-    "correctness": 85,
-    "completeness": 70,
-    "accuracy": 80,
-    "clarity": 90,
-    "tag": "Strong" | "Weak" | "Partially Correct" | "Bluffing" | "Incomplete" | "Confused",
-    "correctAnswer": "A detailed and professional response showing how a top-tier candidate should answer, outlining key design trade-offs, architecture choices, industry standards, or STAR highlights."${hasAudio ? `,
-    "nervousness": 20,
-    "confidence": 85,
-    "hesitation": 10` : ""}
-  }`
+
+Question Asked: "${question}"
+Candidate Response: "${answer}"
+Job Competency Context: ${JSON.stringify(syllabus)}
+${audioInstruction}
+
+Score each metric 0-100 (use null for delivery metrics when no audio):
+1. correctness: logical correctness, technical depth, industry validity (0-100)
+2. completeness: coverage of edge cases, trade-offs, STAR details (0-100)
+3. accuracy: precise engineering terminology and architectural accuracy (0-100)
+4. clarity: ${hasAudio ? "acoustic voice clarity, structural flow, articulation (0-100)" : "null (no audio)"}
+5. confidence: ${hasAudio ? "vocal presence, assertiveness, tone stability (0-100)" : "null (no audio)"}
+6. nervousness: ${hasAudio ? "vocal tremors, jitteriness, speaking rate anxiety (0-100)" : "null (no audio)"}
+7. hesitation: ${hasAudio ? "long pauses, silence gaps, filler words like um/uh (0-100)" : "null (no audio)"}
+
+Evaluation tag (pick one):
+- "Strong": highly correct, technically accurate, confident
+- "Weak": incorrect, blank, or extremely short
+- "Partially Correct": correct direction but lacks precise trade-offs or STAR details
+- "Bluffing": general filler phrases, near-zero real technical competence
+- "Incomplete": correct but too brief (no depth)
+- "Confused": contradicts itself or completely lost
+
+Respond ONLY with a valid clean JSON object. Do not use markdown:
+{
+  "correctness": 85,
+  "completeness": 70,
+  "accuracy": 80,
+  "clarity": ${hasAudio ? "88" : "null"},
+  "confidence": ${hasAudio ? "75" : "null"},
+  "nervousness": ${hasAudio ? "22" : "null"},
+  "hesitation": ${hasAudio ? "18" : "null"},
+  "tag": "Strong",
+  "correctAnswer": "A detailed professional answer outlining design trade-offs, architecture choices, STAR highlights, and best practices.",
+  "gradingSource": "${hasAudio ? "audio+text" : "text-only"}"
+}`
     : `Act as an academic examiner grading an oral response in a college viva.
-  
-  Question Asked: "${question}"
-  Student Response: "${answer}"
-  Syllabus Context: ${JSON.stringify(syllabus)}
-  ${hasAudio ? "An audio recording of the student's actual speech is attached to this request. Listen to it carefully to evaluate both content and voice delivery." : "No audio recording is attached. Grade based on the text response."}
-  
-  Evaluate the response across the following metrics out of 100:
-  1. correctness: general logical correctness (0-100)
-  2. completeness: depth, details, and completeness of explanation (0-100)
-  3. accuracy: technical formulas, precise keywords, and terminology (0-100)
-  4. clarity: fluency, structural flow (0-100) ${hasAudio ? "(based on both text flow and acoustic voice clarity)" : ""}
-  ${hasAudio ? `5. nervousness: level of nervousness, vocal tremors, or jitteriness (0-100)
-  6. confidence: vocal presence, assertiveness, and tone stability (0-100)
-  7. hesitation: frequency of long pauses, silence gaps, and verbal filler words (like "um", "uh", "basically") (0-100)` : ""}
-  
-  Also select a singular evaluation tag:
-  - "Strong": highly correct, technically accurate, confident.
-  - "Weak": incorrect, extremely short, or blank.
-  - "Partially Correct": correct direction but lacks precise terms/equations.
-  - "Bluffing": uses lots of general filler words but has near-zero academic accuracy.
-  - "Incomplete": correct answer but way too short (lacks explanations).
-  - "Confused": contradicts itself or completely lost.
-  
-  Response Format:
-  Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown:
-  {
-    "correctness": 85,
-    "completeness": 70,
-    "accuracy": 80,
-    "clarity": 90,
-    "tag": "Strong" | "Weak" | "Partially Correct" | "Bluffing" | "Incomplete" | "Confused",
-    "correctAnswer": "A detailed and unique correct answer that fully explains the concept, stating any critical equations/formulas, definitions, and physical parameters."${hasAudio ? `,
-    "nervousness": 20,
-    "confidence": 85,
-    "hesitation": 10` : ""}
-  }`;
+
+Question Asked: "${question}"
+Student Response: "${answer}"
+Syllabus Context: ${JSON.stringify(syllabus)}
+${audioInstruction}
+
+Score each metric 0-100 (use null for delivery metrics when no audio):
+1. correctness: general logical correctness and subject accuracy (0-100)
+2. completeness: depth, completeness, formula coverage (0-100)
+3. accuracy: precise technical keywords, formulas, terminology (0-100)
+4. clarity: ${hasAudio ? "acoustic voice clarity, fluency, structural flow (0-100)" : "null (no audio)"}
+5. confidence: ${hasAudio ? "vocal presence, tone stability (0-100)" : "null (no audio)"}
+6. nervousness: ${hasAudio ? "vocal tremors, jitteriness, pace anxiety (0-100)" : "null (no audio)"}
+7. hesitation: ${hasAudio ? "long pauses, silence gaps, filler words um/uh (0-100)" : "null (no audio)"}
+
+Evaluation tag (pick one):
+- "Strong": highly correct, technically accurate, confident
+- "Weak": incorrect, blank, or extremely short
+- "Partially Correct": correct direction but lacks precise equations/terms
+- "Bluffing": general filler phrases, near-zero academic accuracy
+- "Incomplete": correct but too brief (no depth)
+- "Confused": contradicts itself or completely lost
+
+Respond ONLY with a valid clean JSON object. Do not use markdown:
+{
+  "correctness": 85,
+  "completeness": 70,
+  "accuracy": 80,
+  "clarity": ${hasAudio ? "88" : "null"},
+  "confidence": ${hasAudio ? "75" : "null"},
+  "nervousness": ${hasAudio ? "22" : "null"},
+  "hesitation": ${hasAudio ? "18" : "null"},
+  "tag": "Strong",
+  "correctAnswer": "A precise academic answer with governing equations, definitions, boundary conditions.",
+  "gradingSource": "${hasAudio ? "audio+text" : "text-only"}"
+}`;
 
   const responseJson = await callGeminiAPI(prompt, apiKey, audioBase64);
   return NextResponse.json(responseJson);
@@ -929,72 +935,27 @@ function handleOfflineFallback(payload) {
   }
 
   if (action === "evaluate-answer") {
-    const { question, answer } = payload;
+    // Gemini API is offline — return honest Ungraded response.
+    // Never use keyword-match heuristics that inflate scores.
+    const { answer } = payload;
     const cleanAnswer = (answer || "").trim();
     const lowerAnswer = cleanAnswer.toLowerCase();
-    const wordsCount = lowerAnswer.split(/\s+/).filter(w => w.length > 0).length;
-    
-    let correctness = 60;
-    let accuracy = 55;
-    let completeness = 50;
-    let tag = "Partially Correct";
-    
-    if (wordsCount < 6 || lowerAnswer.includes("student remained silent") || lowerAnswer.includes("candidate remained silent")) {
-      correctness = 25;
-      accuracy = 20;
-      completeness = 15;
-      tag = "Weak";
-    } else if (lowerAnswer.includes("don't know") || lowerAnswer.includes("not sure") || lowerAnswer.includes("skip")) {
-      correctness = 20;
-      accuracy = 15;
-      completeness = 10;
-      tag = "Weak";
-    } else {
-      // Check keyword matches from the question topic/text
-      const topicKeywords = question.toLowerCase().replace(/[^\w\s]/g, "").split(/\s+/).filter(w => w.length > 4);
-      let matchCount = 0;
-      topicKeywords.forEach(kw => {
-        if (lowerAnswer.includes(kw)) matchCount++;
-      });
-      
-      const matchRatio = topicKeywords.length > 0 ? matchCount / topicKeywords.length : 0.5;
-      
-      if (matchRatio >= 0.5) {
-        correctness = Math.round(78 + matchRatio * 18);
-        accuracy = Math.round(75 + matchRatio * 20);
-        completeness = Math.round(70 + matchRatio * 25);
-        tag = "Strong";
-      } else if (wordsCount > 28 && matchRatio < 0.25) {
-        correctness = 45;
-        accuracy = 35;
-        completeness = 40;
-        tag = "Bluffing";
-      } else if (wordsCount < 16) {
-        correctness = 62;
-        accuracy = 55;
-        completeness = 45;
-        tag = "Incomplete";
-      }
-    }
+    const isSilent = cleanAnswer.length < 10
+      || lowerAnswer.includes("remained silent")
+      || lowerAnswer.includes("no substantive answer");
 
-    const questionLower = (question || "").toLowerCase();
-    let correctAnswer = isProfessional
-      ? `A correct response should explain the underlying engineering principles, state any design trade-offs/STAR details, and outline architectural best practices.`
-      : `A correct response should explain the underlying technical principles, state any governing formulas/relationships, and outline how parameters behave under boundary conditions.`;
-    for (const [key, val] of Object.entries(DEFAULT_CORRECT_ANSWERS)) {
-      if (questionLower.includes(key.toLowerCase()) || key.toLowerCase().includes(questionLower)) {
-        correctAnswer = val;
-        break;
-      }
-    }
-    
     return NextResponse.json({
-      correctness,
-      completeness,
-      accuracy,
-      clarity: Math.round(correctness * 0.95),
-      tag,
-      correctAnswer: correctAnswer
+      correctness: isSilent ? 0 : null,
+      completeness: isSilent ? 0 : null,
+      accuracy: isSilent ? 0 : null,
+      clarity: null,
+      confidence: null,
+      nervousness: null,
+      hesitation: null,
+      tag: isSilent ? "Weak" : "Ungraded",
+      correctAnswer: null,
+      gradingSource: "offline",
+      isUngraded: true
     });
   }
 

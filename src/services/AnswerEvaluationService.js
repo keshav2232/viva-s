@@ -1,25 +1,45 @@
 /**
  * VivaSim - Answer Evaluation Service
- * Combines server-side Gemini semantic text grading (correctness, accuracy, tags)
- * with client-side lexical-acoustic metrics (speaking rate, hesitation gaps, filler frequencies).
+ * Gemini is the single source of truth for ALL metrics.
+ * Audio recording is always sent when available (oral mode).
+ * Local math is only used for WPM (timing fact, not AI judgment).
+ * Offline/API-failure → returns isUngraded:true (never inflated scores).
  */
 
 export const AnswerEvaluationService = {
-  
+
   /**
-   * Evaluates the student transcript against asked question and syllabus contexts.
-   * @param {object} params - { question, answer, syllabus, speechDurationMs, pauseCount }
-   * @returns {Promise<object>} Combined metrics { confidence, clarity, nervousness, hesitation, correctness, accuracy, completeness, tag }
+   * Evaluates the student answer using Gemini as the sole scoring authority.
+   * Audio blob is passed directly to Gemini for acoustic + semantic analysis.
+   * @param {object} params - { question, answer, syllabus, speechDurationMs, pauseCount, liveMetrics, isHesitationPenalty, mode, audioBlob }
+   * @returns {Promise<object>} Full metrics from Gemini. isUngraded=true if evaluation failed.
    */
   async evaluateResponse(params) {
-    const { question, answer, syllabus, speechDurationMs, pauseCount, liveMetrics, isHesitationPenalty, mode, audioBase64 } = params;
+    const {
+      question,
+      answer,
+      syllabus,
+      speechDurationMs,
+      pauseCount,
+      isHesitationPenalty,
+      mode,
+      audioBlob    // Blob object (oral) or null (keyboard fallback)
+    } = params;
 
-    // 1. Calculate local acoustic/delivery metrics (prefer live-tracked metrics)
-    const local = this.calculateLocalDeliveryMetrics(answer, speechDurationMs, pauseCount);
-    const delivery = liveMetrics ? { ...local, ...liveMetrics } : local;
+    // WPM is a timing fact — calculate locally from real duration
+    const wpm = this.calculateWpm(answer, speechDurationMs);
+
+    // Convert audioBlob to base64 if present
+    let audioBase64 = null;
+    if (audioBlob && audioBlob.size > 100) {
+      try {
+        audioBase64 = await this.blobToBase64(audioBlob);
+      } catch (encErr) {
+        console.warn("AnswerEvaluationService: Failed to encode audio blob:", encErr);
+      }
+    }
 
     try {
-      // 2. Call server-side Gemini AI for semantic evaluations
       const response = await fetch("/api/viva", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -33,142 +53,116 @@ export const AnswerEvaluationService = {
         })
       });
 
-      if (!response.ok) throw new Error("Evaluation API request failed");
-      const semanticGrading = await response.json();
+      if (!response.ok) throw new Error(`Evaluation API returned ${response.status}`);
+      const geminiResult = await response.json();
 
-      // Adjust dynamic nervousness and confidence based on AI grading results if Gemini didn't return them directly
-      let confAdjustment = 0;
-      if (semanticGrading.tag === "Strong") confAdjustment = 10;
-      else if (semanticGrading.tag === "Weak") confAdjustment = -15;
-      else if (semanticGrading.tag === "Bluffing") confAdjustment = -20;
+      // Validate that we got real scores back (not a broken response)
+      if (geminiResult.correctness === undefined || geminiResult.correctness === null) {
+        throw new Error("Gemini returned incomplete evaluation data");
+      }
 
-      const finalConfidence = semanticGrading.confidence !== undefined
-        ? semanticGrading.confidence
-        : Math.min(Math.max(delivery.confidence + confAdjustment, 30), 98);
-
-      const finalClarity = semanticGrading.clarity !== undefined
-        ? semanticGrading.clarity
-        : Math.round((delivery.clarity * 0.4) + (semanticGrading.clarity * 0.6));
-
-      const finalNervousness = semanticGrading.nervousness !== undefined
-        ? semanticGrading.nervousness
-        : delivery.nervousness;
-
-      const finalHesitation = semanticGrading.hesitation !== undefined
-        ? semanticGrading.hesitation
-        : delivery.hesitation;
-
+      // Apply hesitation penalty if terror personality triggered one
       if (isHesitationPenalty) {
-        semanticGrading.correctness = Math.max(Math.round(semanticGrading.correctness * 0.8), 0);
-        semanticGrading.accuracy = Math.max(Math.round(semanticGrading.accuracy * 0.8), 0);
-        semanticGrading.tag = "Partially Correct";
+        geminiResult.correctness = Math.max(Math.round((geminiResult.correctness ?? 0) * 0.8), 0);
+        geminiResult.accuracy = Math.max(Math.round((geminiResult.accuracy ?? 0) * 0.8), 0);
+        geminiResult.tag = "Partially Correct";
       }
 
       return {
-        // Combined metrics
-        confidence: finalConfidence,
-        clarity: finalClarity,
-        nervousness: finalNervousness,
-        hesitation: finalHesitation,
-        wpm: delivery.wpm || 120,
-        fillerCount: delivery.fillerCount || 0,
-        
-        // Gemini grading outputs
-        correctness: semanticGrading.correctness,
-        accuracy: semanticGrading.accuracy,
-        completeness: semanticGrading.completeness,
-        tag: semanticGrading.tag,
-        correctAnswer: semanticGrading.correctAnswer
+        // Content scores — entirely from Gemini
+        correctness: geminiResult.correctness,
+        completeness: geminiResult.completeness,
+        accuracy: geminiResult.accuracy,
+        tag: geminiResult.tag,
+        correctAnswer: geminiResult.correctAnswer || null,
+
+        // Delivery scores — from Gemini (audio mode) or null (text mode)
+        clarity: geminiResult.clarity ?? null,
+        confidence: geminiResult.confidence ?? null,
+        nervousness: geminiResult.nervousness ?? null,
+        hesitation: geminiResult.hesitation ?? null,
+
+        // Timing fact — calculated locally from real duration
+        wpm: wpm,
+        fillerCount: this.countFillers(answer),
+
+        // Metadata
+        gradingSource: geminiResult.gradingSource || (audioBase64 ? "audio+text" : "text-only"),
+        isUngraded: false
       };
 
     } catch (e) {
-      console.warn("AnswerEvaluationService API error. Falling back to clean local calculations:", e);
-      return this.getLocalFallbackMetrics(delivery, answer, isHesitationPenalty);
+      console.warn("AnswerEvaluationService: Gemini evaluation failed. Marking round as Ungraded:", e.message);
+      // Honest fallback — never inflate scores
+      return this.getUngradedMetrics(answer, speechDurationMs, isHesitationPenalty);
     }
   },
 
   /**
-   * Computes client-side hesitation and pacing metrics.
+   * Returned when Gemini evaluation fails.
+   * Marks the round as ungraded rather than assigning fake high scores.
    */
-  calculateLocalDeliveryMetrics(answerText, speechDurationMs, pauseCount) {
-    const textLower = answerText.toLowerCase();
-    const words = textLower.split(/\s+/).filter(w => w.length > 0);
-    const wordCount = words.length;
+  getUngradedMetrics(answerText, speechDurationMs, isHesitationPenalty) {
+    const isSilent = !answerText || answerText.length < 10
+      || answerText.includes("remained silent")
+      || answerText.includes("no substantive answer");
 
-    // Hesitation
-    const fillers = ["um", "umm", "uhm", "uh", "ah", "ahh", "like", "basically", "actually", "you know", "maybe", "sort of", "kind of"];
-    let fillerCount = 0;
-    fillers.forEach(f => {
-      const matches = textLower.match(new RegExp(`\\b${f}\\b`, 'g'));
-      if (matches) fillerCount += matches.length;
-    });
+    return {
+      correctness: isSilent ? 0 : null,
+      completeness: isSilent ? 0 : null,
+      accuracy: isSilent ? 0 : null,
+      clarity: null,
+      confidence: null,
+      nervousness: null,
+      hesitation: null,
+      wpm: this.calculateWpm(answerText, speechDurationMs),
+      fillerCount: this.countFillers(answerText),
+      tag: isSilent ? "Weak" : "Ungraded",
+      correctAnswer: null,
+      gradingSource: "offline",
+      isUngraded: true
+    };
+  },
 
-    let hesitationScore = Math.min(Math.max((fillerCount * 8) + (pauseCount * 12) + 10, 8), 92);
-
-    // Uncertainty
-    const weakTerms = ["i think", "i guess", "not sure", "don't know", "possibly", "probably", "maybe"];
-    let weakCount = 0;
-    weakTerms.forEach(t => {
-      if (textLower.includes(t)) weakCount++;
-    });
-
-    // Pacing (WPM)
+  /**
+   * Calculates WPM from real timing data. Never guesses a duration.
+   * Returns null if duration is unknown (avoids the 24s assumption bug).
+   */
+  calculateWpm(answerText, speechDurationMs) {
+    if (!speechDurationMs || speechDurationMs < 1000) return null;
+    const words = (answerText || "").split(/\s+/).filter(w => w.length > 0);
     const durationMins = speechDurationMs / 1000 / 60;
-    const wpm = durationMins > 0 ? Math.round(wordCount / durationMins) : 120;
-    
-    let wpmDeviation = 0;
-    if (wpm < 85) wpmDeviation = (85 - wpm) * 1.5;
-    else if (wpm > 175) wpmDeviation = (wpm - 175) * 1.2;
-
-    let nervousnessScore = Math.min(Math.max((weakCount * 15) + wpmDeviation + 15, 10), 90);
-
-    // General density clarity
-    let clarityScore = Math.min(Math.max((wordCount > 15 ? 50 : 25) - (weakCount * 8) - (fillerCount * 3) + 40, 20), 98);
-
-    // Base confidence
-    let confidenceScore = Math.round(100 - (hesitationScore * 0.4 + nervousnessScore * 0.4 + (100 - clarityScore) * 0.2));
-    confidenceScore = Math.min(Math.max(confidenceScore, 35), 98);
-
-    return {
-      confidence: confidenceScore,
-      clarity: clarityScore,
-      nervousness: nervousnessScore,
-      hesitation: hesitationScore,
-      wpm: wpm,
-      fillerCount: fillerCount
-    };
+    return durationMins > 0 ? Math.round(words.length / durationMins) : null;
   },
 
   /**
-   * Highly responsive fallback metrics in case API key is offline.
+   * Counts lexical filler words in the transcript.
+   * Used for the filler distribution chart in Results.jsx.
+   * "actually" and "like" removed — too many false positives in technical speech.
    */
-  getLocalFallbackMetrics(delivery, answerText, isHesitationPenalty) {
-    const isShort = answerText.length < 15;
-    let tag = "Partially Correct";
-    if (isShort) tag = "Incomplete";
-    else if (delivery.confidence >= 80) tag = "Strong";
-    else if (delivery.confidence < 60) tag = "Weak";
+  countFillers(answerText) {
+    const text = (answerText || "").toLowerCase();
+    const fillers = ["um", "umm", "uhm", "uh", "ah", "ahh", "basically", "you know", "maybe", "sort of", "kind of"];
+    let count = 0;
+    fillers.forEach(f => {
+      const matches = text.match(new RegExp(`\\b${f}\\b`, "g"));
+      if (matches) count += matches.length;
+    });
+    return count;
+  },
 
-    let correctness = isShort ? 55 : 82;
-    let accuracy = isShort ? 50 : 80;
-
-    if (isHesitationPenalty) {
-      correctness = Math.max(Math.round(correctness * 0.8), 0);
-      accuracy = Math.max(Math.round(accuracy * 0.8), 0);
-      tag = "Partially Correct";
-    }
-
-    return {
-      confidence: delivery.confidence,
-      clarity: delivery.clarity,
-      nervousness: delivery.nervousness,
-      hesitation: delivery.hesitation,
-      wpm: delivery.wpm || 120,
-      fillerCount: delivery.fillerCount || 0,
-      correctness: correctness,
-      accuracy: accuracy,
-      completeness: isShort ? 45 : 78,
-      tag: tag
-    };
+  /**
+   * Converts a Blob to a base64 string.
+   */
+  blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result.split(",")[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
   }
 };

@@ -2,6 +2,10 @@
  * VivaSim - Session Context Manager Service
  * Manages in-memory context: tracking asked questions, answer transcripts,
  * active evaluation histories, and compiling weaknesses report parameters.
+ *
+ * NOTE: recordRoundPending() and updateRoundMetrics() have been removed.
+ * The system now uses a single atomic evaluation call, so a round is only
+ * recorded once with real data (or with isUngraded:true on failure).
  */
 
 export const SessionContextManager = {
@@ -11,6 +15,7 @@ export const SessionContextManager = {
   detectedEmotions: [],
   weakConcepts: [],
   confidenceEvolution: [],
+  askedTopics: [],
 
   /**
    * Resets the active session parameters context.
@@ -22,68 +27,33 @@ export const SessionContextManager = {
     this.detectedEmotions = [];
     this.weakConcepts = [];
     this.confidenceEvolution = [];
+    this.askedTopics = [];
   },
 
   /**
    * Records a completed question-answer round into memory.
+   * Called ONCE per round with real Gemini evaluation data (or isUngraded:true).
    */
   recordRound(params) {
     const { questionText, answerText, metrics, questionObj } = params;
-    
+
     this.askedQuestions.push(questionText);
-    this.askedQuestionsObjects.push(questionObj || { text: questionText, speech: questionText, topic: "Syllabus Concept", difficulty: "Medium" });
+    this.askedQuestionsObjects.push(questionObj || {
+      text: questionText,
+      speech: questionText,
+      topic: "Syllabus Concept",
+      difficulty: "Medium"
+    });
     this.answerTranscripts.push(answerText);
     this.detectedEmotions.push(metrics);
-    this.confidenceEvolution.push(metrics.confidence);
 
-    // If clarity or technical accuracy are low, flag expected keywords as weak concepts
-    if (metrics.clarity < 65 || metrics.accuracy < 60) {
-      const parsedTerms = this.extractTechnicalTerms(answerText);
-      parsedTerms.forEach(term => {
-        if (!this.weakConcepts.includes(term)) {
-          this.weakConcepts.push(term);
-        }
-      });
-    }
-  },
+    // Confidence evolution uses real confidence from Gemini, or null for ungraded rounds
+    this.confidenceEvolution.push(metrics.isUngraded ? null : (metrics.confidence ?? null));
 
-  /**
-   * Records a pending question-answer round into memory with placeholder metrics.
-   */
-  recordRoundPending(questionText, answerText, questionObj) {
-    this.askedQuestions.push(questionText);
-    this.askedQuestionsObjects.push(questionObj || { text: questionText, speech: questionText, topic: "Syllabus Concept", difficulty: "Medium" });
-    this.answerTranscripts.push(answerText);
-    
-    // Push placeholder metrics so indices and lengths stay aligned
-    const placeholderMetrics = {
-      confidence: 70,
-      clarity: 70,
-      nervousness: 30,
-      hesitation: 20,
-      wpm: 120,
-      fillerCount: 0,
-      correctness: 70,
-      accuracy: 70,
-      completeness: 70,
-      tag: "Evaluating...",
-      correctAnswer: "Loading evaluation..."
-    };
-    this.detectedEmotions.push(placeholderMetrics);
-    this.confidenceEvolution.push(placeholderMetrics.confidence);
-  },
-
-  /**
-   * Updates a specific round's metrics once resolved.
-   */
-  updateRoundMetrics(index, metrics) {
-    if (this.detectedEmotions[index]) {
-      this.detectedEmotions[index] = metrics;
-      this.confidenceEvolution[index] = metrics.confidence;
-
-      // If clarity or technical accuracy are low, flag expected keywords as weak concepts
-      if (metrics.clarity < 65 || metrics.accuracy < 60) {
-        const parsedTerms = this.extractTechnicalTerms(this.answerTranscripts[index] || "");
+    // Flag weak concepts only for graded rounds with confirmed low scores
+    if (!metrics.isUngraded) {
+      if ((metrics.clarity !== null && metrics.clarity < 65) || (metrics.accuracy !== null && metrics.accuracy < 60)) {
+        const parsedTerms = this.extractTechnicalTerms(answerText);
         parsedTerms.forEach(term => {
           if (!this.weakConcepts.includes(term)) {
             this.weakConcepts.push(term);
@@ -99,11 +69,10 @@ export const SessionContextManager = {
   extractTechnicalTerms(text) {
     const textLower = text.toLowerCase();
     const coreKeywords = [
-      "entropy", "carnot", "clausius", "reversibility", "piston", "exergy", 
+      "entropy", "carnot", "clausius", "reversibility", "piston", "exergy",
       "stack", "queue", "avl", "balanced", "collision", "hash", "probing", "bfs", "dfs",
       "goodman", "soderberg", "sommerfeld", "bearing", "fatigue", "concentration", "fillet", "gears"
     ];
-
     return coreKeywords.filter(keyword => textLower.includes(keyword));
   },
 
