@@ -53,13 +53,9 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
   const speechStartTime = useRef(0);
   const [liveVolume, setLiveVolume] = useState(0);
   const [failsafeWarning, setFailsafeWarning] = useState(null);
-  const interruptedRef = useRef(false);
   const latestNervousnessRef = useRef(20);
   
-  // Hesitation Monitor & Local Audio Replay states/refs
-  const [hesitationPenalties, setHesitationPenalties] = useState({});
-  const hesitationTimerRef = useRef(null);
-  const hasHesitatedInCurrentRoundRef = useRef(false);
+  // Local Audio Replay states/refs
   const recordedAudiosRef = useRef({});
   
   // Live Biometric Synchronization
@@ -74,15 +70,15 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
   // Refs for tracking latest state values in async callbacks
   const activeQuestionRef = useRef(activeQuestion);
   const currentQuestionIndexRef = useRef(currentQuestionIndex);
-  const hesitationPenaltiesRef = useRef(hesitationPenalties);
   const liveMetricsRef = useRef(liveMetrics);
   const transcriptTextRef = useRef(transcriptText);
+  const vivaStateRef = useRef(vivaState);
 
   useEffect(() => { activeQuestionRef.current = activeQuestion; }, [activeQuestion]);
   useEffect(() => { currentQuestionIndexRef.current = currentQuestionIndex; }, [currentQuestionIndex]);
-  useEffect(() => { hesitationPenaltiesRef.current = hesitationPenalties; }, [hesitationPenalties]);
   useEffect(() => { liveMetricsRef.current = liveMetrics; }, [liveMetrics]);
   useEffect(() => { transcriptTextRef.current = transcriptText; }, [transcriptText]);
+  useEffect(() => { vivaStateRef.current = vivaState; }, [vivaState]);
 
   // Main initial hook: registers failsafes
   useEffect(() => {
@@ -101,7 +97,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       if (liveTrackerRef.current) clearInterval(liveTrackerRef.current);
       if (introTimeoutRef.current) clearTimeout(introTimeoutRef.current);
       if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
-      if (hesitationTimerRef.current) clearTimeout(hesitationTimerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -143,12 +138,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         () => {
           setVisualState("speaking");
           setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
-          if (config.personality !== "friendly" && config.enableInterruption !== false) {
-            startBackgroundListeningForInterruptions(config.resumeState.activeQuestion);
-          }
         },
         () => {
-          if (interruptedRef.current) return;
           startListeningMode();
         }
       );
@@ -169,7 +160,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     SpeechManager.stop();
     if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
     if (introTimeoutRef.current) clearTimeout(introTimeoutRef.current);
-    if (hesitationTimerRef.current) clearTimeout(hesitationTimerRef.current);
   }
 
   // Live Biometric Speech Prosody Estimator
@@ -274,58 +264,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     };
   }, [vivaState, transcriptText, isPlaceholder]);
 
-  function startBackgroundListeningForInterruptions(activeQ) {
-    interruptedRef.current = false;
-    SpeechManager.stop();
-
-    SpeechManager.start({
-      onResult: (interim, final) => {
-        const text = (interim || "" + final || "").trim();
-        // If student spoke more than a few words while examiner was actively speaking
-        if (text.length > 8 && VoiceManager.isSpeaking() && !interruptedRef.current) {
-          interruptedRef.current = true;
-          handleExaminerInterruption(activeQ);
-        }
-      },
-      onError: (err) => {
-        console.warn("Background speech recognition error:", err);
-      }
-    });
-  }
-
-  function handleExaminerInterruption(activeQ) {
-    VoiceManager.stop();
-    SpeechManager.stop();
-    
-    setVivaState("speaking");
-    setVisualState("speaking");
-    setStatusText(config.mode === "professional" ? "Interviewer interrupted you..." : "Professor interrupted you...");
-    
-    const interruptionPhrases = config.mode === "professional" ? {
-      strict: "One moment, please. Let me finish framing the scenario before you answer.",
-      brutal: "Hold on. Let's finish the question before we dig into the details. Hear me out.",
-      terror: "Excuse me! Let me complete the question. Pacing is key here. Answer what is asked."
-    } : {
-      strict: "One moment, please. Do not speak over me. Listen to the question carefully first.",
-      brutal: "Hold on. Stop talking. Let me finish my question before you jump in with your answer.",
-      terror: "Silence! Do not interrupt me. Answer precisely what is being asked, and nothing else."
-    };
-    
-    const phrase = interruptionPhrases[config.personality] || "Excuse me, let me finish speaking.";
-    const followUpSpeech = phrase + " Let me repeat: " + activeQ.text;
-    
-    VoiceManager.speak(followUpSpeech, config.personality, 
-      () => {
-        setTranscriptText("[Examiner interrupted your speech]");
-        setIsPlaceholder(false);
-      },
-      () => {
-        interruptedRef.current = false;
-        startListeningMode();
-      }
-    );
-  }
-
   function getFormattedTime() {
     const mins = Math.floor(timeRemaining / 60);
     const secs = timeRemaining % 60;
@@ -411,13 +349,9 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         () => {
           setVisualState("speaking");
           setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
-          if (config.personality !== "friendly" && config.enableInterruption !== false) {
-            startBackgroundListeningForInterruptions(firstQuestion);
-          }
         },
         // onEnd
         () => {
-          if (interruptedRef.current) return;
           startListeningMode();
         }
       );
@@ -436,189 +370,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         () => {
           setVisualState("speaking");
           setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
-          if (config.personality !== "friendly" && config.enableInterruption !== false) {
-            startBackgroundListeningForInterruptions(fallback);
-          }
         },
-        () => {
-          if (interruptedRef.current) return;
-          startListeningMode();
-        }
-      );
-    }
-  };
-
-  const getOfflineHint = (topic, questionText) => {
-    return {
-      hintText: `Friendly hint: Think about the core principles of ${topic || "this topic"}. How does it relate to its main variables or inputs?`,
-      hintSpeech: `Don't worry, let's take a step back. Think about the core principles of ${topic || "this topic"}. How does it relate to its main variables or inputs? Take your time.`
-    };
-  };
-
-  const getOfflineSubquestion = (topic, questionText) => {
-    return {
-      subQuestionText: `Simpler question: What is the absolute basic definition of ${topic || "this concept"}?`,
-      subQuestionSpeech: `You are taking too long. Let's make it simpler. Just tell me: what is the absolute basic definition of ${topic || "this concept"}?`
-    };
-  };
-
-  const clearHesitationTimer = () => {
-    if (hesitationTimerRef.current) {
-      clearTimeout(hesitationTimerRef.current);
-      hesitationTimerRef.current = null;
-    }
-  };
-
-  const resetHesitationTimer = () => {
-    clearHesitationTimer();
-    
-    // Only run hesitation monitor if:
-    // 1. We are in listening state
-    // 2. We are NOT in keyboard fallback mode
-    // 3. We haven't already hesitated in this specific question round
-    if (!fallbackMode && !hasHesitatedInCurrentRoundRef.current) {
-      hesitationTimerRef.current = setTimeout(() => {
-        handleStudentHesitation();
-      }, 5000); // 5 seconds of inactivity triggers the hesitation monitor
-    }
-  };
-
-  const handleStudentHesitation = async () => {
-    hasHesitatedInCurrentRoundRef.current = true;
-    clearHesitationTimer();
-
-    // Stop Speech Recognition temporarily so it doesn't pick up the examiner's voice
-    SpeechManager.stop();
-
-    const persona = config.personality;
-    
-    setVivaState("speaking");
-    setVisualState("speaking");
-
-    const currentQ = activeQuestionRef.current;
-    if (!currentQ) {
-      console.warn("Hesitation triggered but activeQuestion is null, aborting.");
-      startListeningMode();
-      return;
-    }
-
-    if (persona === "friendly") {
-      setStatusText(`${getPersonaTitle("friendly", config.mode)} is offering a hint...`);
-      
-      let hintText = "";
-      let hintSpeech = "";
-      
-      try {
-        const res = await fetch("/api/viva", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "generate-hint",
-            question: currentQ.text,
-            answer: transcriptTextRef.current === "Speak now. System is listening..." ? "" : transcriptTextRef.current,
-            topic: currentQ.topic,
-            mode: config.mode
-          })
-        });
-        if (res.ok) {
-          const data = await res.json();
-          hintText = data.hintText;
-          hintSpeech = data.hintSpeech;
-        } else {
-          throw new Error("Hint generation error");
-        }
-      } catch (err) {
-        console.warn("Using offline fallback hint:", err);
-        const fallbackHint = getOfflineHint(currentQ.topic, currentQ.text);
-        hintText = fallbackHint.hintText;
-        hintSpeech = fallbackHint.hintSpeech;
-      }
-
-      setTranscriptText(`[Hint: ${hintText}]`);
-      setIsPlaceholder(false);
-
-      VoiceManager.speak(hintSpeech, "friendly", 
-          null,
-        () => {
-          startListeningMode();
-        }
-      );
-
-    } else if (persona === "strict" || persona === "brutal") {
-      setStatusText(`${getPersonaTitle(persona, config.mode)} is reminding you of the time...`);
-
-      const mins = Math.floor(timeRemaining / 60);
-      const secs = timeRemaining % 60;
-      const timeStr = mins > 0 ? `${mins} minutes and ${secs} seconds` : `${secs} seconds`;
-      const reminderSpeech = config.mode === "professional"
-        ? `We are running out of time. You have ${timeStr} remaining for this interview. Please provide your answer immediately.`
-        : `We are running out of time. You have ${timeStr} remaining for this examination. Please provide your explanation immediately.`;
-      
-      setTranscriptText(config.mode === "professional"
-        ? `[Interviewer reminded you of the remaining time: ${getFormattedTime()}]`
-        : `[Examiner reminded you of the remaining time: ${getFormattedTime()}]`
-      );
-      setIsPlaceholder(false);
-
-      VoiceManager.speak(reminderSpeech, persona,
-        null,
-        () => {
-          startListeningMode();
-        }
-      );
-
-    } else if (persona === "terror") {
-      setStatusText(`${getPersonaTitle("terror", config.mode)} is interrupting you...`);
-      
-      setHesitationPenalties(prev => ({
-        ...prev,
-        [currentQuestionIndexRef.current]: true
-      }));
-
-      let subQuestionText = "";
-      let subQuestionSpeech = "";
-
-      try {
-        const res = await fetch("/api/viva", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "generate-subquestion",
-            question: currentQ.text,
-            answer: transcriptTextRef.current === "Speak now. System is listening..." ? "" : transcriptTextRef.current,
-            topic: currentQ.topic,
-            mode: config.mode
-          })
-        });
-        if (res.ok) {
-          const data = await res.json();
-          subQuestionText = data.subQuestionText;
-          subQuestionSpeech = data.subQuestionSpeech;
-        } else {
-          throw new Error("Sub-question generation failed");
-        }
-      } catch (err) {
-        console.warn("Using offline subquestion fallback:", err);
-        const fallbackSub = getOfflineSubquestion(currentQ.topic, currentQ.text);
-        subQuestionText = fallbackSub.subQuestionText;
-        subQuestionSpeech = fallbackSub.subQuestionSpeech;
-      }
-
-      setActiveQuestion(prev => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          text: `${prev.text} (Simplified: ${subQuestionText})`
-        };
-      });
-      setTranscriptText(config.mode === "professional"
-        ? `[Interviewer interrupted to ask a simpler sub-question. Score penalty applied.]`
-        : `[Examiner interrupted to ask a simpler sub-question. Score penalty applied.]`
-      );
-      setIsPlaceholder(false);
-
-      VoiceManager.speak(subQuestionSpeech, "terror",
-        null,
         () => {
           startListeningMode();
         }
@@ -635,11 +387,10 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     setIsPlaceholder(true);
     
     speechStartTime.current = Date.now();
-    resetHesitationTimer();
 
     SpeechManager.start({
       onResult: (interim, final) => {
-        resetHesitationTimer();
+        if (vivaStateRef.current !== "listening") return;
         if (!final && !interim) {
           setTranscriptText("Speak now. System is listening...");
           setIsPlaceholder(true);
@@ -649,11 +400,12 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         }
       },
       onVolumeChange: (volPct) => {
+        if (vivaStateRef.current !== "listening") return;
         setLiveVolume(volPct);
       },
       onSilenceDetected: async () => {
+        if (vivaStateRef.current !== "listening") return;
         // Hands-free auto submit — capture audio + transcript atomically
-        clearHesitationTimer();
         setVivaState("analyzing");
         setVisualState("analyzing");
         setStatusText(config.mode === "professional" ? "Capturing your response..." : "Capturing your response...");
@@ -662,6 +414,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         processResponse(captured);
       },
       onAudioCaptured: (audioBlob) => {
+        if (vivaStateRef.current !== "listening") return;
         // Store for Results replay only (not for evaluation — that uses stopAndCapture)
         const qIdx = currentQuestionIndexRef.current;
         if (audioBlob && audioBlob.size > 100) {
@@ -669,6 +422,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         }
       },
       onError: (err) => {
+        if (vivaStateRef.current !== "listening") return;
         console.warn("React SpeechManager error:", err);
         if (err === "not-allowed" || err === "service-not-allowed" || err === "not-supported") {
           setFallbackMode(true);
@@ -682,7 +436,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
 
   function triggerKeyboardFallback() {
     SpeechManager.stop();
-    clearHesitationTimer();
     setVisualState("listening");
     setStatusText("Keyboard Fallback Active");
     setTranscriptText("Please type your detailed explanation inside the box below.");
@@ -713,7 +466,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     }
 
     const qIdxStart = currentQuestionIndexRef.current;
-    const penalties = hesitationPenaltiesRef.current;
 
     if (!answerText || answerText.length < 5) {
       answerText = config.mode === "professional"
@@ -726,9 +478,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     setStatusText(config.mode === "professional" ? "Interviewer is evaluating your answer..." : "Examiner is evaluating your answer...");
     setTranscriptText(answerText);
     setIsPlaceholder(false);
-    clearHesitationTimer();
-
-    const hasPenalty = penalties[qIdxStart] || false;
 
     try {
       const resultMetrics = await AnswerEvaluationService.evaluateResponse({
@@ -737,7 +486,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         syllabus: config.syllabusStructure,
         speechDurationMs: durationMs,
         pauseCount: gapsCount,
-        isHesitationPenalty: hasPenalty,
+        isHesitationPenalty: false,
         mode: config.mode,
         audioBlob   // Pass the real Blob — AnswerEvaluationService encodes it
       });
@@ -792,7 +541,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
           return;
         }
 
-        hasHesitatedInCurrentRoundRef.current = false;
         setCurrentQuestionIndex(qIndex);
         setVivaState("generating");
         setVisualState("analyzing");
@@ -825,13 +573,9 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
               if (!isMountedRef.current) return;
               setVisualState("speaking");
               setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
-              if (config.personality !== "friendly" && config.enableInterruption !== false) {
-                startBackgroundListeningForInterruptions(nextQuestion);
-              }
             },
             () => {
               if (!isMountedRef.current) return;
-              if (interruptedRef.current) return;
               startListeningMode();
             }
           );
@@ -855,13 +599,9 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
               if (!isMountedRef.current) return;
               setVisualState("speaking");
               setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
-              if (config.personality !== "friendly" && config.enableInterruption !== false) {
-                startBackgroundListeningForInterruptions(nextQuestion);
-              }
             },
             () => {
               if (!isMountedRef.current) return;
-              if (interruptedRef.current) return;
               startListeningMode();
             }
           );
@@ -871,7 +611,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     } catch (err) {
       console.error("Failed to process answer evaluation:", err);
       // Honest ungraded fallback — never inflate scores
-      const fallbackMetrics = AnswerEvaluationService.getUngradedMetrics(answerText, durationMs, hasPenalty);
+      const fallbackMetrics = AnswerEvaluationService.getUngradedMetrics(answerText, durationMs, false);
 
       SessionContextManager.recordRound({
         questionText: currentQ.text,
@@ -915,7 +655,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
           return;
         }
 
-        hasHesitatedInCurrentRoundRef.current = false;
         setCurrentQuestionIndex(qIndex);
         setVivaState("generating");
         setVisualState("analyzing");
@@ -932,13 +671,9 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
             if (!isMountedRef.current) return;
             setVisualState("speaking");
             setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
-            if (config.personality !== "friendly" && config.enableInterruption !== false) {
-              startBackgroundListeningForInterruptions(nextQuestion);
-            }
           },
           () => {
             if (!isMountedRef.current) return;
-            if (interruptedRef.current) return;
             startListeningMode();
           }
         );
@@ -948,7 +683,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
 
   const handlePauseSession = () => {
     stopAudioStreams();
-    clearHesitationTimer();
     
     const pauseState = {
       config,
@@ -1071,6 +805,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
 
   // Unified Submission for Oral & Keyboard Modes
   const handleSubmit = async () => {
+    if (vivaStateRef.current !== "listening") return;
     if (fallbackMode) {
       if (!writtenAnswer.trim()) return;
       const textToSubmit = writtenAnswer.trim();
@@ -1080,7 +815,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       processResponse({ transcript: textToSubmit, audioBlob: null, durationMs: Date.now() - speechStartTime.current, gapsCount: 0 });
     } else {
       // Force-submit: capture audio + transcript atomically via stopAndCapture
-      clearHesitationTimer();
       setVivaState("analyzing");
       setVisualState("analyzing");
       setStatusText("Capturing your response...");

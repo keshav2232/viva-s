@@ -21,7 +21,6 @@ export const AnswerEvaluationService = {
       syllabus,
       speechDurationMs,
       pauseCount,
-      isHesitationPenalty,
       mode,
       audioBlob    // Blob object (oral) or null (keyboard fallback)
     } = params;
@@ -61,13 +60,6 @@ export const AnswerEvaluationService = {
         throw new Error("Gemini returned incomplete evaluation data");
       }
 
-      // Apply hesitation penalty if terror personality triggered one
-      if (isHesitationPenalty) {
-        geminiResult.correctness = Math.max(Math.round((geminiResult.correctness ?? 0) * 0.8), 0);
-        geminiResult.accuracy = Math.max(Math.round((geminiResult.accuracy ?? 0) * 0.8), 0);
-        geminiResult.tag = "Partially Correct";
-      }
-
       return {
         // Content scores — entirely from Gemini
         correctness: geminiResult.correctness,
@@ -94,7 +86,7 @@ export const AnswerEvaluationService = {
     } catch (e) {
       console.warn("AnswerEvaluationService: Gemini evaluation failed. Marking round as Ungraded:", e.message);
       // Honest fallback — never inflate scores
-      return this.getUngradedMetrics(answer, speechDurationMs, isHesitationPenalty);
+      return this.getUngradedMetrics(answer, speechDurationMs);
     }
   },
 
@@ -102,7 +94,7 @@ export const AnswerEvaluationService = {
    * Returned when Gemini evaluation fails.
    * Marks the round as ungraded rather than assigning fake high scores.
    */
-  getUngradedMetrics(answerText, speechDurationMs, isHesitationPenalty) {
+  getUngradedMetrics(answerText, speechDurationMs) {
     const isSilent = !answerText || answerText.length < 10
       || answerText.includes("remained silent")
       || answerText.includes("no substantive answer");
