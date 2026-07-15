@@ -106,9 +106,10 @@ export default function SyllabusMindMap({
     const svgHeight = Math.max(340, currentY - unitClusterGap + 24);
 
     // 1. Subject Node
-    const subjectX = 80;
-    const subjectY = svgHeight / 2;
     const subjectWidth = getNodeWidth(syllabusStructure.topic, "subject");
+    // ponytail: Simple dynamic horizontal layout offset based on subject node width. Ceiling: assumes 3-tier depth layout and single line node titles. Upgrade path: implement D3 force-directed or hierarchal grid layout.
+    const subjectX = subjectWidth / 2 + 20;
+    const subjectY = svgHeight / 2;
 
     nodes.push({
       id: "subject",
@@ -122,7 +123,8 @@ export default function SyllabusMindMap({
 
     syllabusStructure.units.forEach((u, uIdx) => {
       // 2. Unit Node
-      const unitX = 260;
+      // Scale unitX relative to subject space to avoid overlaps
+      const unitX = Math.max(260, subjectX + subjectWidth / 2 + 100);
       const { unitY, topicYs, topicHeights } = unitLayouts[uIdx];
       const unitId = `unit_${uIdx}`;
       const unitWidth = getNodeWidth(u.name, "unit");
@@ -211,7 +213,7 @@ export default function SyllabusMindMap({
         position: "relative",
         border: "1px solid var(--border-color)",
         borderRadius: "var(--radius-md)",
-        backgroundColor: "var(--bg-secondary)",
+        backgroundColor: "var(--bg-input)",
         cursor: isDragging ? "grabbing" : "grab",
         userSelect: "none"
       }}
@@ -391,7 +393,7 @@ export default function SyllabusMindMap({
                       height={height}
                       rx={node.type === "subject" ? "20" : "8"}
                       ry={node.type === "subject" ? "20" : "8"}
-                      fill={node.type === "subject" ? "rgba(99, 102, 241, 0.06)" : "var(--bg-secondary)"}
+                      fill={node.type === "subject" ? "rgba(99, 102, 241, 0.06)" : "var(--accent-light)"}
                       stroke={node.type === "subject" ? "var(--accent-primary)" : "var(--border-color)"}
                       strokeWidth={node.type === "subject" ? 2.5 : 1.5}
                     />
