@@ -1,7 +1,4 @@
-/**
- * VivaSim - Syllabus Ingestion & Hierarchy Parser Service
- * Cleans course text documents and calls Gemini endpoints to expand input keywords.
- */
+import { getFallbackSyllabus } from "../utils/mockData";
 
 export const SyllabusParserService = {
   

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { VoiceManager } from "@/services/voiceManager";
 import GaugeMetric from "./GaugeMetric";
+import { SyllabusMasteryService } from "@/services/SyllabusMasteryService";
 
 export default function Results({ resultsData, onRestart, onGoDashboard }) {
   const [activeTimelineIndex, setActiveTimelineIndex] = useState(0);
@@ -13,6 +14,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
   const [mobileTab, setMobileTab] = useState("overview"); // "overview" | "metrics" | "qa" | "plan"
   const hindsightData = resultsData.hindsightData || null;
   const hindsightLoading = false;
+  const [selectedSubtopic, setSelectedSubtopic] = useState(null);
 
 
   const {
@@ -31,6 +33,12 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
   } = resultsData;
 
   const isProfessional = mode === "professional";
+
+  // Load syllabus structure and mastery scores from SyllabusMasteryService
+  const masteryDB = SyllabusMasteryService.getMasteryData();
+  const subjectMastery = masteryDB[subjectName] || null;
+  const syllabusStructure = subjectMastery ? { topic: subjectMastery.topic, units: subjectMastery.units } : null;
+  const masteryMap = subjectMastery ? subjectMastery.mastery : {};
 
   // Cleanup active audio playbacks on unmount
   useEffect(() => {
@@ -1200,60 +1208,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
               </p>
             </div>
 
-            <div className={`card historical-card ${mobileTab === 'overview' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-md) var(--space-lg)", textAlign: "left" }}>
-              <h3 style={{ fontSize: "0.95rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
-                Historical Progress Comparison
-              </h3>
-              {pastSessionsAvg !== null ? (
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "6px 0" }}>
-                    <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Previous Role Average" : "Previous Subject Average"}</span>
-                    <strong style={{ fontSize: "0.85rem", color: "var(--text-primary)" }}>{pastSessionsAvg}%</strong>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "6px 0" }}>
-                    <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Current Interview Score" : "Current Viva Score"}</span>
-                    <strong style={{ fontSize: "0.85rem", color: "var(--accent-primary)" }}>{overallScore}%</strong>
-                  </div>
-                  <div style={{
-                    marginTop: "var(--space-sm)",
-                    padding: "8px 12px",
-                    borderRadius: "var(--radius-xs)",
-                    backgroundColor: overallScore >= pastSessionsAvg ? "var(--color-success-bg)" : "var(--color-error-bg)",
-                    color: overallScore >= pastSessionsAvg ? "var(--color-success)" : "var(--color-error)",
-                    fontSize: "0.8rem",
-                    fontWeight: "600",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px"
-                  }}>
-                    {overallScore >= pastSessionsAvg ? (
-                      <>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                          <polyline points="18 15 12 9 6 15"/>
-                        </svg>
-                        Performance increase of +{overallScore - pastSessionsAvg}% compared to baseline.
-                      </>
-                    ) : (
-                      <>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                          <polyline points="6 9 12 15 18 9"/>
-                        </svg>
-                        Score is -{pastSessionsAvg - overallScore}% below your historical baseline.
-                      </>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--text-secondary)" }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: "20px", height: "20px" }}>
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <line x1="12" y1="16" x2="12" y2="12"></line>
-                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                  </svg>
-                  <span style={{ fontSize: "0.8rem" }}>{isProfessional ? "First session registered for this role. Subsequent practice will unlock delta progress metrics." : "First viva registered for this subject. Subsequent exams will unlock delta progress metrics."}</span>
-                </div>
-              )}
-            </div>
+
 
             <div className={`card suggested-revision-card smart-revision-card ${mobileTab === 'plan' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-lg)" }}>
               <h3 style={{ fontSize: "1.05rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-sm)", textAlign: "left" }}>
@@ -1262,7 +1217,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
               <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "var(--space-md)", textAlign: "left" }}>
                 {isProfessional ? "Prioritized development queue compiled from detected competency gaps." : "Prioritized revision queue compiled from detected conceptual gaps."}
               </p>
-              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)", marginBottom: "var(--space-md)" }}>
                 {getSuggestedRevisionPills().map((rev, idx) => (
                   <div key={idx} className="suggested-revision-row">
                     <span style={{ fontSize: "0.85rem", fontWeight: "600", color: "var(--accent-primary)" }}>
@@ -1274,7 +1229,24 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                   </div>
                 ))}
               </div>
+
+              {/* Flashcard Active Cram Deck */}
+              <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "var(--space-md)", marginTop: "var(--space-md)" }}>
+                <h4 style={{ fontSize: "0.95rem", fontWeight: "700", marginBottom: "4px", textAlign: "left", color: "var(--accent-primary)" }}>
+                  Active Weakness Cram Deck
+                </h4>
+                <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "var(--space-sm)", textAlign: "left" }}>
+                  Interactive 3D-flipping cards targeting your diagnosed conceptual gaps. Use arrows to navigate, click to flip.
+                </p>
+                <CramFlashcardDeck 
+                  revisions={revisions} 
+                  weakConcepts={weakConcepts} 
+                  subjectName={subjectName} 
+                  mode={mode} 
+                />
+              </div>
             </div>
+
 
             {/* AI Hindsight Retrospective Card */}
             <div className={`card hindsight-card ${mobileTab === 'plan' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-lg)", textAlign: "left", position: "relative", overflow: "hidden" }}>
@@ -1766,10 +1738,13 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                             </button>
                           </div>
 
-                          {/* Student answer transcript */}
-                          <div style={{ fontSize: "0.85rem", color: "var(--text-primary)", backgroundColor: "var(--bg-primary)", padding: "10px", borderRadius: "var(--radius-xs)", border: "1px solid var(--border-color)", marginBottom: "var(--space-sm)" }}>
-                            <strong>Your Transcript:</strong> &quot;{answer}&quot;
-                          </div>
+                          {isProfessional ? (
+                             <StarAlignmentTracker starSegments={emotion.starSegments} answerText={answer} />
+                           ) : (
+                             <div style={{ fontSize: "0.85rem", color: "var(--text-primary)", backgroundColor: "var(--bg-primary)", padding: "10px", borderRadius: "var(--radius-xs)", border: "1px solid var(--border-color)", marginBottom: "var(--space-sm)" }}>
+                               <strong>Your Transcript:</strong> &quot;{answer}&quot;
+                             </div>
+                           )}
 
                           {/* Local Audio Recording Replay */}
                           {resultsData.recordedAudios && resultsData.recordedAudios[idx] && (
@@ -1847,5 +1822,396 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
 
       </div>
     </section>
+  );
+}
+
+function CramFlashcardDeck({ revisions = [], weakConcepts = [], subjectName, mode }) {
+  const [cards, setCards] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [isFlipped, setIsFlipped] = useState(false);
+
+  const isProfessional = mode === "professional";
+  const allWeaknesses = [...new Set([...(weakConcepts || []), ...(revisions || [])])];
+
+  // Populate dynamic weaknesses fallback if empty
+  if (allWeaknesses.length === 0) {
+    const fallbackTopics = isProfessional
+      ? ["System design trade-offs", "Data consistency scaling", "API interface design patterns", "STAR response structure review"]
+      : (subjectName === "Data Structures" 
+          ? ["BST insert & delete operations", "Stack overflow checks", "Double hashing probing", "Graph traversal state space"] 
+          : ["Clapeyron phase transitions", "Exergy entropy degradation calculations", "Maxwell conversions", "Carnot thermal bounds"]);
+    allWeaknesses.push(...fallbackTopics);
+  }
+
+  useEffect(() => {
+    let active = true;
+
+    const fetchCards = async () => {
+      try {
+        setLoading(true);
+        setIsFlipped(false);
+        setActiveIndex(0);
+
+        const mockSyllabus = {
+          topic: subjectName,
+          units: [
+            {
+              name: isProfessional ? "Weak Competencies Focus" : "Weak Concepts Focus",
+              topics: allWeaknesses.slice(0, 5)
+            }
+          ]
+        };
+
+        const response = await fetch("/api/viva", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "generate-flashcards",
+            syllabusStructure: mockSyllabus,
+            mode: mode
+          })
+        });
+
+        if (!response.ok) throw new Error("API call failed");
+        const data = await response.json();
+
+        if (active) {
+          if (Array.isArray(data) && data.length > 0) {
+            setCards(data);
+          } else {
+            throw new Error("Invalid response format");
+          }
+        }
+      } catch (err) {
+        console.warn("Failed fetching dynamic flashcards, using local fallbacks:", err);
+        if (active) {
+          const fallbacks = generateLocalFallbackCards(allWeaknesses);
+          setCards(fallbacks);
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchCards();
+
+    return () => {
+      active = false;
+    };
+  }, [subjectName, mode]);
+
+  // Keyboard navigation listener
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (loading || cards.length === 0) return;
+      if (e.key === "ArrowLeft") {
+        handlePrev();
+      } else if (e.key === "ArrowRight") {
+        handleNext();
+      } else if (e.key === " " || e.key === "Enter") {
+        e.preventDefault();
+        setIsFlipped(prev => !prev);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [loading, cards, activeIndex]);
+
+  const generateLocalFallbackCards = (topics) => {
+    const localFallbackMap = {
+      "entropy": "A measure of molecular disorder or randomness in a system. According to the Second Law, entropy always increases in an isolated system during spontaneous processes.",
+      "entropy generation": "Entropy generated due to internal irreversibilities (like friction, mixing, or unrestricted expansion). S_gen is always > 0 for real processes.",
+      "carnot": "An idealized thermodynamic cycle that provides the maximum possible thermal efficiency for any heat engine operating between two temperatures. It consists of two isothermal and two adiabatic processes.",
+      "carnot cycle": "An idealized thermodynamic cycle that provides the maximum possible thermal efficiency for any heat engine operating between two temperatures. It consists of two isothermal and two adiabatic processes.",
+      "clausius": "The Clausius inequality states that for any thermodynamic cycle, the cyclic integral of dQ/T is less than or equal to zero, establishing the criterion for irreversibility.",
+      "clausius inequality": "The Clausius inequality states that for any thermodynamic cycle, the cyclic integral of dQ/T is less than or equal to zero, establishing the criterion for irreversibility.",
+      "exergy": "The maximum theoretical useful work obtainable from a system as it comes into equilibrium with its environment state. Exergy is destroyed during real irreversible processes.",
+      "exergy destruction": "Lost work potential caused by irreversibilities: I = T_0 * S_gen, where T_0 is the dead state environment temperature.",
+      "clapeyron": "The Clapeyron equation describes phase boundary slopes on a P-T diagram: dP/dT = L / (T * delta_v), where L is latent heat and delta_v is the specific volume change.",
+      "avl": "A self-balancing binary search tree where the heights of the two child subtrees of any node differ by at most one. Rebalancing is performed via tree rotations.",
+      "avl trees": "A self-balancing binary search tree where the heights of the two child subtrees of any node differ by at most one. Rebalancing is performed via tree rotations.",
+      "hash": "A technique to map keys to indices in an array using a hash function. Collisions are resolved using open addressing (probing) or separate chaining (linked list buckets).",
+      "hash collisions": "Occurs when two different keys hash to the same index. Resolved using chaining (linked list buckets) or open addressing (linear/quadratic probing, double hashing).",
+      "stack": "A linear LIFO (Last-In-First-Out) structure where elements are pushed and popped at one end. Main boundaries are Stack Overflow (full) and Stack Underflow (empty).",
+      "queue": "A linear FIFO (First-In-First-Out) structure where elements are enqueued at the rear and dequeued at the front. Circular queues optimize space via modulo arithmetic.",
+      "bst": "A binary search tree where left children are smaller and right children are larger than the parent node. Average complexity is O(log N), but degrades to O(N) if unbalanced.",
+      "goodman": "A design fatigue limit relation that maps mean stress and alternating stress against endurance limit and ultimate tensile strength: Sa/Se + Sm/Sut = 1.",
+      "goodman line": "A design fatigue limit relation that maps mean stress and alternating stress against endurance limit and ultimate tensile strength: Sa/Se + Sm/Sut = 1.",
+      "soderberg": "A highly conservative design fatigue limit relation that uses yield strength instead of ultimate strength: Sa/Se + Sm/Syt = 1.",
+      "soderberg yield": "A highly conservative design fatigue limit relation that uses yield strength instead of ultimate strength: Sa/Se + Sm/Syt = 1.",
+      "sommerfeld": "A dimensionless lubrication parameter S = (r/c)^2 * (mu * N) / P that encapsulates clearance, speed, viscosity, and load to describe journal bearing behavior.",
+      "journal bearing": "A bearing where a rotating shaft is supported by a thin fluid film of lubricant. Eccentricity determines film thickness to avoid metal-to-metal contact.",
+      "microservices": "An architectural style structuring an application as a collection of loosely coupled, independently deployable services communicating via lightweight APIs or message queues.",
+      "monolith": "A unified database and execution block compiled together. Simple to build and deploy, but suffers from scalability and build time bottlenecks as size grows.",
+      "caching": "Storing active datasets in fast temporary memory (like Redis or Memcached) to reduce database read overhead. Common strategies: write-through vs cache-aside.",
+      "message queue": "An asynchronous service-to-service communication channel supporting eventual consistency. Solves direct connection locks and handles high traffic spikes.",
+      "consistency": "Ensuring data is uniform across all database nodes. In distributed systems (CAP Theorem), trade-offs are made between consistency, availability, and partition tolerance."
+    };
+
+    return topics.slice(0, 5).map(topic => {
+      const topicLower = topic.toLowerCase();
+      let shortAnswer = "";
+
+      for (const [key, val] of Object.entries(localFallbackMap)) {
+        if (topicLower.includes(key) || key.includes(topicLower)) {
+          shortAnswer = val;
+          break;
+        }
+      }
+
+      if (!shortAnswer) {
+        shortAnswer = isProfessional
+          ? `A professional command of "${topic}" requires understanding its typical scaling patterns, engineering trade-offs, and standard implementations inside enterprise-scale architectures. Review this competency's core best practices.`
+          : `A solid conceptual review of "${topic}" requires understanding its first-principles definitions, governing physical formulas, and boundary parameters under different state constraints. Review this topic in your notes.`;
+      }
+
+      return {
+        question: isProfessional
+          ? `Explain the core concepts, scaling considerations, and system design trade-offs of: "${topic}".`
+          : `State the fundamental principles, governing constraints, and physical definitions of: "${topic}".`,
+        shortAnswer
+      };
+    });
+  };
+
+  const handlePrev = () => {
+    if (activeIndex > 0) {
+      setIsFlipped(false);
+      setTimeout(() => {
+        setActiveIndex(prev => prev - 1);
+      }, 150);
+    }
+  };
+
+  const handleNext = () => {
+    if (activeIndex < cards.length - 1) {
+      setIsFlipped(false);
+      setTimeout(() => {
+        setActiveIndex(prev => prev + 1);
+      }, 150);
+    }
+  };
+
+  const activeCard = cards[activeIndex];
+
+  if (loading) {
+    return (
+      <div className="cram-deck-container">
+        <div className="cram-card-wrapper">
+          <div className="cram-card-face cram-card-front" style={{ animation: "pulse 1.5s infinite" }}>
+            <span style={{ color: "var(--text-secondary)", fontSize: "0.85rem", fontWeight: "600" }}>
+              Generating cram flashcards...
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (cards.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="cram-deck-container">
+      <div className="cram-card-wrapper" onClick={() => setIsFlipped(prev => !prev)}>
+        <div className={`cram-card ${isFlipped ? "flipped" : ""}`}>
+          
+          {/* Card Front */}
+          <div className="cram-card-face cram-card-front">
+            <span className="cram-card-title">Cram Card {activeIndex + 1} of {cards.length}</span>
+            <div className="cram-card-question">{activeCard.question}</div>
+            <div style={{ marginTop: "var(--space-md)", fontSize: "0.7rem", color: "var(--text-muted)", fontWeight: "600" }}>
+              Click card or press Space to reveal answer
+            </div>
+          </div>
+
+          {/* Card Back */}
+          <div className="cram-card-face cram-card-back">
+            <span className="cram-card-title">Recall Explanation</span>
+            <div className="cram-card-answer">{activeCard.shortAnswer}</div>
+            <div style={{ marginTop: "auto", paddingTop: "8px", fontSize: "0.7rem", color: "var(--text-muted)", fontWeight: "600" }}>
+              Click to return to question
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      {/* Nav Controls */}
+      <div className="cram-deck-controls">
+        <button 
+          className="cram-btn-nav" 
+          onClick={(e) => { e.stopPropagation(); handlePrev(); }}
+          disabled={activeIndex === 0}
+          title="Previous (Left Arrow)"
+        >
+          ←
+        </button>
+        
+        <div className="cram-dots">
+          {cards.map((_, idx) => (
+            <span 
+              key={idx} 
+              className={`cram-dot ${idx === activeIndex ? "active" : ""}`}
+              onClick={(e) => { e.stopPropagation(); setIsFlipped(false); setActiveIndex(idx); }}
+            />
+          ))}
+        </div>
+
+        <button 
+          className="cram-btn-nav" 
+          onClick={(e) => { e.stopPropagation(); handleNext(); }}
+          disabled={activeIndex === cards.length - 1}
+          title="Next (Right Arrow)"
+        >
+          →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const getFallbackStarSegments = (text) => {
+  if (!text) return [];
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+  const total = sentences.length;
+  return sentences.map((sentence, idx) => {
+    let label = "O";
+    if (total === 1) {
+      label = "A";
+    } else if (total === 2) {
+      label = idx === 0 ? "S" : "R";
+    } else if (total === 3) {
+      label = idx === 0 ? "S" : (idx === 1 ? "A" : "R");
+    } else {
+      const ratio = idx / total;
+      if (ratio < 0.25) label = "S";
+      else if (ratio < 0.45) label = "T";
+      else if (ratio < 0.8) label = "A";
+      else label = "R";
+    }
+    return { text: sentence.trim(), label };
+  });
+};
+
+function StarAlignmentTracker({ starSegments, answerText }) {
+  const segments = starSegments && starSegments.length > 0
+    ? starSegments
+    : getFallbackStarSegments(answerText);
+
+  if (segments.length === 0) return null;
+
+  const counts = { S: 0, T: 0, A: 0, R: 0, O: 0 };
+  let totalLength = 0;
+  segments.forEach(seg => {
+    const len = seg.text.length;
+    counts[seg.label] = (counts[seg.label] || 0) + len;
+    totalLength += len;
+  });
+
+  const getPercent = (label) => {
+    if (totalLength === 0) return 0;
+    return Math.round((counts[label] / totalLength) * 100);
+  };
+
+  const pct = {
+    S: getPercent("S"),
+    T: getPercent("T"),
+    A: getPercent("A"),
+    R: getPercent("R"),
+    O: getPercent("O")
+  };
+
+  const themes = {
+    S: { bg: "rgba(59, 130, 246, 0.12)", border: "1px solid rgba(59, 130, 246, 0.3)", color: "#3b82f6", text: "#93c5fd", label: "Situation" },
+    T: { bg: "rgba(245, 158, 11, 0.12)", border: "1px solid rgba(245, 158, 11, 0.3)", color: "#f59e0b", text: "#fde047", label: "Task" },
+    A: { bg: "rgba(16, 185, 129, 0.12)", border: "1px solid rgba(16, 185, 129, 0.3)", color: "#10b981", text: "#6ee7b7", label: "Action" },
+    R: { bg: "rgba(139, 92, 246, 0.12)", border: "1px solid rgba(139, 92, 246, 0.3)", color: "#8b5cf6", text: "#c084fc", label: "Result" },
+    O: { bg: "transparent", border: "1px solid transparent", color: "var(--text-muted)", text: "var(--text-primary)", label: "Other" }
+  };
+
+  return (
+    <div style={{ marginTop: "12px", borderTop: "1px solid var(--border-color)", paddingTop: "12px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+        <h5 style={{ fontSize: "0.8rem", fontWeight: "700", margin: 0, color: "var(--accent-primary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          STAR Methodology Alignment
+        </h5>
+        <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>Speech block parsing</span>
+      </div>
+
+      <div style={{
+        display: "flex",
+        height: "8px",
+        borderRadius: "var(--radius-full)",
+        overflow: "hidden",
+        backgroundColor: "var(--bg-primary)",
+        marginBottom: "12px"
+      }}>
+        {pct.S > 0 && <div style={{ width: `${pct.S}%`, backgroundColor: themes.S.color, transition: "width 0.3s" }} title={`Situation: ${pct.S}%`} />}
+        {pct.T > 0 && <div style={{ width: `${pct.T}%`, backgroundColor: themes.T.color, transition: "width 0.3s" }} title={`Task: ${pct.T}%`} />}
+        {pct.A > 0 && <div style={{ width: `${pct.A}%`, backgroundColor: themes.A.color, transition: "width 0.3s" }} title={`Action: ${pct.A}%`} />}
+        {pct.R > 0 && <div style={{ width: `${pct.R}%`, backgroundColor: themes.R.color, transition: "width 0.3s" }} title={`Result: ${pct.R}%`} />}
+        {pct.O > 0 && <div style={{ width: `${pct.O}%`, backgroundColor: "var(--border-color)", transition: "width 0.3s" }} title={`Other: ${pct.O}%`} />}
+      </div>
+
+      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "12px", fontSize: "0.68rem" }}>
+        {["S", "T", "A", "R"].map(l => (
+          <div key={l} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: themes[l].color }} />
+            <span style={{ fontWeight: "600", color: "var(--text-primary)" }}>{themes[l].label}: {pct[l]}%</span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{
+        fontSize: "0.825rem",
+        lineHeight: "1.6",
+        color: "var(--text-primary)",
+        backgroundColor: "var(--bg-primary)",
+        padding: "12px",
+        borderRadius: "var(--radius-xs)",
+        border: "1px solid var(--border-color)",
+        maxHeight: "160px",
+        overflowY: "auto"
+      }}>
+        {segments.map((seg, sIdx) => {
+          const theme = themes[seg.label];
+          const isOther = seg.label === "O";
+          return (
+            <span
+              key={sIdx}
+              style={{
+                backgroundColor: theme.bg,
+                borderBottom: theme.border,
+                borderRadius: "2px",
+                padding: "2px 4px",
+                margin: "0 2px",
+                display: "inline",
+                position: "relative"
+              }}
+            >
+              {seg.text}
+              {!isOther && (
+                <span style={{
+                  fontSize: "0.55rem",
+                  fontWeight: "800",
+                  color: theme.color,
+                  verticalAlign: "super",
+                  marginLeft: "2px",
+                  userSelect: "none"
+                }}>
+                  {seg.label}
+                </span>
+              )}
+            </span>
+          );
+        })}
+      </div>
+    </div>
   );
 }

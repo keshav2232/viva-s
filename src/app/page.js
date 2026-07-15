@@ -44,6 +44,7 @@ export default function Home() {
   const [vivaConfig, setVivaConfig] = useState(null);
   const [resultsData, setResultsData] = useState(null);
   const [pausedSession, setPausedSession] = useState(null);
+  const [preselectedSubtopic, setPreselectedSubtopic] = useState(null);
   
   // Local storage migration alert checker
   const [hasLocalGuestData, setHasLocalGuestData] = useState(false);
@@ -380,6 +381,45 @@ export default function Home() {
     setActiveScreen("results");
   };
 
+  const handleLoadDevMock = async () => {
+    try {
+      const res = await fetch("/devMock.json");
+      if (!res.ok) {
+        alert("Failed to load public/devMock.json. Please ensure this file exists in your public/ directory.");
+        return;
+      }
+      const data = await res.json();
+      
+      // Update mastery database so mind map shows the scores!
+      const mockSyllabus = {
+        topic: data.subjectName,
+        units: data.askedQuestionsObjects.reduce((acc, curr) => {
+          let unit = acc.find(u => u.name === "Mock Unit");
+          if (!unit) {
+            unit = { name: "Mock Unit", topics: [] };
+            acc.push(unit);
+          }
+          if (!unit.topics.includes(curr.topic)) {
+            unit.topics.push(curr.topic);
+          }
+          return acc;
+        }, [])
+      };
+      
+      SyllabusMasteryService.updateMastery(
+        data.subjectName,
+        mockSyllabus,
+        data.askedTopics || []
+      );
+
+      setResultsData(data);
+      setActiveScreen("results");
+    } catch (e) {
+      console.error(e);
+      alert("Error parsing public/devMock.json: " + e.message);
+    }
+  };
+
   const calculateFinalScore = (summary) => {
     let confidenceAvg = 84;
     let clarityAvg = 82;
@@ -654,7 +694,10 @@ export default function Home() {
               userName={activeUserName} 
               stats={activeStats} 
               sessions={activeSessions} 
-              onStartNewViva={() => setActiveScreen("setup")} 
+              onStartNewViva={() => {
+                setPreselectedSubtopic(null);
+                setActiveScreen("setup");
+              }} 
               pausedSession={pausedSession}
               onClearPausedSession={handleClearPausedSession}
               onResumePausedSession={handleResumePausedSession}
@@ -667,6 +710,7 @@ export default function Home() {
             <SetupFlow 
               onCancel={() => setActiveScreen("dashboard")} 
               onBeginViva={handleBeginViva} 
+              initialSelectedSubtopic={preselectedSubtopic}
             />
           )}
 
@@ -683,7 +727,10 @@ export default function Home() {
           {activeScreen === "results" && resultsData && (
             <Results 
               resultsData={resultsData} 
-              onRestart={() => setActiveScreen("setup")} 
+              onRestart={(subtopic) => {
+                setPreselectedSubtopic(subtopic || null);
+                setActiveScreen("setup");
+              }} 
               onGoDashboard={() => setActiveScreen("dashboard")} 
             />
           )}
@@ -694,6 +741,30 @@ export default function Home() {
       <footer style={{ borderTop: "1px solid var(--border-color)", padding: "var(--space-lg) 0", fontSize: "0.8rem", color: "var(--text-muted)", textAlign: "center", backgroundColor: "var(--bg-card)" }}>
         <p>© 2026 PrepSim. Engineered as a high-fidelity academic prep tool.</p>
       </footer>
+
+      {process.env.NODE_ENV === "development" && (
+        <div style={{ position: "fixed", bottom: "16px", left: "16px", zIndex: 9999 }}>
+          <button
+            className="btn btn-secondary"
+            onClick={handleLoadDevMock}
+            style={{
+              padding: "8px 12px",
+              fontSize: "0.75rem",
+              fontWeight: "700",
+              backgroundColor: "#1e1e2e",
+              color: "#cdd6f4",
+              border: "1px dashed #f38ba8",
+              borderRadius: "var(--radius-sm)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px"
+            }}
+          >
+            🧪 Dev: Load Mock Results
+          </button>
+        </div>
+      )}
     </div>
   );
 }

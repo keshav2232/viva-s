@@ -4,7 +4,8 @@ export default function SyllabusMindMap({
   syllabusStructure, 
   selectedSubtopic, 
   setSelectedSubtopic, 
-  practiceMode 
+  practiceMode,
+  mastery = {}
 }) {
   const [zoomScale, setZoomScale] = useState(1.0);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
@@ -299,6 +300,36 @@ export default function SyllabusMindMap({
             const width = node.width;
             const height = node.height;
 
+            const score = (node.type === "subtopic" && mastery && mastery[node.name] !== undefined)
+              ? mastery[node.name]
+              : null;
+
+            let fillColor = "var(--bg-primary)";
+            let strokeColor = "var(--border-color)";
+            let textColor = "var(--text-primary)";
+            let fontWeight = "500";
+
+            if (node.type === "subtopic" && score !== null) {
+              if (score >= 80) {
+                fillColor = "rgba(22, 163, 74, 0.08)";
+                strokeColor = "rgb(34, 197, 94)";
+                textColor = "rgb(21, 128, 61)";
+              } else if (score >= 50) {
+                fillColor = "rgba(245, 158, 11, 0.08)";
+                strokeColor = "rgb(245, 158, 11)";
+                textColor = "rgb(180, 83, 9)";
+              } else if (score > 0) {
+                fillColor = "rgba(220, 38, 38, 0.08)";
+                strokeColor = "rgb(239, 68, 68)";
+                textColor = "rgb(185, 28, 28)";
+              }
+            }
+
+            if (isSelected) {
+              strokeColor = "var(--color-warning)";
+              fontWeight = "700";
+            }
+
             let animationClass = "animate-subject";
             let delay = 0;
             if (node.type === "subject") {
@@ -348,9 +379,9 @@ export default function SyllabusMindMap({
                       height={height}
                       rx="16"
                       ry="16"
-                      fill={isSelected ? "var(--color-warning-bg)" : "var(--bg-primary)"}
-                      stroke={isSelected ? "var(--color-warning)" : "var(--border-color)"}
-                      strokeWidth={isSelected ? 2 : 1.25}
+                      fill={isSelected ? "var(--color-warning-bg)" : fillColor}
+                      stroke={isSelected ? "var(--color-warning)" : strokeColor}
+                      strokeWidth={isSelected ? 2.5 : 1.25}
                       filter={isSelected ? "url(#gold-glow)" : "none"}
                       style={{
                         transition: "fill 0.2s, stroke 0.2s, filter 0.2s"
@@ -371,8 +402,8 @@ export default function SyllabusMindMap({
                           alignItems: "center",
                           justifyContent: "center",
                           fontSize: "0.72rem",
-                          fontWeight: isSelected ? "700" : "500",
-                          color: isSelected ? "var(--color-warning-text)" : "var(--text-primary)",
+                          fontWeight: fontWeight,
+                          color: isSelected ? "var(--color-warning-text)" : textColor,
                           textAlign: "center",
                           lineHeight: "1.25",
                           wordBreak: "break-word",

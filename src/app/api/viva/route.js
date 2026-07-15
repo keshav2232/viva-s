@@ -423,6 +423,16 @@ Evaluation tag (pick one):
 - "Incomplete": correct but too brief (no depth)
 - "Confused": contradicts itself or completely lost
 
+Analyze the Candidate Response and segment the transcript text into STAR blocks.
+Each segment must be a continuous substring of the candidate response, labeled as:
+- "S": Situation (context, challenges, system constraints)
+- "T": Task (candidate's direct responsibility, objective)
+- "A": Action (engineering solutions, algorithms, architectural implementations, testing)
+- "R": Result (outcomes, latency metrics, performance data, scaling achievements)
+- "O": Other (opening buffer, filler dialogue, or unrelated talk)
+
+Every part of the candidate response transcript should be accounted for in order inside the "starSegments" array.
+
 Respond ONLY with a valid clean JSON object. Do not use markdown:
 {
   "correctness": 85,
@@ -434,7 +444,13 @@ Respond ONLY with a valid clean JSON object. Do not use markdown:
   "hesitation": ${hasAudio ? "18" : "null"},
   "tag": "Strong",
   "correctAnswer": "A detailed professional answer outlining design trade-offs, architecture choices, STAR highlights, and best practices.",
-  "gradingSource": "${hasAudio ? "audio+text" : "text-only"}"
+  "gradingSource": "${hasAudio ? "audio+text" : "text-only"}",
+  "starSegments": [
+    { "text": "In our previous startup, our microservice architecture suffered from high latency during sync requests.", "label": "S" },
+    { "text": "I was assigned to refactor the payment microservice to use asynchronous queues.", "label": "T" },
+    { "text": "I set up a RabbitMQ message broker, modified the order processing flow to use callbacks, and added Redis caching.", "label": "A" },
+    { "text": "This optimization reduced request lock times by 60% and improved throughput.", "label": "R" }
+  ]
 }`
     : `Act as an academic examiner grading an oral response in a college viva.
 

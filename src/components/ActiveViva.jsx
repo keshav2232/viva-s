@@ -16,6 +16,16 @@ function getNow() {
   return Date.now();
 }
 
+const getCoExaminerPersonality = (primary) => {
+  switch (primary) {
+    case "friendly": return "strict";
+    case "strict": return "friendly";
+    case "brutal": return "terror";
+    case "terror": return "brutal";
+    default: return "strict";
+  }
+};
+
 export default function ActiveViva({ config, activeUser, onFinishViva }) {
   const getPersonaTitle = (p, mode) => {
     const cleanType = p?.toLowerCase();
@@ -24,6 +34,16 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     if (cleanType === "brutal") return mode === "professional" ? "Bar Raiser" : "Brutal External";
     if (cleanType === "terror") return mode === "professional" ? "Stress Interviewer" : "Viva Terror";
     return mode === "professional" ? "AI Interviewer" : "AI Examiner";
+  };
+
+  const getPersonaName = (p, mode) => {
+    const cleanType = p?.toLowerCase();
+    const isProf = mode === "professional";
+    if (cleanType === "friendly") return isProf ? "George" : "Dr. George";
+    if (cleanType === "strict") return isProf ? "Daniel" : "Dr. Daniel";
+    if (cleanType === "brutal") return isProf ? "Adam" : "Dr. Adam";
+    if (cleanType === "terror") return isProf ? "Thorne" : "Prof. Thorne";
+    return isProf ? "Examiner" : "Professor";
   };
 
   // State machine variables
@@ -44,6 +64,14 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
   const [transcriptText, setTranscriptText] = useState(() => config.isResume ? "Resumed session. Speak or type your answer..." : "Waiting to transcribe your response...");
   const [isPlaceholder, setIsPlaceholder] = useState(true);
   const [lastEvalRecord, setLastEvalRecord] = useState(null);
+  const coPersonality = getCoExaminerPersonality(config.personality);
+  const [activeSpeaker, setActiveSpeaker] = useState(() => {
+    if (config.isResume) {
+      const idx = config.resumeState.currentQuestionIndex || 0;
+      return (idx % 2 === 0) ? 1 : 2;
+    }
+    return 1;
+  });
   const [sessionUnlocked, setSessionUnlocked] = useState(false);
 
   // Fallback and Input values
@@ -134,10 +162,11 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       const resumeNudge = config.mode === "professional" 
         ? `Resuming your mock interview on ${config.topic}. Let me repeat the question: ${config.resumeState.activeQuestion.text}`
         : `Resuming your exam on ${config.topic}. Let me repeat the question: ${config.resumeState.activeQuestion.text}`;
-      VoiceManager.speak(resumeNudge, config.personality,
+      VoiceManager.speak(resumeNudge, activeSpeaker === 1 ? config.personality : coPersonality,
         () => {
           setVisualState("speaking");
-          setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
+          const activeTitle = getPersonaName(activeSpeaker === 1 ? config.personality : coPersonality, config.mode);
+          setStatusText(`${activeTitle} is speaking...`);
         },
         () => {
           startListeningMode();
@@ -341,14 +370,15 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       const fullSpeech = greeting + (firstQuestion.speech || firstQuestion.text);
       
       // Preload the intro speech
-      VoiceManager.preload(fullSpeech, config.personality);
+      VoiceManager.preload(fullSpeech, activeSpeaker === 1 ? config.personality : coPersonality);
  
       setVivaState("speaking");
-      VoiceManager.speak(fullSpeech, config.personality,
+      VoiceManager.speak(fullSpeech, activeSpeaker === 1 ? config.personality : coPersonality,
         // onStart
         () => {
           setVisualState("speaking");
-          setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
+          const activeTitle = getPersonaName(activeSpeaker === 1 ? config.personality : coPersonality, config.mode);
+          setStatusText(`${activeTitle} is speaking...`);
         },
         // onEnd
         () => {
@@ -363,13 +393,14 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       setActiveQuestion(fallback);;
       
       // Preload fallback speech
-      VoiceManager.preload(fallback.speech, config.personality);
+      VoiceManager.preload(fallback.speech, activeSpeaker === 1 ? config.personality : coPersonality);
 
       setVivaState("speaking");
-      VoiceManager.speak(fallback.speech, config.personality,
+      VoiceManager.speak(fallback.speech, activeSpeaker === 1 ? config.personality : coPersonality,
         () => {
           setVisualState("speaking");
-          setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
+          const activeTitle = getPersonaName(activeSpeaker === 1 ? config.personality : coPersonality, config.mode);
+          setStatusText(`${activeTitle} is speaking...`);
         },
         () => {
           startListeningMode();
@@ -520,11 +551,12 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       });
 
       // Update status text based on reaction
-      let reactionText = config.mode === "professional" ? "Interviewer is noting your response..." : "Professor is noting your response...";
+      const activeTitle = getPersonaName(activeSpeaker === 1 ? config.personality : coPersonality, config.mode);
+      let reactionText = `${activeTitle} is noting your response...`;
       if (resultMetrics.correctness >= 75) {
-        reactionText = `${getPersonaTitle(config.personality, config.mode)} is pleased with your answer.`;
+        reactionText = `${activeTitle} is pleased with your answer.`;
       } else if (resultMetrics.correctness < 55 || resultMetrics.tag === "Bluffing" || resultMetrics.tag === "Incorrect") {
-        reactionText = `${getPersonaTitle(config.personality, config.mode)} looks skeptical.`;
+        reactionText = `${activeTitle} looks skeptical.`;
       }
       setStatusText(reactionText);
 
@@ -541,15 +573,21 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
           return;
         }
 
+        let nextSpeaker = 1;
+        if (config.enablePanelMode) {
+          nextSpeaker = (qIndex % 2 === 0) ? 1 : 2;
+          setActiveSpeaker(nextSpeaker);
+        }
         setCurrentQuestionIndex(qIndex);
         setVivaState("generating");
         setVisualState("analyzing");
-        setStatusText(config.mode === "professional" ? "Formulating next interview question..." : "Formulating next question...");
+        const nextTitle = getPersonaName(nextSpeaker === 1 ? config.personality : coPersonality, config.mode);
+        setStatusText(`${nextTitle} is formulating next question...`);
 
         try {
           const nextQuestion = await QuestionGraphEngine.generateNextQuestion({
             syllabus: config.syllabusStructure,
-            personality: config.personality,
+            personality: nextSpeaker === 1 ? config.personality : coPersonality,
             duration: config.duration,
             askedList: SessionContextManager.askedQuestions,
             answersList: SessionContextManager.answerTranscripts,
@@ -565,14 +603,14 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
 
           setActiveQuestion(nextQuestion);
           // Preload next question speech!
-          VoiceManager.preload(nextQuestion.speech, config.personality);
+          VoiceManager.preload(nextQuestion.speech, nextSpeaker === 1 ? config.personality : coPersonality);
 
           setVivaState("speaking");
-          VoiceManager.speak(nextQuestion.speech, config.personality,
+          VoiceManager.speak(nextQuestion.speech, nextSpeaker === 1 ? config.personality : coPersonality,
             () => {
               if (!isMountedRef.current) return;
               setVisualState("speaking");
-              setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
+              setStatusText(`${nextTitle} is speaking...`);
             },
             () => {
               if (!isMountedRef.current) return;
@@ -584,21 +622,27 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
           if (!isMountedRef.current) return;
           // Catch and handle fallback inside delayed try
           const qIdx = qIdxStart + 1;
+          let nextSpeaker = 1;
+          if (config.enablePanelMode) {
+            nextSpeaker = (qIdx % 2 === 0) ? 1 : 2;
+            setActiveSpeaker(nextSpeaker);
+          }
           setCurrentQuestionIndex(qIdx);
           setVivaState("generating");
           setVisualState("analyzing");
-          setStatusText(config.mode === "professional" ? "Formulating next interview question..." : "Formulating next question...");
+          const nextTitle = getPersonaName(nextSpeaker === 1 ? config.personality : coPersonality, config.mode);
+          setStatusText(`${nextTitle} is formulating next question...`);
 
-          const nextQuestion = QuestionGraphEngine.getRuleBasedOfflineFallback(qIdx + 1, config.personality, currentQ.topic, config.syllabusStructure);
+          const nextQuestion = QuestionGraphEngine.getRuleBasedOfflineFallback(qIdx + 1, nextSpeaker === 1 ? config.personality : coPersonality, currentQ.topic, config.syllabusStructure);
           setActiveQuestion(nextQuestion);
-          VoiceManager.preload(nextQuestion.speech, config.personality);
+          VoiceManager.preload(nextQuestion.speech, nextSpeaker === 1 ? config.personality : coPersonality);
 
           setVivaState("speaking");
-          VoiceManager.speak(nextQuestion.speech, config.personality,
+          VoiceManager.speak(nextQuestion.speech, nextSpeaker === 1 ? config.personality : coPersonality,
             () => {
               if (!isMountedRef.current) return;
               setVisualState("speaking");
-              setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
+              setStatusText(`${nextTitle} is speaking...`);
             },
             () => {
               if (!isMountedRef.current) return;
@@ -635,11 +679,12 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       });
 
       // Update status text based on reaction
-      let reactionText = config.mode === "professional" ? "Interviewer is noting your response..." : "Professor is noting your response...";
+      const activeTitle = getPersonaName(activeSpeaker === 1 ? config.personality : coPersonality, config.mode);
+      let reactionText = `${activeTitle} is noting your response...`;
       if (fallbackMetrics.correctness >= 75) {
-        reactionText = `${getPersonaTitle(config.personality, config.mode)} is pleased with your answer.`;
+        reactionText = `${activeTitle} is pleased with your answer.`;
       } else if (fallbackMetrics.correctness < 55 || fallbackMetrics.tag === "Bluffing" || fallbackMetrics.tag === "Incorrect") {
-        reactionText = `${getPersonaTitle(config.personality, config.mode)} looks skeptical.`;
+        reactionText = `${activeTitle} looks skeptical.`;
       }
       setStatusText(reactionText);
 
@@ -655,22 +700,28 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
           return;
         }
 
+        let nextSpeaker = 1;
+        if (config.enablePanelMode) {
+          nextSpeaker = (qIndex % 2 === 0) ? 1 : 2;
+          setActiveSpeaker(nextSpeaker);
+        }
         setCurrentQuestionIndex(qIndex);
         setVivaState("generating");
         setVisualState("analyzing");
-        setStatusText(config.mode === "professional" ? "Formulating next interview question..." : "Formulating next question...");
+        const nextTitle = getPersonaName(nextSpeaker === 1 ? config.personality : coPersonality, config.mode);
+        setStatusText(`${nextTitle} is formulating next question...`);
 
-        const nextQuestion = QuestionGraphEngine.getRuleBasedOfflineFallback(qIndex + 1, config.personality, currentQ.topic, config.syllabusStructure);
+        const nextQuestion = QuestionGraphEngine.getRuleBasedOfflineFallback(qIndex + 1, nextSpeaker === 1 ? config.personality : coPersonality, currentQ.topic, config.syllabusStructure);
         setActiveQuestion(nextQuestion);
         // Preload next question speech!
-        VoiceManager.preload(nextQuestion.speech, config.personality);
+        VoiceManager.preload(nextQuestion.speech, nextSpeaker === 1 ? config.personality : coPersonality);
 
         setVivaState("speaking");
-        VoiceManager.speak(nextQuestion.speech, config.personality,
+        VoiceManager.speak(nextQuestion.speech, nextSpeaker === 1 ? config.personality : coPersonality,
           () => {
             if (!isMountedRef.current) return;
             setVisualState("speaking");
-            setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
+            setStatusText(`${nextTitle} is speaking...`);
           },
           () => {
             if (!isMountedRef.current) return;
@@ -766,8 +817,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       }
     });
 
-    clearHesitationTimer();
-
     let hindsightResult = null;
     try {
       hindsightResult = await HindsightEngine.analyze({
@@ -837,8 +886,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
   if (!sessionUnlocked) {
     const titleText = config.mode === "professional" ? "Interactive Mock Interview" : "AI Oral Examination Simulator";
     const descText = config.mode === "professional"
-      ? `You are about to start a professional technical interview on ${config.topic} with ${getPersonaTitle(config.personality, config.mode)}.`
-      : `You are about to start an oral examination on ${config.topic} with ${getPersonaTitle(config.personality, config.mode)}.`;
+      ? `You are about to start a professional technical interview on ${config.topic} with ${getPersonaName(config.personality, config.mode)}.`
+      : `You are about to start an oral examination on ${config.topic} with ${getPersonaName(config.personality, config.mode)}.`;
     
     return (
       <section id="active-viva-screen" className="screen active" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "80vh", padding: "20px" }}>
@@ -958,18 +1007,102 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         </div>
 
         {/* Middle Stage */}
-        <div className={`examiner-stage ${visualState}`} id="viva-examiner-stage">
-          <div className="examiner-avatar-box">
-            <ExaminerAvatar 
-              personality={config.personality}
-              vivaState={vivaState}
-              liveMetrics={liveMetrics}
-              lastEvaluation={lastEvalRecord}
-              isProfessional={config.mode === "professional"}
-            />
+        <div className={`examiner-stage ${visualState}`} id="viva-examiner-stage" style={{ height: "auto", minHeight: "220px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          <div className={config.enablePanelMode ? "" : "examiner-avatar-box"} style={config.enablePanelMode ? {
+            display: "flex",
+            justifyContent: "center",
+            gap: "36px",
+            width: "100%",
+            maxWidth: "380px",
+            margin: "0 auto 16px auto",
+            height: "auto",
+            minHeight: "140px",
+            alignItems: "center"
+          } : {}}>
+            {config.enablePanelMode ? (
+              <>
+                {/* Main Examiner Avatar */}
+                <div style={{
+                  width: "115px",
+                  transition: "opacity 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), filter 0.4s",
+                  opacity: activeSpeaker === 1 ? 1 : 0.35,
+                  transform: activeSpeaker === 1 ? "scale(1.12)" : "scale(0.88)",
+                  filter: activeSpeaker === 1 ? "drop-shadow(0 10px 20px rgba(99, 102, 241, 0.25))" : "grayscale(60%)",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center"
+                }}>
+                  <div style={{ width: "96px", height: "96px" }}>
+                    <ExaminerAvatar 
+                      personality={config.personality}
+                      vivaState={activeSpeaker === 1 ? vivaState : "default"}
+                      liveMetrics={liveMetrics}
+                      lastEvaluation={activeSpeaker === 1 ? lastEvalRecord : null}
+                      isProfessional={config.mode === "professional"}
+                    />
+                  </div>
+                  <div style={{
+                    fontSize: "0.7rem",
+                    fontWeight: "700",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    textAlign: "center",
+                    marginTop: "10px",
+                    color: activeSpeaker === 1 ? "var(--accent-primary)" : "var(--text-secondary)",
+                    transition: "color 0.3s"
+                  }}>
+                    {getPersonaName(config.personality, config.mode)}
+                  </div>
+                </div>
+
+                {/* Co-Examiner Avatar */}
+                <div style={{
+                  width: "115px",
+                  transition: "opacity 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), filter 0.4s",
+                  opacity: activeSpeaker === 2 ? 1 : 0.35,
+                  transform: activeSpeaker === 2 ? "scale(1.12)" : "scale(0.88)",
+                  filter: activeSpeaker === 2 ? "drop-shadow(0 10px 20px rgba(99, 102, 241, 0.25))" : "grayscale(60%)",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center"
+                }}>
+                  <div style={{ width: "96px", height: "96px" }}>
+                    <ExaminerAvatar 
+                      personality={coPersonality}
+                      vivaState={activeSpeaker === 2 ? vivaState : "default"}
+                      liveMetrics={liveMetrics}
+                      lastEvaluation={activeSpeaker === 2 ? lastEvalRecord : null}
+                      isProfessional={config.mode === "professional"}
+                    />
+                  </div>
+                  <div style={{
+                    fontSize: "0.7rem",
+                    fontWeight: "700",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    textAlign: "center",
+                    marginTop: "10px",
+                    color: activeSpeaker === 2 ? "var(--accent-primary)" : "var(--text-secondary)",
+                    transition: "color 0.3s"
+                  }}>
+                    {getPersonaName(coPersonality, config.mode)}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div style={{ width: "100%", height: "100%" }}>
+                <ExaminerAvatar 
+                  personality={config.personality}
+                  vivaState={vivaState}
+                  liveMetrics={liveMetrics}
+                  lastEvaluation={lastEvalRecord}
+                  isProfessional={config.mode === "professional"}
+                />
+              </div>
+            )}
           </div>
 
-          <div className="examiner-status-tag" id="examiner-status">
+          <div className="examiner-status-tag" id="examiner-status" style={{ marginTop: "20px" }}>
             <span className="status-pulse-dot"></span>
             <span id="examiner-status-text">{statusText}</span>
           </div>

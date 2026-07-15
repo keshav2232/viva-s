@@ -6133,5 +6133,153 @@ main, header, footer {
   }
 }
 
+/* ==========================================
+   DYNAMIC CRAM FLASHCARD DECK STYLES
+   ========================================== */
+
+.cram-deck-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  margin-top: var(--space-md);
+}
+
+.cram-card-wrapper {
+  perspective: 1200px;
+  width: 100%;
+  max-width: 380px;
+  height: 240px;
+  position: relative;
+  margin: var(--space-sm) auto;
+}
+
+.cram-card {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  transform-style: preserve-3d;
+  transition: transform 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+  cursor: pointer;
+}
+
+.cram-card.flipped {
+  transform: rotateY(180deg);
+}
+
+.cram-card-face {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  backface-visibility: hidden;
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  box-shadow: var(--shadow-subtle);
+  border: 1px solid var(--border-color);
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+
+.cram-card-front {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.cram-card-front:hover {
+  border-color: var(--border-focus);
+  box-shadow: var(--shadow-md);
+}
+
+.cram-card-back {
+  background-color: var(--accent-light);
+  color: var(--text-primary);
+  transform: rotateY(180deg);
+  overflow-y: auto;
+}
+
+.cram-card-back:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.cram-card-title {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-sm);
+}
+
+.cram-card-question {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--accent-primary);
+}
+
+.cram-card-answer {
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.cram-deck-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 320px;
+  margin-top: var(--space-sm);
+}
+
+.cram-btn-nav {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.cram-btn-nav:hover:not(:disabled) {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: var(--accent-light);
+}
+
+.cram-btn-nav:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.cram-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.cram-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--border-color);
+  transition: var(--transition-smooth);
+  cursor: pointer;
+}
+
+.cram-dot.active {
+  background: var(--accent-primary);
+  transform: scale(1.3);
+}
+
 
 
