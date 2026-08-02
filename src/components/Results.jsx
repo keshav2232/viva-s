@@ -662,36 +662,57 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
       );
     }
 
+    const getMetricColor = (val, isInverse = false) => {
+      const v = Math.min(Math.max(val ?? 0, 0), 100);
+      if (isInverse) {
+        // Lower nervousness/hesitation is better
+        if (v <= 40) return "#10b981"; // Green (Low nervousness/hesitation)
+        if (v <= 60) return "#f59e0b"; // Amber (Moderate nervousness/hesitation)
+        return "#ef4444";             // Red (High nervousness/hesitation)
+      } else {
+        // Higher confidence/clarity/correctness/depth is better
+        if (v >= 60) return "#10b981"; // Green
+        if (v >= 45) return "#f59e0b"; // Amber
+        return "#ef4444";             // Red
+      }
+    };
+
     const metricsList = [
       {
         label: "Vocal Confidence",
         value: emotion.confidence ?? 0,
-        color: (emotion.confidence ?? 0) >= 75 ? "#10b981" : ((emotion.confidence ?? 0) >= 50 ? "#f59e0b" : "#ef4444")
+        fillWidth: emotion.confidence ?? 0,
+        color: getMetricColor(emotion.confidence, false)
       },
       {
         label: "Nervousness Level",
         value: emotion.nervousness ?? 0,
-        color: (emotion.nervousness ?? 0) <= 30 ? "#10b981" : ((emotion.nervousness ?? 0) <= 60 ? "#f59e0b" : "#ef4444")
+        fillWidth: Math.max(0, 100 - (emotion.nervousness ?? 0)),
+        color: getMetricColor(emotion.nervousness, true)
       },
       {
         label: "Speech Hesitation",
         value: emotion.hesitation ?? 0,
-        color: (emotion.hesitation ?? 0) <= 30 ? "#10b981" : ((emotion.hesitation ?? 0) <= 60 ? "#f59e0b" : "#ef4444")
+        fillWidth: Math.max(0, 100 - (emotion.hesitation ?? 0)),
+        color: getMetricColor(emotion.hesitation, true)
       },
       {
         label: "Acoustic Clarity",
         value: emotion.clarity ?? 0,
-        color: (emotion.clarity ?? 0) >= 75 ? "#10b981" : ((emotion.clarity ?? 0) >= 50 ? "#f59e0b" : "#ef4444")
+        fillWidth: emotion.clarity ?? 0,
+        color: getMetricColor(emotion.clarity, false)
       },
       {
         label: "Correctness",
         value: emotion.correctness ?? 0,
-        color: (emotion.correctness ?? 0) >= 75 ? "#10b981" : ((emotion.correctness ?? 0) >= 50 ? "#f59e0b" : "#ef4444")
+        fillWidth: emotion.correctness ?? 0,
+        color: getMetricColor(emotion.correctness, false)
       },
       {
         label: "Conceptual Depth",
         value: emotion.completeness ?? 0,
-        color: (emotion.completeness ?? 0) >= 75 ? "#10b981" : ((emotion.completeness ?? 0) >= 50 ? "#f59e0b" : "#ef4444")
+        fillWidth: emotion.completeness ?? 0,
+        color: getMetricColor(emotion.completeness, false)
       }
     ];
 
@@ -732,7 +753,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
               }}>
                 <div style={{
                   height: "100%",
-                  width: `${Math.min(Math.max(m.value, 0), 100)}%`,
+                  width: `${Math.min(Math.max(m.fillWidth, 0), 100)}%`,
                   backgroundColor: m.color,
                   borderRadius: "var(--radius-full)",
                   transition: "width 0.6s ease"
