@@ -123,6 +123,8 @@ export async function POST(req) {
         return NextResponse.json(humeResult);
       case "hindsight-analyze":
         return await handleHindsightAnalyze(payload, apiKey);
+      case "interactive-dialogue":
+        return await handleInteractiveDialogue(payload, apiKey);
       default:
         return NextResponse.json({ error: "Invalid action type" }, { status: 400 });
     }
@@ -228,7 +230,7 @@ async function handleParseSyllabus(rawText, mode, duration, apiKey) {
 // 2. GENERATE QUESTION & REMARKS (ADAPTIVE BRANCHING)
 // ==========================================
 async function handleGenerateQuestion(payload, apiKey) {
-  const { syllabus, personality, duration, asked, history, lastTag, activeTopic, nervousness, isTargetDrill, targetSubtopic, mode } = payload;
+  const { syllabus, personality, duration, asked, history, lastTag, activeTopic, nervousness, isTargetDrill, targetSubtopic, mode, previousInteractionId } = payload;
   const isProfessional = mode === "professional";
   
   // Format history for the prompt
@@ -381,7 +383,7 @@ async function handleGenerateQuestion(payload, apiKey) {
     "correctAnswer": "A highly precise academic explanation of what the correct answer must include, outlining key definitions, relevant formulas/equations, and necessary boundary conditions."
   }`;
 
-  const responseJson = await callGeminiAPI(prompt, apiKey);
+  const responseJson = await callGeminiAPI(prompt, apiKey, null, previousInteractionId);
   return NextResponse.json(responseJson);
 }
 
@@ -622,13 +624,41 @@ Respond ONLY with a valid, clean JSON object matching this schema. Do not enclos
 }
 
 // ==========================================
+// 6.5. INTERACTIVE SOCRATIC DIALOGUE
+// ==========================================
+async function handleInteractiveDialogue(payload, apiKey) {
+  const { question, studentAnswer, userPrompt, personality, mode, previousInteractionId } = payload;
+  const isProfessional = mode === "professional";
+
+  const prompt = isProfessional
+    ? `You are an expert industry interviewer (${personality || "strict"} mode) engaged in an interactive Socratic dialogue with a candidate after their mock interview.
+The candidate asked: "${userPrompt}" regarding the interview question: "${question}" and their response: "${studentAnswer}".
+Provide a clear, highly constructive, and conversational response (2-3 paragraphs) as the interviewer.
+Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown:
+{
+  "replyText": "Your helpful, detailed response string as the interviewer."
+}`
+    : `You are a university examiner (${personality || "strict"} mode) engaged in an interactive Socratic dialogue with a student after their oral viva.
+The student asked: "${userPrompt}" regarding the viva question: "${question}" and their response: "${studentAnswer}".
+Provide a clear, highly educational, and encouraging response (2-3 paragraphs) explaining the concept, formulas, or trade-offs.
+Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown:
+{
+  "replyText": "Your helpful, detailed response string as the examiner."
+}`;
+
+  const responseJson = await callGeminiAPI(prompt, apiKey, null, previousInteractionId);
+  return NextResponse.json(responseJson);
+}
+
+// ==========================================
 // GEMINI API CALLER (Delegated to GeminiAIService via @google/genai SDK)
 // ==========================================
-async function callGeminiAPI(prompt, apiKey, audioBase64 = null) {
+async function callGeminiAPI(prompt, apiKey, audioBase64 = null, previousInteractionId = null) {
   return await GeminiAIService.callGeminiInteraction({
     prompt,
     apiKey,
-    audioBase64
+    audioBase64,
+    previousInteractionId
   });
 }
 

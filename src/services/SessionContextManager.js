@@ -16,6 +16,7 @@ export const SessionContextManager = {
   weakConcepts: [],
   confidenceEvolution: [],
   askedTopics: [],
+  lastInteractionId: null,
 
   /**
    * Resets the active session parameters context.
@@ -28,6 +29,7 @@ export const SessionContextManager = {
     this.weakConcepts = [];
     this.confidenceEvolution = [];
     this.askedTopics = [];
+    this.lastInteractionId = null;
   },
 
   /**
@@ -36,6 +38,11 @@ export const SessionContextManager = {
    */
   recordRound(params) {
     const { questionText, answerText, metrics, questionObj } = params;
+
+    const interactionId = params.interactionId || (metrics && metrics.interactionId) || (questionObj && questionObj.interactionId) || null;
+    if (interactionId) {
+      this.lastInteractionId = interactionId;
+    }
 
     this.askedQuestions.push(questionText);
     this.askedQuestionsObjects.push(questionObj || {
@@ -89,7 +96,8 @@ export const SessionContextManager = {
       answerTranscripts: [...this.answerTranscripts],
       detectedEmotions: [...this.detectedEmotions],
       weakConcepts: [...this.weakConcepts],
-      confidenceEvolution: [...this.confidenceEvolution]
+      confidenceEvolution: [...this.confidenceEvolution],
+      lastInteractionId: this.lastInteractionId
     };
   }
 };

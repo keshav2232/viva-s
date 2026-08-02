@@ -11,9 +11,56 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
   const [pastSessionsAvg, setPastSessionsAvg] = useState(null);
   const [activeRightTab, setActiveRightTab] = useState("timeline"); // "timeline" | "fluency"
   const [mobileTab, setMobileTab] = useState("overview"); // "overview" | "metrics" | "qa" | "plan"
+  const [socraticInputs, setSocraticInputs] = useState({});
+  const [socraticDialogues, setSocraticDialogues] = useState({});
+  const [socraticLoading, setSocraticLoading] = useState({});
+
   const hindsightData = resultsData.hindsightData || null;
   const hindsightLoading = false;
 
+  async function handleSendSocraticQuery(roundIdx, questionText, studentAnswerText) {
+    const userText = (socraticInputs[roundIdx] || "").trim();
+    if (!userText || socraticLoading[roundIdx]) return;
+
+    setSocraticDialogues(prev => ({
+      ...prev,
+      [roundIdx]: [...(prev[roundIdx] || []), { sender: "user", text: userText }]
+    }));
+    setSocraticInputs(prev => ({ ...prev, [roundIdx]: "" }));
+    setSocraticLoading(prev => ({ ...prev, [roundIdx]: true }));
+
+    try {
+      const res = await fetch("/api/viva", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "interactive-dialogue",
+          question: questionText,
+          studentAnswer: studentAnswerText,
+          userPrompt: userText,
+          personality: resultsData.examinerPersonality || "strict",
+          mode: resultsData.mode || "academic",
+          previousInteractionId: resultsData.lastInteractionId || null
+        })
+      });
+      if (!res.ok) throw new Error("Socratic dialogue request failed");
+      const data = await res.json();
+      const replyText = data.replyText || data.text || "I am glad to help clarify. Keep practicing!";
+
+      setSocraticDialogues(prev => ({
+        ...prev,
+        [roundIdx]: [...(prev[roundIdx] || []), { sender: "examiner", text: replyText }]
+      }));
+    } catch (err) {
+      console.error("Socratic Dialogue Error:", err);
+      setSocraticDialogues(prev => ({
+        ...prev,
+        [roundIdx]: [...(prev[roundIdx] || []), { sender: "examiner", text: "I couldn't process that follow-up question right now. Try rephrasing your question." }]
+      }));
+    } finally {
+      setSocraticLoading(prev => ({ ...prev, [roundIdx]: false }));
+    }
+  }
 
   const {
     endedEarly,
@@ -1716,6 +1763,70 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                             border: "1px solid rgba(31, 42, 56, 0.15)"
                           }}>
                             {getConfidenceCoachingTip(emotion, answer, idx)}
+                          </div>
+
+                          {/* Interactive Socratic Dialogue */}
+                          <div style={{
+                            marginTop: "var(--space-md)",
+                            padding: "12px",
+                            borderRadius: "var(--radius-sm)",
+                            backgroundColor: "var(--bg-primary)",
+                            border: "1px solid var(--border-color)"
+                          }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+                              <span style={{ fontSize: "0.85rem" }}>💬</span>
+                              <strong style={{ fontSize: "0.8rem", color: "var(--accent-primary)" }}>
+                                {isProfessional ? "Ask Interviewer a Follow-up Question:" : "Ask Examiner a Socratic Follow-up Question:"}
+                              </strong>
+                            </div>
+
+                            {/* Dialogue Messages History */}
+                            {socraticDialogues[idx] && socraticDialogues[idx].length > 0 && (
+                              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "10px" }}>
+                                {socraticDialogues[idx].map((msg, mIdx) => (
+                                  <div key={mIdx} style={{
+                                    alignSelf: msg.sender === "user" ? "flex-end" : "flex-start",
+                                    maxWidth: "88%",
+                                    padding: "8px 12px",
+                                    borderRadius: "var(--radius-sm)",
+                                    backgroundColor: msg.sender === "user" ? "var(--accent-primary)" : "var(--bg-card)",
+                                    color: msg.sender === "user" ? "#ffffff" : "var(--text-primary)",
+                                    fontSize: "0.8rem",
+                                    border: msg.sender === "user" ? "none" : "1px solid var(--border-color)",
+                                    lineHeight: "1.45"
+                                  }}>
+                                    <strong>{msg.sender === "user" ? "You" : (isProfessional ? "Interviewer" : "Examiner")}:</strong> {msg.text}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            <div style={{ display: "flex", gap: "8px" }}>
+                              <input 
+                                type="text"
+                                placeholder={isProfessional ? "e.g., 'How can I structure this with STAR?'" : "e.g., 'Can you derive the formula step-by-step?'"}
+                                value={socraticInputs[idx] || ""}
+                                onChange={(e) => setSocraticInputs(prev => ({ ...prev, [idx]: e.target.value }))}
+                                onKeyDown={(e) => { if (e.key === "Enter") handleSendSocraticQuery(idx, qObj ? qObj.text : qText, answer); }}
+                                style={{
+                                  flex: 1,
+                                  padding: "8px 12px",
+                                  borderRadius: "var(--radius-xs)",
+                                  border: "1px solid var(--border-color)",
+                                  backgroundColor: "var(--bg-card)",
+                                  color: "var(--text-primary)",
+                                  fontSize: "0.8rem"
+                                }}
+                              />
+                              <button
+                                className="btn btn-primary"
+                                disabled={socraticLoading[idx]}
+                                onClick={() => handleSendSocraticQuery(idx, qObj ? qObj.text : qText, answer)}
+                                style={{ padding: "8px 14px", fontSize: "0.8rem", flexShrink: 0, cursor: "pointer" }}
+                              >
+                                {socraticLoading[idx] ? "Asking..." : "Ask AI"}
+                              </button>
+                            </div>
                           </div>
 
                         </div>

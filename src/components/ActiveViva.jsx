@@ -457,7 +457,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
             nervousness: latestNervousnessRef.current,
             isTargetDrill: config.isTargetDrill || false,
             targetSubtopic: config.targetSubtopic || null,
-            mode: config.mode
+            mode: config.mode,
+            previousInteractionId: SessionContextManager.lastInteractionId
           });
 
           if (!isMountedRef.current) return;

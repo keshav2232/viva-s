@@ -26,7 +26,7 @@ export const GeminiAIService = {
    * @param {number} [params.timeoutMs=25000] - Timeout in milliseconds per attempt
    * @returns {Promise<object>} Parsed JSON response from Gemini
    */
-  async callGeminiInteraction({ prompt, apiKey, audioBase64 = null, models = DEFAULT_CANDIDATE_MODELS, timeoutMs = 25000 }) {
+  async callGeminiInteraction({ prompt, apiKey, audioBase64 = null, previousInteractionId = null, models = DEFAULT_CANDIDATE_MODELS, timeoutMs = 25000 }) {
     const key = apiKey || process.env.GEMINI_API_KEY || process.env.XAI_API_KEY;
     if (!key) {
       throw new Error("GEMINI_API_KEY is missing from environment variables or request parameters.");
@@ -37,7 +37,7 @@ export const GeminiAIService = {
 
     for (const model of models) {
       try {
-        const responseJson = await this._executeSingleAttempt(ai, model, prompt, audioBase64, timeoutMs);
+        const responseJson = await this._executeSingleAttempt(ai, model, prompt, audioBase64, previousInteractionId, timeoutMs);
         return responseJson;
       } catch (err) {
         console.warn(`GeminiAIService: Model attempt failed [${model}]:`, err.message);
@@ -51,11 +51,12 @@ export const GeminiAIService = {
   /**
    * Internal helper to execute a single interaction attempt with timeout and fallback support.
    */
-  async _executeSingleAttempt(ai, model, prompt, audioBase64, timeoutMs) {
+  async _executeSingleAttempt(ai, model, prompt, audioBase64, previousInteractionId, timeoutMs) {
     let timeoutId;
 
     const promise = (async () => {
       let rawText = "";
+      let interactionId = null;
 
       // Assemble contents array for multimodal (audio + prompt) or text
       const contents = [{ text: prompt }];
@@ -71,11 +72,18 @@ export const GeminiAIService = {
       // Try Interaction API via ai.interactions.create if supported, or ai.models.generateContent
       try {
         if (ai.interactions && typeof ai.interactions.create === "function") {
-          const interaction = await ai.interactions.create({
+          const interactionOptions = {
             model: model,
             input: audioBase64 ? contents : prompt
-          });
+          };
+
+          if (previousInteractionId) {
+            interactionOptions.previous_interaction_id = previousInteractionId;
+          }
+
+          const interaction = await ai.interactions.create(interactionOptions);
           rawText = interaction.output_text || (interaction.outputs && interaction.outputs[0] && interaction.outputs[0].text) || "";
+          interactionId = interaction.id || interaction.name || null;
         }
       } catch (interactionErr) {
         console.warn(`GeminiAIService: interactions.create fallback to models.generateContent [${model}]:`, interactionErr.message);
@@ -97,7 +105,11 @@ export const GeminiAIService = {
         throw new Error("Received empty response string from Gemini API.");
       }
 
-      return this._parseCleanJson(rawText);
+      const parsed = this._parseCleanJson(rawText);
+      if (interactionId && typeof parsed === "object" && parsed !== null) {
+        parsed.interactionId = interactionId;
+      }
+      return parsed;
     })();
 
     const timeoutPromise = new Promise((_, reject) => {
