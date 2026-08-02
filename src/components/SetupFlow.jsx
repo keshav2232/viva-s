@@ -13,17 +13,17 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [practiceMode, setPracticeMode] = useState("academic"); // "academic" | "professional"
   const [sourceType, setSourceType] = useState("syllabus"); // "syllabus" | "topic"
-  
+
   // Input fields
   const [topic, setTopic] = useState("");
   const [syllabusText, setSyllabusText] = useState("");
-  
+
   // File Upload states
   const [syllabusUploaded, setSyllabusUploaded] = useState(false);
   const [uploadStatus, setUploadStatus] = useState("Drag & drop syllabus PDF/TXT here or click to browse");
   const [isExtractingText, setIsExtractingText] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState([]);
-  
+
   // Syllabus & Topic Tree structures
   const [syllabusStructure, setSyllabusStructure] = useState(null);
   const [isExpandingTopic, setIsExpandingTopic] = useState(false);
@@ -55,7 +55,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
   const handleStartCramMode = async () => {
     setCramMode(true);
     setIsLoadingFlashcards(true);
-    
+
     try {
       const response = await fetch("/api/viva", {
         method: "POST",
@@ -93,7 +93,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
       setIsPlayingSample(false);
       return;
     }
-    
+
     // Stop any active playbacks
     VoiceManager.stop();
     setIsPlayingSample(true);
@@ -111,9 +111,9 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
     };
 
     const text = samplePhrases[personality] || (practiceMode === "academic" ? "Hello, let us begin the examination." : "Hello, let's begin the interview.");
-    
-    VoiceManager.speak(text, personality, 
-      () => setIsPlayingSample(true), 
+
+    VoiceManager.speak(text, personality,
+      () => setIsPlayingSample(true),
       () => setIsPlayingSample(false)
     );
   };
@@ -126,7 +126,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
           alert(practiceMode === "academic" ? "Please enter a subject topic to proceed." : "Please enter a job role to proceed.");
           return;
         }
-        
+
         // Expand the topic into a structured tree using Gemini!
         setIsExpandingTopic(true);
         try {
@@ -143,7 +143,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
           alert(practiceMode === "academic" ? "Please upload a syllabus PDF or paste notes text to proceed." : "Please upload a job description PDF or paste its text to proceed.");
           return;
         }
-        
+
         // Expand the custom syllabus text into a structured tree using Gemini!
         setIsExpandingTopic(true);
         try {
@@ -219,10 +219,10 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
   const handleFileParsing = async (files) => {
     setIsExtractingText(true);
     setUploadStatus(`Ingesting documents...`);
-    
+
     const newFiles = [...uploadedFiles];
     let errors = [];
-    
+
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       // Avoid duplicates
@@ -241,9 +241,9 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
         errors.push(`${file.name}: ${e.message}`);
       }
     }
-    
+
     setUploadedFiles(newFiles);
-    
+
     if (newFiles.length > 0) {
       setSyllabusUploaded(true);
       const combinedText = newFiles.map(f => `--- ${f.name} ---\n${f.text}`).join("\n\n");
@@ -254,7 +254,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
       setSyllabusText("");
       setUploadStatus("Drag & drop syllabus PDF/TXT here or click to browse");
     }
-    
+
     if (errors.length > 0) {
       alert("Errors occurred while parsing some files:\n" + errors.join("\n"));
     }
@@ -339,8 +339,8 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                 Study key concepts for <strong>{syllabusStructure?.topic || topic || "Custom Subject"}</strong>
               </p>
             </div>
-            <button 
-              className="btn btn-secondary" 
+            <button
+              className="btn btn-secondary"
               onClick={() => setCramMode(false)}
               style={{ padding: "6px 12px", fontSize: "0.8rem" }}
             >
@@ -373,7 +373,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
   return (
     <section id="setup-screen" className="screen active">
       <div className="setup-container">
-        
+
         {/* Step node indicators */}
         <div className="setup-steps-header">
           <div className={`step-node ${currentStep === 1 ? "active" : currentStep > 1 ? "completed" : ""}`}>
@@ -414,7 +414,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                 }}
                 style={{ flex: 1, padding: "8px 16px", fontSize: "0.9rem", borderRadius: "var(--radius-sm)", border: "none" }}
               >
-                🎓 Academic Viva Mode
+                Academic Viva Mode
               </button>
               <button
                 type="button"
@@ -427,19 +427,19 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                 }}
                 style={{ flex: 1, padding: "8px 16px", fontSize: "0.9rem", borderRadius: "var(--radius-sm)", border: "none" }}
               >
-                💼 Professional Mock Interview
+                Professional Mock Interview
               </button>
             </div>
 
             <div style={{ textAlign: "left", marginBottom: "var(--space-sm)" }}>
               <h2>{practiceMode === "academic" ? "Select Viva Source" : "Select Interview Context"}</h2>
-              <p>{practiceMode === "academic" 
-                ? "Provide the syllabus or topic you want the AI Examiner to focus on." 
+              <p>{practiceMode === "academic"
+                ? "Provide the syllabus or topic you want the AI Examiner to focus on."
                 : "Provide the job description, resume, or job role you want the AI Interviewer to focus on."}</p>
             </div>
 
             <div className="source-selection-grid">
-              <div 
+              <div
                 className={`card source-card ${sourceType === "syllabus" ? "selected" : ""}`}
                 onClick={() => setSourceType("syllabus")}
               >
@@ -454,13 +454,13 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                   <h3>{practiceMode === "academic" ? "Upload Syllabus" : "Upload JD / Resume"}</h3>
                 </div>
                 <p style={{ fontSize: "0.85rem" }}>
-                  {practiceMode === "academic" 
-                    ? "Upload custom PDF syllabus, notes, or paste table of contents." 
+                  {practiceMode === "academic"
+                    ? "Upload custom PDF syllabus, notes, or paste table of contents."
                     : "Upload custom PDF job description, resume, or paste recruitment specs."}
                 </p>
               </div>
 
-              <div 
+              <div
                 className={`card source-card ${sourceType === "topic" ? "selected" : ""}`}
                 onClick={() => setSourceType("topic")}
               >
@@ -473,8 +473,8 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                   <h3>{practiceMode === "academic" ? "Topic-Based" : "Role Presets"}</h3>
                 </div>
                 <p style={{ fontSize: "0.85rem" }}>
-                  {practiceMode === "academic" 
-                    ? "Enter a single subject or chapter to generate an examination automatically." 
+                  {practiceMode === "academic"
+                    ? "Enter a single subject or chapter to generate an examination automatically."
                     : "Enter or select a job role/domain to generate a mock interview immediately."}
                 </p>
               </div>
@@ -486,8 +486,8 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                   <label className="form-label">
                     {practiceMode === "academic" ? "Upload Syllabus PDF / Notes / MD" : "Upload Job Description / Resume PDF"}
                   </label>
-                  <div 
-                    className={`upload-zone ${isExtractingText ? "dragover" : ""}`} 
+                  <div
+                    className={`upload-zone ${isExtractingText ? "dragover" : ""}`}
                     onClick={handleFileUploadTrigger}
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
@@ -513,9 +513,9 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                             <span style={{ fontWeight: "600", color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "250px" }}>{file.name}</span>
                             <span style={{ color: "var(--text-muted)", fontSize: "0.75rem", flexShrink: 0 }}>({(file.size / 1024 / 1024).toFixed(2)} MB)</span>
                           </div>
-                          <button 
-                            type="button" 
-                            onClick={(e) => { e.stopPropagation(); handleRemoveFile(index); }} 
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleRemoveFile(index); }}
                             style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", display: "flex", alignItems: "center", padding: "4px" }}
                             title="Remove file"
                           >
@@ -533,15 +533,15 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                   <label className="form-label" htmlFor="syllabus-text">
                     {practiceMode === "academic" ? "Or Paste Syllabus Text / Notes" : "Or Paste Job Description / Resume Text"}
                   </label>
-                  <textarea 
-                    className="form-input" 
-                    id="syllabus-text" 
-                    rows="5" 
+                  <textarea
+                    className="form-input"
+                    id="syllabus-text"
+                    rows="5"
                     value={syllabusText}
                     onChange={(e) => setSyllabusText(e.target.value)}
-                    placeholder={practiceMode === "academic" 
-                      ? "Paste Table of Contents, course outlines, or structural notes here..." 
-                      : "Paste Job Description, qualifications, or your Resume details here..."} 
+                    placeholder={practiceMode === "academic"
+                      ? "Paste Table of Contents, course outlines, or structural notes here..."
+                      : "Paste Job Description, qualifications, or your Resume details here..."}
                     style={{ resize: "vertical", minHeight: "100px", fontSize: "0.9rem" }}
                   />
                 </div>
@@ -552,15 +552,15 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                   <label className="form-label" htmlFor="topic-input">
                     {practiceMode === "academic" ? "Enter Viva Subject / Chapter" : "Enter Job Role / Domain"}
                   </label>
-                  <input 
-                    className="form-input" 
-                    type="text" 
-                    id="topic-input" 
+                  <input
+                    className="form-input"
+                    type="text"
+                    id="topic-input"
                     value={topic}
                     onChange={(e) => setTopic(e.target.value)}
-                    placeholder={practiceMode === "academic" 
-                      ? "e.g. Thermodynamics, Data Structures, Marketing Management" 
-                      : "e.g. Software Engineer (Backend), Product Manager, Data Scientist"} 
+                    placeholder={practiceMode === "academic"
+                      ? "e.g. Thermodynamics, Data Structures, Marketing Management"
+                      : "e.g. Software Engineer (Backend), Product Manager, Data Scientist"}
                   />
                 </div>
 
@@ -609,8 +609,8 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
           <div className="setup-step-view active">
             <div style={{ textAlign: "left", marginBottom: "var(--space-sm)" }}>
               <h2>{practiceMode === "academic" ? "Configure Examination Parameters" : "Configure Interview Parameters"}</h2>
-              <p>{practiceMode === "academic" 
-                ? "Adjust the time duration and the pedagogical personality of your examiner." 
+              <p>{practiceMode === "academic"
+                ? "Adjust the time duration and the pedagogical personality of your examiner."
                 : "Adjust the duration and the evaluation style of your recruitment panel."}</p>
             </div>
 
@@ -626,14 +626,14 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
 
               {showCustomDuration && (
                 <div className="custom-duration-input-wrapper active">
-                  <input 
-                    className="form-input" 
-                    type="number" 
-                    min="1" 
-                    max="60" 
+                  <input
+                    className="form-input"
+                    type="number"
+                    min="1"
+                    max="60"
                     value={customDurationVal}
                     onChange={(e) => setCustomDurationVal(e.target.value)}
-                    placeholder="15" 
+                    placeholder="15"
                     style={{ width: "80px", textAlign: "center" }}
                   />
                   <span className="form-label">Minutes</span>
@@ -649,8 +649,8 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
               marginTop: "var(--space-md)",
               marginBottom: "var(--space-md)"
             }}>
-              <div 
-                className={`card ${isLastMinute ? "selected" : ""}`} 
+              <div
+                className={`card ${isLastMinute ? "selected" : ""}`}
                 onClick={() => setIsLastMinute(prev => !prev)}
                 style={{
                   padding: "var(--space-md)",
@@ -679,7 +679,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                 }}>
                   {isLastMinute && (
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                      <polyline points="20 6 9 17 4 12"/>
+                      <polyline points="20 6 9 17 4 12" />
                     </svg>
                   )}
                 </div>
@@ -688,15 +688,15 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                     {practiceMode === "academic" ? "Last-Minute Viva Mode" : "Rapid Fire Interview"}
                   </h4>
                   <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--text-secondary)" }}>
-                    {practiceMode === "academic" 
+                    {practiceMode === "academic"
                       ? "5-minute rapid-fire preparation. Ideal for last-minute cram sessions. Focuses on high-yield basic concepts."
                       : "5-minute rapid session focusing on core questions. Perfect for a quick check before stepping in."}
                   </p>
                 </div>
               </div>
 
-              <div 
-                className={`card ${isMockExternal ? "selected" : ""}`} 
+              <div
+                className={`card ${isMockExternal ? "selected" : ""}`}
                 onClick={() => setIsMockExternal(prev => !prev)}
                 style={{
                   padding: "var(--space-md)",
@@ -725,7 +725,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                 }}>
                   {isMockExternal && (
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                      <polyline points="20 6 9 17 4 12"/>
+                      <polyline points="20 6 9 17 4 12" />
                     </svg>
                   )}
                 </div>
@@ -734,7 +734,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                     {practiceMode === "academic" ? "Mock External Viva" : "Stress / Bar Raiser Interview"}
                   </h4>
                   <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--text-secondary)" }}>
-                    {practiceMode === "academic" 
+                    {practiceMode === "academic"
                       ? "High-stress university board review. Intimidating grading and intense questioning."
                       : "High-stress bar-raiser session. Intimidating recruiter questioning and complex system-design pressure."}
                   </p>
@@ -747,28 +747,28 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                 {practiceMode === "academic" ? "Examiner Personality" : "Interviewer Style"}
               </label>
               <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "var(--space-md)" }}>
-                {practiceMode === "academic" 
+                {practiceMode === "academic"
                   ? "Select who will evaluate you. Each persona carries distinct grading traits and oral behaviors."
                   : "Select who will conduct your mock interview. Each interviewer uses a distinct candidate evaluation style."}
               </p>
-              
+
               <div className="personality-grid">
                 {Object.entries(EXAMINER_PERSONALITIES).map(([key, details]) => {
                   const displayName = practiceMode === "academic" ? details.name : (
                     key === "friendly" ? "Warm Recruiter" :
-                    key === "strict" ? "Structured Hiring Manager" :
-                    key === "brutal" ? "Bar Raiser Interviewer" :
-                    "Stress Interviewer"
+                      key === "strict" ? "Structured Hiring Manager" :
+                        key === "brutal" ? "Bar Raiser Interviewer" :
+                          "Stress Interviewer"
                   );
                   const displayDesc = practiceMode === "academic" ? details.description : (
                     key === "friendly" ? "Encouraging recruiter, conversational pace, supportive hints." :
-                    key === "strict" ? "Focused on role competencies, structured questions, demands clarity." :
-                    key === "brutal" ? "Detailed behavioral driller, probe deep into decisions, STAR checks." :
-                    "Elite stress interviewer, rapid design challenges, logical pressure."
+                      key === "strict" ? "Focused on role competencies, structured questions, demands clarity." :
+                        key === "brutal" ? "Detailed behavioral driller, probe deep into decisions, STAR checks." :
+                          "Elite stress interviewer, rapid design challenges, logical pressure."
                   );
                   return (
-                    <div 
-                      className={`card personality-card card-personality-${key} ${personality === key ? "selected" : ""}`} 
+                    <div
+                      className={`card personality-card card-personality-${key} ${personality === key ? "selected" : ""}`}
                       key={key}
                       onClick={() => {
                         setPersonality(key);
@@ -777,7 +777,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                       }}
                       style={{ position: "relative" }}
                     >
-                      <button 
+                      <button
                         type="button"
                         className="info-btn-mobile"
                         onClick={(e) => {
@@ -823,11 +823,10 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
               <div className="card examiner-preview-card" style={{
                 marginTop: "var(--space-md)",
                 padding: "var(--space-md) var(--space-lg)",
-                borderLeft: `4px solid ${
-                  personality === "friendly" ? "var(--color-success)" : 
-                  personality === "strict" ? "var(--accent-primary)" : 
-                  "var(--color-error)"
-                }`,
+                borderLeft: `4px solid ${personality === "friendly" ? "var(--color-success)" :
+                  personality === "strict" ? "var(--accent-primary)" :
+                    "var(--color-error)"
+                  }`,
                 backgroundColor: "var(--bg-primary)",
                 textAlign: "left",
                 width: "100%"
@@ -846,9 +845,9 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                   alignItems: "center",
                   justifyContent: "center"
                 }}>
-                  <ExaminerAvatar 
-                    personality={personality} 
-                    vivaState={isPlayingSample ? "speaking" : "default"} 
+                  <ExaminerAvatar
+                    personality={personality}
+                    vivaState={isPlayingSample ? "speaking" : "default"}
                     isProfessional={practiceMode === "professional"}
                   />
                 </div>
@@ -861,35 +860,35 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                   <h4 style={{ margin: "4px 0", fontSize: "1.2rem", color: "var(--accent-primary)" }}>
                     {practiceMode === "academic" ? (
                       personality === "friendly" ? "Dr. George Abernathy" :
-                      personality === "strict" ? "Dr. Daniel Sterling" :
-                      personality === "brutal" ? "Dr. Adam Vance" :
-                      "Professor Harry Thorne"
+                        personality === "strict" ? "Dr. Daniel Sterling" :
+                          personality === "brutal" ? "Dr. Adam Vance" :
+                            "Professor Harry Thorne"
                     ) : (
                       personality === "friendly" ? "George Abernathy (Talent Partner)" :
-                      personality === "strict" ? "Daniel Sterling (Engineering Manager)" :
-                      personality === "brutal" ? "Adam Vance (Lead Architect)" :
-                      "Director Harry Thorne (Bar Raiser)"
+                        personality === "strict" ? "Daniel Sterling (Engineering Manager)" :
+                          personality === "brutal" ? "Adam Vance (Lead Architect)" :
+                            "Director Harry Thorne (Bar Raiser)"
                     )}
                   </h4>
                   <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary)", lineHeight: 1.4 }}>
                     {practiceMode === "academic" ? (
                       personality === "friendly" ? "A highly supportive educator known for conceptual guiding, patient pauses, and constructive evaluations." :
-                      personality === "strict" ? "An exacting formal academic focusing on flawless precision, mathematical derivations, and technical accuracy." :
-                      personality === "brutal" ? "An external industry reviewer focused on skepticism, pressure loading, and testing boundaries." :
-                      "A legendary exam terror designed to simulate high-stress viva environments with sudden logical challenges."
+                        personality === "strict" ? "An exacting formal academic focusing on flawless precision, mathematical derivations, and technical accuracy." :
+                          personality === "brutal" ? "An external industry reviewer focused on skepticism, pressure loading, and testing boundaries." :
+                            "A legendary exam terror designed to simulate high-stress viva environments with sudden logical challenges."
                     ) : (
                       personality === "friendly" ? "A welcoming recruiter focusing on your career trajectory, culture fit, and foundational skills with supportive pacing." :
-                      personality === "strict" ? "A methodical team leader checking architectural choices, trade-offs, and practical design principles." :
-                      personality === "brutal" ? "A seasoned industry interviewer who probes deeply into execution details, failure modes, and problem-solving." :
-                      "A senior executive testing logical boundaries, decision resilience, and system scalability under high pressure."
+                        personality === "strict" ? "A methodical team leader checking architectural choices, trade-offs, and practical design principles." :
+                          personality === "brutal" ? "A seasoned industry interviewer who probes deeply into execution details, failure modes, and problem-solving." :
+                            "A senior executive testing logical boundaries, decision resilience, and system scalability under high pressure."
                     )}
                   </p>
                 </div>
 
                 {/* Sample voice button */}
-                <button 
+                <button
                   type="button"
-                  className="btn btn-secondary" 
+                  className="btn btn-secondary"
                   onClick={handlePlaySampleVoice}
                   style={{
                     padding: "8px 16px",
@@ -914,8 +913,8 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
 
             <div className="flow-nav-buttons">
               <button className="btn btn-secondary" onClick={() => handleProceedStep(1)}>Back</button>
-              <button 
-                className="btn btn-primary" 
+              <button
+                className="btn btn-primary"
                 onClick={() => handleProceedStep(3)}
                 disabled={isExpandingTopic}
               >
@@ -936,8 +935,8 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
           <div className="setup-step-view active">
             <div style={{ textAlign: "left", marginBottom: "var(--space-sm)" }}>
               <h2>{practiceMode === "academic" ? "Review Exam Structure" : "Review Interview Outline"}</h2>
-              <p>{practiceMode === "academic" 
-                ? "Verify the structured course syllabus mapped dynamically by the intelligence engine." 
+              <p>{practiceMode === "academic"
+                ? "Verify the structured course syllabus mapped dynamically by the intelligence engine."
                 : "Verify the job competencies and mock questions mapped dynamically by the AI model."}</p>
             </div>
 
@@ -949,24 +948,24 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                     {syllabusStructure ? syllabusStructure.topic : (practiceMode === "academic" ? "Custom Examination" : "Custom Interview")} Mapped Outline
                   </h3>
                   <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", margin: "2px 0 0 0" }}>
-                    {practiceMode === "academic" 
+                    {practiceMode === "academic"
                       ? "Select a subtopic leaf node to launch a highly focused Custom Target Drill."
                       : "Select a competency leaf node to launch a highly focused target mock session."}
                   </p>
                 </div>
-                
+
                 {/* View Toggles */}
                 <div className="no-print" style={{ display: "flex", gap: "6px", backgroundColor: "var(--bg-primary)", padding: "4px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-color)" }}>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     className={`btn ${previewMode === "map" ? "btn-primary" : "btn-secondary"}`}
                     onClick={() => setPreviewMode("map")}
                     style={{ padding: "6px 12px", fontSize: "0.75rem", borderRadius: "var(--radius-xs)" }}
                   >
                     Mind Map
                   </button>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     className={`btn ${previewMode === "list" ? "btn-primary" : "btn-secondary"}`}
                     onClick={() => setPreviewMode("list")}
                     style={{ padding: "6px 12px", fontSize: "0.75rem", borderRadius: "var(--radius-xs)" }}
@@ -995,17 +994,17 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                         {u.topics.map((t, tid) => {
                           const isSel = selectedSubtopic && selectedSubtopic.unitIndex === idx && selectedSubtopic.topicIndex === tid;
                           return (
-                            <span 
-                              key={tid} 
+                            <span
+                              key={tid}
                               onClick={() => {
                                 if (isSel) setSelectedSubtopic(null);
                                 else setSelectedSubtopic({ unitIndex: idx, topicIndex: tid, name: t });
                               }}
-                              style={{ 
-                                fontSize: "0.75rem", 
-                                padding: "4px 10px", 
-                                backgroundColor: isSel ? "var(--color-warning-bg)" : "var(--bg-card)", 
-                                border: isSel ? "2.5px solid var(--color-warning)" : "1px solid var(--border-color)", 
+                              style={{
+                                fontSize: "0.75rem",
+                                padding: "4px 10px",
+                                backgroundColor: isSel ? "var(--color-warning-bg)" : "var(--bg-card)",
+                                border: isSel ? "2.5px solid var(--color-warning)" : "1px solid var(--border-color)",
                                 color: isSel ? "var(--color-warning)" : "var(--text-primary)",
                                 borderRadius: "var(--radius-full)",
                                 cursor: "pointer",
@@ -1030,7 +1029,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                     <>
                       <div style={{ fontSize: "0.85rem", fontWeight: "700", color: "var(--color-warning)", display: "flex", alignItems: "center", gap: "4px" }}>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ width: "16px", height: "16px" }}>
-                          <circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24M14.83 9.17l4.24-4.24M14.83 14.83l4.24 4.24M9.17 14.83l-4.24 4.24"/>
+                          <circle cx="12" cy="12" r="10" /><path d="m4.93 4.93 4.24 4.24M14.83 9.17l4.24-4.24M14.83 14.83l4.24 4.24M9.17 14.83l-4.24 4.24" />
                         </svg>
                         {practiceMode === "academic" ? "Focus Target Drill Engaged" : "Focused Competency Drill Engaged"}
                       </div>
@@ -1042,12 +1041,12 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                     <>
                       <div style={{ fontSize: "0.85rem", fontWeight: "700", color: "var(--color-success)", display: "flex", alignItems: "center", gap: "4px" }}>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ width: "16px", height: "16px" }}>
-                          <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>
+                          <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" />
                         </svg>
                         {practiceMode === "academic" ? "Comprehensive Oral Mode" : "Comprehensive Interview Mode"}
                       </div>
                       <p style={{ margin: "2px 0 0 0", fontSize: "0.775rem", color: "var(--text-secondary)" }}>
-                        {practiceMode === "academic" 
+                        {practiceMode === "academic"
                           ? "Questions will cover all topics mapped throughout the curriculum syllabus."
                           : "Questions will cover all competencies mapped for this role."}
                       </p>
@@ -1055,9 +1054,9 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                   )}
                 </div>
                 {selectedSubtopic && (
-                  <button 
-                    type="button" 
-                    className="btn-text" 
+                  <button
+                    type="button"
+                    className="btn-text"
                     onClick={() => setSelectedSubtopic(null)}
                     style={{ fontSize: "0.75rem", color: "var(--color-error)", cursor: "pointer", border: "none", background: "none", fontWeight: "600" }}
                   >
@@ -1075,9 +1074,9 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                     <span className="preview-value" style={{ fontSize: "0.8rem" }}>
                       {practiceMode === "academic" ? EXAMINER_PERSONALITIES[personality].name : (
                         personality === "friendly" ? "Warm Recruiter" :
-                        personality === "strict" ? "Structured Hiring Manager" :
-                        personality === "brutal" ? "Bar Raiser Interviewer" :
-                        "Stress Interviewer"
+                          personality === "strict" ? "Structured Hiring Manager" :
+                            personality === "brutal" ? "Bar Raiser Interviewer" :
+                              "Stress Interviewer"
                       )}
                     </span>
                   </div>
@@ -1101,25 +1100,25 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                 </div>
               </div>
 
-              <button 
-                type="button" 
-                className="btn btn-primary" 
+              <button
+                type="button"
+                className="btn btn-primary"
                 onClick={handleStartExam}
                 style={{ width: "100%", padding: "12px", fontSize: "1.05rem", marginTop: "16px", background: selectedSubtopic ? "linear-gradient(135deg, var(--color-warning), hsl(38, 85%, 35%))" : "var(--accent-primary)" }}
               >
-                {selectedSubtopic 
+                {selectedSubtopic
                   ? (practiceMode === "academic" ? `Begin Target Drill: ${selectedSubtopic.name}` : `Begin Competency Drill: ${selectedSubtopic.name}`)
                   : (practiceMode === "academic" ? "Begin Mapped Viva" : "Begin Mock Interview")}
               </button>
 
-              <button 
-                type="button" 
-                className="btn btn-secondary" 
+              <button
+                type="button"
+                className="btn btn-secondary"
                 onClick={handleStartCramMode}
                 style={{ width: "100%", padding: "12px", fontSize: "1.05rem", marginTop: "8px", borderColor: "var(--color-warning)", color: "var(--color-warning)", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
                 </svg>
                 {practiceMode === "academic" ? "⚡ Quick Cram: Study Flashcards" : "⚡ Quick Prep: Study Questions"}
               </button>
