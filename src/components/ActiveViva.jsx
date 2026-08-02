@@ -98,7 +98,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       if (introTimeoutRef.current) clearTimeout(introTimeoutRef.current);
       if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Stopwatch timer and speech trigger starts upon unlocking
@@ -765,8 +764,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         audioUrls[idx] = URL.createObjectURL(blob);
       }
     });
-
-    clearHesitationTimer();
 
     let hindsightResult = null;
     try {
