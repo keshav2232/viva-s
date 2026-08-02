@@ -67,6 +67,7 @@ export const AnswerEvaluationService = {
         accuracy: geminiResult.accuracy,
         tag: geminiResult.tag,
         correctAnswer: geminiResult.correctAnswer || null,
+        starSegments: geminiResult.starSegments || null,
 
         // Delivery scores — from Gemini (audio mode) or null (text mode)
         clarity: geminiResult.clarity ?? null,
@@ -111,6 +112,7 @@ export const AnswerEvaluationService = {
       fillerCount: this.countFillers(answerText),
       tag: isSilent ? "Weak" : "Ungraded",
       correctAnswer: null,
+      starSegments: null,
       gradingSource: "offline",
       isUngraded: true
     };

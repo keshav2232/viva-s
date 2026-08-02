@@ -9,7 +9,7 @@ import ExaminerAvatar from "@/components/ExaminerAvatar";
 import FlashcardDeck from "./FlashcardDeck";
 import SyllabusMindMap from "./SyllabusMindMap";
 
-export default function SetupFlow({ onCancel, onBeginViva }) {
+export default function SetupFlow({ onCancel, onBeginViva, initialSelectedSubtopic }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [practiceMode, setPracticeMode] = useState("academic"); // "academic" | "professional"
   const [sourceType, setSourceType] = useState("syllabus"); // "syllabus" | "topic"
@@ -42,6 +42,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
   const [isLastMinute, setIsLastMinute] = useState(false);
   const [isMockExternal, setIsMockExternal] = useState(false);
   const [enableInterruption, setEnableInterruption] = useState(false);
+  const [enablePanelMode, setEnablePanelMode] = useState(false);
 
   // Target Drill & Mind Map States
   const [selectedSubtopic, setSelectedSubtopic] = useState(null);
@@ -86,6 +87,28 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
       VoiceManager.stop();
     };
   }, []);
+
+  // Sync initial subtopic drill target if coming from results page
+  useEffect(() => {
+    if (initialSelectedSubtopic) {
+      const { subjectName, mode } = initialSelectedSubtopic;
+      setPracticeMode(mode || "academic");
+      setTopic(subjectName || "");
+      setSelectedSubtopic({
+        name: initialSelectedSubtopic.name,
+        unitIndex: initialSelectedSubtopic.unitIndex,
+        topicIndex: initialSelectedSubtopic.topicIndex
+      });
+      // Skip directly to Step 2 (Syllabus Mind Map Preview)
+      setCurrentStep(2);
+      
+      const struct = SyllabusParserService.getDefaultHierarchy(
+        subjectName || "Thermodynamics",
+        duration
+      );
+      setSyllabusStructure(struct);
+    }
+  }, [initialSelectedSubtopic]);
 
   const handlePlaySampleVoice = () => {
     if (isPlayingSample) {
@@ -324,6 +347,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
       isTargetDrill: !!selectedSubtopic,
       targetSubtopic: selectedSubtopic ? selectedSubtopic.name : null,
       enableInterruption,
+      enablePanelMode,
       mode: practiceMode
     });
   };
@@ -737,6 +761,52 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                     {practiceMode === "academic" 
                       ? "High-stress university board review. Intimidating grading and intense questioning."
                       : "High-stress bar-raiser session. Intimidating recruiter questioning and complex system-design pressure."}
+                  </p>
+                </div>
+              </div>
+
+              {/* Committee Group Panel Mode Toggle */}
+              <div 
+                className={`card ${enablePanelMode ? "selected" : ""}`} 
+                onClick={() => setEnablePanelMode(prev => !prev)}
+                style={{
+                  padding: "var(--space-md)",
+                  border: enablePanelMode ? "1px solid var(--accent-primary)" : "1px solid var(--border-color)",
+                  borderRadius: "var(--radius-md)",
+                  cursor: "pointer",
+                  display: "flex",
+                  gap: "var(--space-sm)",
+                  alignItems: "flex-start",
+                  backgroundColor: enablePanelMode ? "var(--accent-light)" : "var(--bg-card)",
+                  transition: "var(--transition-smooth)",
+                  marginTop: "var(--space-sm)"
+                }}
+              >
+                <div style={{
+                  width: "20px",
+                  height: "20px",
+                  borderRadius: "var(--radius-xs)",
+                  border: enablePanelMode ? "2px solid var(--accent-primary)" : "2px solid var(--accent-primary)",
+                  backgroundColor: enablePanelMode ? "var(--accent-primary)" : "transparent",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "white",
+                  flexShrink: 0,
+                  marginTop: "2px"
+                }}>
+                  {enablePanelMode && (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                  )}
+                </div>
+                <div style={{ textAlign: "left" }}>
+                  <h4 style={{ margin: "0 0 2px 0", fontSize: "0.9rem", color: "var(--accent-primary)" }}>
+                    Committee Group Panel Mode
+                  </h4>
+                  <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                    Alternate questions between a panel of two co-examiners/interviewers with different testing personalities.
                   </p>
                 </div>
               </div>
