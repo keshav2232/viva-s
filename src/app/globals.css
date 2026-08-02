@@ -3352,8 +3352,8 @@ svg path[stroke="var(--color-warning)"] {
   position: relative;
   overflow: hidden;
   padding: 120px 24px 80px 24px;
-  border-bottom: 1px solid var(--border-color);
-  background-color: var(--bg-primary);
+  border-bottom: none !important;
+  background-color: transparent !important;
 }
 
 .story-container {
@@ -5427,22 +5427,7 @@ main, header, footer {
 
 /* Visual Narrative Connection Timeline Line */
 .story-connecting-line {
-  position: absolute;
-  left: 50%;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: linear-gradient(to bottom, 
-    rgba(99, 102, 241, 0) 0%, 
-    rgba(99, 102, 241, 0.12) 20%, 
-    rgba(217, 119, 6, 0.12) 50%, 
-    rgba(16, 185, 129, 0.12) 80%, 
-    rgba(16, 185, 129, 0) 100%
-  );
-  border-left: none;
-  transform: translateX(-50%);
-  z-index: 1;
-  pointer-events: none;
+  display: none !important;
 }
 
 /* Bouncing Audio Spectrogram Equalizer */
