@@ -138,6 +138,70 @@ ul {
 }
 
 /* ==========================================
+   AMBIENT MESH GRADIENT BACKGROUND (OPTION 1)
+   ========================================== */
+.ambient-bg-wrapper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.ambient-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  opacity: 0.65;
+  transition: transform 10s ease-in-out;
+}
+
+.ambient-orb-1 {
+  top: -15%;
+  left: -10%;
+  width: 55vw;
+  height: 55vw;
+  background: radial-gradient(circle, hsla(215, 60%, 88%, 0.85) 0%, hsla(215, 40%, 95%, 0) 70%);
+  animation: orbFloat1 22s infinite ease-in-out alternate;
+}
+
+.ambient-orb-2 {
+  top: -5%;
+  right: -15%;
+  width: 50vw;
+  height: 50vw;
+  background: radial-gradient(circle, hsla(38, 75%, 92%, 0.85) 0%, hsla(38, 40%, 96%, 0) 70%);
+  animation: orbFloat2 26s infinite ease-in-out alternate;
+}
+
+.ambient-orb-3 {
+  bottom: -20%;
+  left: 25%;
+  width: 48vw;
+  height: 48vw;
+  background: radial-gradient(circle, hsla(258, 50%, 92%, 0.55) 0%, hsla(258, 30%, 97%, 0) 70%);
+  animation: orbFloat3 20s infinite ease-in-out alternate;
+}
+
+@keyframes orbFloat1 {
+  0% { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(45px, 35px) scale(1.08); }
+}
+
+@keyframes orbFloat2 {
+  0% { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(-35px, 45px) scale(1.06); }
+}
+
+@keyframes orbFloat3 {
+  0% { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(30px, -40px) scale(1.1); }
+}
+
+/* ==========================================
    GLOBAL LAYOUT ELEMENTS
    ========================================== */
 header {
@@ -5371,9 +5435,15 @@ main, header, footer {
   left: 50%;
   top: 0;
   bottom: 0;
-  width: 2px;
-  background: linear-gradient(to bottom, rgba(37, 99, 235, 0.04) 0%, rgba(217, 119, 6, 0.06) 50%, rgba(16, 185, 129, 0.04) 100%);
-  border-left: 2px dashed rgba(15, 23, 42, 0.08);
+  width: 1px;
+  background: linear-gradient(to bottom, 
+    rgba(99, 102, 241, 0) 0%, 
+    rgba(99, 102, 241, 0.12) 20%, 
+    rgba(217, 119, 6, 0.12) 50%, 
+    rgba(16, 185, 129, 0.12) 80%, 
+    rgba(16, 185, 129, 0) 100%
+  );
+  border-left: none;
   transform: translateX(-50%);
   z-index: 1;
   pointer-events: none;
@@ -5484,31 +5554,35 @@ main, header, footer {
   border-color: rgba(37, 99, 235, 0.15) !important;
 }
 
-/* Decorative Background Elements (Floating Code Icons/Blobs) */
+/* Decorative Background Elements (Aesthetic Soft Light Glow Orbs) */
 .story-hero-section::after {
   content: "";
   position: absolute;
-  width: 250px;
-  height: 250px;
-  top: 10%;
-  right: 5%;
-  background-image: radial-gradient(rgba(37, 99, 235, 0.05) 1.5px, transparent 1.5px);
-  background-size: 15px 15px;
-  z-index: 1;
+  width: 420px;
+  height: 420px;
+  top: 5%;
+  right: 2%;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, rgba(99, 102, 241, 0) 70%);
+  border-radius: 50%;
+  filter: blur(60px);
+  z-index: 0;
   pointer-events: none;
+  animation: orbDrift 20s infinite ease-in-out alternate;
 }
 
 .story-presets-section::before {
   content: "";
   position: absolute;
-  width: 200px;
-  height: 200px;
+  width: 380px;
+  height: 380px;
   bottom: 5%;
-  left: 3%;
-  background-image: radial-gradient(rgba(217, 119, 6, 0.06) 1.5px, transparent 1.5px);
-  background-size: 12px 12px;
-  z-index: 1;
+  left: 2%;
+  background: radial-gradient(circle, rgba(217, 119, 6, 0.07) 0%, rgba(217, 119, 6, 0) 70%);
+  border-radius: 50%;
+  filter: blur(60px);
+  z-index: 0;
   pointer-events: none;
+  animation: orbDrift 24s infinite ease-in-out alternate-reverse;
 }
 
 /* ==========================================
