@@ -91,6 +91,91 @@ export const AnswerEvaluationService = {
   },
 
   /**
+   * Evaluates the student answer AND generates the next adaptive question in a single Gemini call.
+   * Reduces API calls by 50% per question turn.
+   */
+  async evaluateAndGenerateNext(params) {
+    const {
+      question,
+      answer,
+      syllabus,
+      speechDurationMs,
+      pauseCount,
+      mode,
+      audioBlob,
+      personality,
+      asked,
+      history,
+      isFinalRound,
+      previousInteractionId
+    } = params;
+
+    const wpm = this.calculateWpm(answer, speechDurationMs);
+
+    let audioBase64 = null;
+    if (audioBlob && audioBlob.size > 100) {
+      try {
+        audioBase64 = await this.blobToBase64(audioBlob);
+      } catch (encErr) {
+        console.warn("AnswerEvaluationService: Failed to encode audio blob:", encErr);
+      }
+    }
+
+    try {
+      const response = await fetch("/api/viva", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "evaluate-and-generate-next",
+          question,
+          answer,
+          syllabus,
+          mode,
+          audioBase64,
+          personality,
+          asked: asked || [],
+          history: history || [],
+          isFinalRound: !!isFinalRound,
+          previousInteractionId
+        })
+      });
+
+      if (!response.ok) throw new Error(`Combined API returned ${response.status}`);
+      const data = await response.json();
+      const geminiResult = data.evaluation || {};
+      const nextQ = data.nextQuestion || null;
+
+      const parsedMetrics = {
+        correctness: geminiResult.correctness !== null && geminiResult.correctness !== undefined ? parseInt(geminiResult.correctness, 10) : 0,
+        completeness: geminiResult.completeness !== null && geminiResult.completeness !== undefined ? parseInt(geminiResult.completeness, 10) : 0,
+        accuracy: geminiResult.accuracy !== null && geminiResult.accuracy !== undefined ? parseInt(geminiResult.accuracy, 10) : 0,
+        tag: geminiResult.tag || "Ungraded",
+        correctAnswer: geminiResult.correctAnswer || null,
+        clarity: geminiResult.clarity !== null && geminiResult.clarity !== undefined ? parseInt(geminiResult.clarity, 10) : null,
+        confidence: geminiResult.confidence !== null && geminiResult.confidence !== undefined ? parseInt(geminiResult.confidence, 10) : null,
+        nervousness: geminiResult.nervousness !== null && geminiResult.nervousness !== undefined ? parseInt(geminiResult.nervousness, 10) : null,
+        hesitation: geminiResult.hesitation !== null && geminiResult.hesitation !== undefined ? parseInt(geminiResult.hesitation, 10) : null,
+        wpm: wpm,
+        fillerCount: this.countFillers(answer),
+        gradingSource: geminiResult.gradingSource || (audioBase64 ? "audio+text" : "text-only"),
+        isUngraded: geminiResult.isUngraded || false
+      };
+
+      return {
+        metrics: parsedMetrics,
+        nextQuestion: nextQ
+      };
+
+    } catch (e) {
+      console.warn("AnswerEvaluationService: Combined evaluation failed:", e.message);
+      return {
+        metrics: this.getUngradedMetrics(answer, speechDurationMs),
+        nextQuestion: null
+      };
+    }
+  },
+
+  /**
    * Returned when Gemini evaluation fails.
    * Marks the round as ungraded rather than assigning fake high scores.
    */

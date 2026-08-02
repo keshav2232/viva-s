@@ -111,6 +111,8 @@ export async function POST(req) {
         return await handleGenerateQuestion(payload, apiKey);
       case "evaluate-answer":
         return await handleEvaluateAnswer(payload, apiKey);
+      case "evaluate-and-generate-next":
+        return await handleEvaluateAndGenerateNext(payload, apiKey);
       case "generate-hint":
         return await handleGenerateHint(payload, apiKey);
       case "generate-subquestion":
@@ -474,6 +476,126 @@ Respond ONLY with a valid clean JSON object. Do not use markdown syntax.
 NOTE: The integers above (82, 68, 76, 84, 78, 24, 16) are ONLY structural placeholders. YOU MUST CALCULATE ORIGINAL, DISTINCT SCORES FOR THIS SPECIFIC RESPONSE.`;
 
   const responseJson = await callGeminiAPI(prompt, apiKey, audioBase64);
+  return NextResponse.json(responseJson);
+}
+
+// ==========================================
+// 3.4. UNIFIED EVALUATION & NEXT QUESTION GENERATION (SINGLE CALL PER TURN)
+// ==========================================
+async function handleEvaluateAndGenerateNext(payload, apiKey) {
+  const {
+    question,
+    answer,
+    syllabus,
+    mode,
+    audioBase64,
+    personality,
+    asked = [],
+    history = [],
+    isFinalRound = false,
+    previousInteractionId
+  } = payload;
+
+  const isProfessional = mode === "professional";
+  const hasAudio = !!audioBase64;
+
+  const audioInstruction = hasAudio
+    ? "An audio recording of the speaker's actual voice is attached. Listen carefully and evaluate BOTH the spoken content (correctness, logic, accuracy) AND the vocal delivery (clarity, confidence, nervousness, hesitation) from the audio."
+    : "No audio is attached. Evaluate based on the text transcript only. For confidence, nervousness, hesitation, and clarity: set them to null since there is no audio to assess delivery.";
+
+  // Extract topics for next question selection
+  let allTopics = [];
+  try {
+    if (syllabus && syllabus.units && syllabus.units.length > 0) {
+      syllabus.units.forEach(u => {
+        if (u.topics && u.topics.length > 0) {
+          u.topics.forEach(t => {
+            allTopics.push({ unitName: u.name, topicName: t });
+          });
+        }
+      });
+    }
+  } catch (e) {
+    console.warn("Failed parsing syllabus units:", e);
+  }
+
+  const prompt = isProfessional
+    ? `Act as an expert industry interviewer (${personality || "friendly"} mode).
+You are performing TWO tasks in a SINGLE turn:
+1. EVALUATE the candidate's answer & audio for the question: "${question}".
+Candidate Response: "${answer}"
+Job Competency Context: ${JSON.stringify(syllabus)}
+${audioInstruction}
+
+CRITICAL SCORING INSTRUCTIONS:
+Calculate DYNAMIC, UNIQUE INTEGER SCORES (0-100) specific to this candidate's exact answer and voice audio.
+- Excellent, clear, detailed responses score high (78-96).
+- Short, hesitant, or weak responses score low (15-55).
+- Nervousness and hesitation should be low for confident speakers (10-25) and high for anxious speakers (50-85).
+
+2. ${isFinalRound ? "This is the final round. Generate a brief, professional closing wrap-up remark as the interviewer." : `GENERATE THE NEXT INTERVIEW QUESTION based on the candidate's performance. Available Competency Topics: ${JSON.stringify(allTopics.map(t => t.topicName))}. Already Asked Topics: ${JSON.stringify(asked)}. Choose an unasked topic.`}
+
+Respond ONLY with a valid clean JSON object. Do not use markdown syntax:
+{
+  "evaluation": {
+    "correctness": 82,
+    "completeness": 68,
+    "accuracy": 76,
+    "clarity": ${hasAudio ? "84" : "null"},
+    "confidence": ${hasAudio ? "78" : "null"},
+    "nervousness": ${hasAudio ? "24" : "null"},
+    "hesitation": ${hasAudio ? "16" : "null"},
+    "tag": "Strong",
+    "correctAnswer": "A detailed professional reference answer outlining design trade-offs, architecture choices, and best practices.",
+    "gradingSource": "${hasAudio ? "audio+text" : "text-only"}"
+  },
+  "nextQuestion": ${isFinalRound ? "null" : `{
+    "text": "The next interview question string",
+    "speech": "Interviewer's spoken reaction to the candidate's last answer + seamless transition into the next question",
+    "topic": "Selected Subtopic Name",
+    "difficulty": "Medium"
+  }`}
+}
+NOTE: The integers above are structural placeholders. You MUST calculate distinct, dynamic scores for this response.`
+    : `Act as an academic examiner (${personality || "friendly"} mode) conducting a college viva.
+You are performing TWO tasks in a SINGLE turn:
+1. EVALUATE the student's oral answer & audio for the question: "${question}".
+Student Response: "${answer}"
+Syllabus Context: ${JSON.stringify(syllabus)}
+${audioInstruction}
+
+CRITICAL SCORING INSTRUCTIONS:
+Calculate DYNAMIC, UNIQUE INTEGER SCORES (0-100) specific to this student's exact answer and voice audio.
+- Excellent, clear, detailed responses score high (78-96).
+- Short, hesitant, or weak responses score low (15-55).
+- Nervousness and hesitation should be low for confident speakers (10-25) and high for anxious speakers (50-85).
+
+2. ${isFinalRound ? "This is the final round. Generate a brief, encouraging closing wrap-up remark as the examiner." : `GENERATE THE NEXT VIVA QUESTION based on the student's performance. Available Syllabus Topics: ${JSON.stringify(allTopics.map(t => t.topicName))}. Already Asked Topics: ${JSON.stringify(asked)}. Choose an unasked topic.`}
+
+Respond ONLY with a valid clean JSON object. Do not use markdown syntax:
+{
+  "evaluation": {
+    "correctness": 82,
+    "completeness": 68,
+    "accuracy": 76,
+    "clarity": ${hasAudio ? "84" : "null"},
+    "confidence": ${hasAudio ? "78" : "null"},
+    "nervousness": ${hasAudio ? "24" : "null"},
+    "hesitation": ${hasAudio ? "16" : "null"},
+    "tag": "Strong",
+    "correctAnswer": "A precise academic reference answer with governing equations, definitions, and boundary conditions.",
+    "gradingSource": "${hasAudio ? "audio+text" : "text-only"}"
+  },
+  "nextQuestion": ${isFinalRound ? "null" : `{
+    "text": "The next viva question string",
+    "speech": "Examiner's spoken reaction to the student's last answer + seamless transition into the next question",
+    "topic": "Selected Subtopic Name",
+    "difficulty": "Medium"
+  }`}
+}
+NOTE: The integers above are structural placeholders. You MUST calculate distinct, dynamic scores for this response.`;
+
+  const responseJson = await callGeminiAPI(prompt, apiKey, audioBase64, previousInteractionId);
   return NextResponse.json(responseJson);
 }
 
@@ -912,6 +1034,37 @@ function handleOfflineFallback(payload) {
       correctAnswer: null,
       gradingSource: "offline",
       isUngraded: true
+    });
+  }
+
+  if (action === "evaluate-and-generate-next") {
+    const { answer } = payload;
+    const cleanAnswer = (answer || "").trim();
+    const lowerAnswer = cleanAnswer.toLowerCase();
+    const isSilent = cleanAnswer.length < 10
+      || lowerAnswer.includes("remained silent")
+      || lowerAnswer.includes("no substantive answer");
+
+    return NextResponse.json({
+      evaluation: {
+        correctness: isSilent ? 0 : null,
+        completeness: isSilent ? 0 : null,
+        accuracy: isSilent ? 0 : null,
+        clarity: null,
+        confidence: null,
+        nervousness: null,
+        hesitation: null,
+        tag: isSilent ? "Weak" : "Ungraded",
+        correctAnswer: null,
+        gradingSource: "offline",
+        isUngraded: true
+      },
+      nextQuestion: payload.isFinalRound ? null : {
+        text: `Let's examine the next key concept in ${payload.syllabus?.topic || "this subject"}. Can you explain its core principles?`,
+        speech: `Good. Let's examine the next key concept in ${payload.syllabus?.topic || "this subject"}. Can you explain its core principles?`,
+        topic: payload.syllabus?.units?.[0]?.topics?.[0] || "Core Concept",
+        difficulty: "Medium"
+      }
     });
   }
 

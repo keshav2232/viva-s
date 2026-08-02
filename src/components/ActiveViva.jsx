@@ -379,15 +379,23 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     setIsPlaceholder(false);
 
     try {
-      const resultMetrics = await AnswerEvaluationService.evaluateResponse({
+      const qIndex = qIdxStart + 1;
+      const isFinal = qIndex >= 4;
+
+      // SINGLE COMBINED API CALL: Evaluate current answer/audio + Generate next question simultaneously
+      const { metrics: resultMetrics, nextQuestion: precomputedNextQ } = await AnswerEvaluationService.evaluateAndGenerateNext({
         question: currentQ.text,
         answer: answerText,
         syllabus: config.syllabusStructure,
         speechDurationMs: durationMs,
         pauseCount: gapsCount,
-        isHesitationPenalty: false,
         mode: config.mode,
-        audioBlob   // Pass the real Blob — AnswerEvaluationService encodes it
+        audioBlob: audioBlob,
+        personality: config.personality,
+        asked: SessionContextManager.askedQuestions,
+        history: SessionContextManager.answerTranscripts,
+        isFinalRound: isFinal,
+        previousInteractionId: SessionContextManager.lastInteractionId
       });
 
       // Track nervousness for dynamic pressure adaptations
@@ -434,19 +442,17 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         setLastEvalRecord(null);
 
         // Progress to next question or end
-        const qIndex = qIdxStart + 1;
         if (qIndex >= 4) {
           handleFinish(false);
           return;
         }
 
         setCurrentQuestionIndex(qIndex);
-        setVivaState("generating");
-        setVisualState("analyzing");
-        setStatusText(config.mode === "professional" ? "Formulating next interview question..." : "Formulating next question...");
 
-        try {
-          const nextQuestion = await QuestionGraphEngine.generateNextQuestion({
+        // Use precomputed nextQuestion from combined call if available, or fallback to QuestionGraphEngine
+        let finalNextQ = precomputedNextQ;
+        if (!finalNextQ || !finalNextQ.text) {
+          finalNextQ = await QuestionGraphEngine.generateNextQuestion({
             syllabus: config.syllabusStructure,
             personality: config.personality,
             duration: config.duration,
@@ -460,53 +466,27 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
             mode: config.mode,
             previousInteractionId: SessionContextManager.lastInteractionId
           });
-
-          if (!isMountedRef.current) return;
-
-          setActiveQuestion(nextQuestion);
-          // Preload next question speech!
-          VoiceManager.preload(nextQuestion.speech, config.personality);
-
-          setVivaState("speaking");
-          VoiceManager.speak(nextQuestion.speech, config.personality,
-            () => {
-              if (!isMountedRef.current) return;
-              setVisualState("speaking");
-              setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
-            },
-            () => {
-              if (!isMountedRef.current) return;
-              startListeningMode();
-            }
-          );
-        } catch (nextErr) {
-          console.error("Failed to generate next question in delayed block:", nextErr);
-          if (!isMountedRef.current) return;
-          // Catch and handle fallback inside delayed try
-          const qIdx = qIdxStart + 1;
-          setCurrentQuestionIndex(qIdx);
-          setVivaState("generating");
-          setVisualState("analyzing");
-          setStatusText(config.mode === "professional" ? "Formulating next interview question..." : "Formulating next question...");
-
-          const nextQuestion = QuestionGraphEngine.getRuleBasedOfflineFallback(qIdx + 1, config.personality, currentQ.topic, config.syllabusStructure);
-          setActiveQuestion(nextQuestion);
-          VoiceManager.preload(nextQuestion.speech, config.personality);
-
-          setVivaState("speaking");
-          VoiceManager.speak(nextQuestion.speech, config.personality,
-            () => {
-              if (!isMountedRef.current) return;
-              setVisualState("speaking");
-              setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
-            },
-            () => {
-              if (!isMountedRef.current) return;
-              startListeningMode();
-            }
-          );
         }
-      }, 3200);
+
+        if (!isMountedRef.current) return;
+
+        setActiveQuestion(finalNextQ);
+        // Preload next question speech!
+        VoiceManager.preload(finalNextQ.speech, config.personality);
+
+        setVivaState("speaking");
+        VoiceManager.speak(finalNextQ.speech, config.personality,
+          () => {
+            if (!isMountedRef.current) return;
+            setVisualState("speaking");
+            setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
+          },
+          () => {
+            if (!isMountedRef.current) return;
+            startListeningMode();
+          }
+        );
+      }, 2000);
 
     } catch (err) {
       console.error("Failed to process answer evaluation:", err);
