@@ -4422,16 +4422,12 @@ svg path[stroke="var(--color-warning)"] {
    ACADEMIC DESIGN SYSTEM - AESTHETIC BACKGROUNDS
    ========================================== */
 
-/* Technical Blueprint Coordinate Grid Background on Body */
+/* Technical Blueprint Background on Body */
 body {
   position: relative;
   overflow-x: hidden;
   background-color: var(--bg-primary);
-  /* Two linear gradients to form a beautiful, crisp hairline blueprint graph paper */
-  background-image: 
-    linear-gradient(rgba(31, 42, 56, 0.015) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(31, 42, 56, 0.015) 1px, transparent 1px);
-  background-size: 20px 20px, 20px 20px;
+  background-image: none;
 }
 
 /* Base Wrapper for Background Canvas Elements */
