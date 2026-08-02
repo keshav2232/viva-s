@@ -409,14 +409,11 @@ Candidate Response: "${answer}"
 Job Competency Context: ${JSON.stringify(syllabus)}
 ${audioInstruction}
 
-Score each metric 0-100 (use null for delivery metrics when no audio):
-1. correctness: logical correctness, technical depth, industry validity (0-100)
-2. completeness: coverage of edge cases, trade-offs, STAR details (0-100)
-3. accuracy: precise engineering terminology and architectural accuracy (0-100)
-4. clarity: ${hasAudio ? "acoustic voice clarity, structural flow, articulation (0-100)" : "null (no audio)"}
-5. confidence: ${hasAudio ? "vocal presence, assertiveness, tone stability (0-100)" : "null (no audio)"}
-6. nervousness: ${hasAudio ? "vocal tremors, jitteriness, speaking rate anxiety (0-100)" : "null (no audio)"}
-7. hesitation: ${hasAudio ? "long pauses, silence gaps, filler words like um/uh (0-100)" : "null (no audio)"}
+CRITICAL SCORING INSTRUCTIONS:
+You MUST evaluate THIS specific response individually and assign DYNAMIC, UNIQUE INTEGER SCORES (0-100) specific to this candidate's exact answer and voice audio. DO NOT reuse scores from previous questions or default examples.
+- Excellent, clear, and detailed responses should score high (e.g. 78 to 96).
+- Short, hesitant, or weak responses should score low (e.g. 15 to 55).
+- Vocal nervousness and hesitation should be low for confident speakers (e.g. 10 to 25) and high for anxious speakers (e.g. 50 to 85).
 
 Evaluation tag (pick one):
 - "Strong": highly correct, technically accurate, confident
@@ -426,19 +423,20 @@ Evaluation tag (pick one):
 - "Incomplete": correct but too brief (no depth)
 - "Confused": contradicts itself or completely lost
 
-Respond ONLY with a valid clean JSON object. Do not use markdown:
+Respond ONLY with a valid clean JSON object. Do not use markdown syntax.
 {
-  "correctness": 85,
-  "completeness": 70,
-  "accuracy": 80,
-  "clarity": ${hasAudio ? "88" : "null"},
-  "confidence": ${hasAudio ? "75" : "null"},
-  "nervousness": ${hasAudio ? "22" : "null"},
-  "hesitation": ${hasAudio ? "18" : "null"},
+  "correctness": 82,
+  "completeness": 68,
+  "accuracy": 76,
+  "clarity": ${hasAudio ? "84" : "null"},
+  "confidence": ${hasAudio ? "78" : "null"},
+  "nervousness": ${hasAudio ? "24" : "null"},
+  "hesitation": ${hasAudio ? "16" : "null"},
   "tag": "Strong",
   "correctAnswer": "A detailed professional answer outlining design trade-offs, architecture choices, STAR highlights, and best practices.",
   "gradingSource": "${hasAudio ? "audio+text" : "text-only"}"
-}`
+}
+NOTE: The integers above (82, 68, 76, 84, 78, 24, 16) are ONLY structural placeholders. YOU MUST CALCULATE ORIGINAL, DISTINCT SCORES FOR THIS SPECIFIC RESPONSE.`
     : `Act as an academic examiner grading an oral response in a college viva.
 
 Question Asked: "${question}"
@@ -446,14 +444,11 @@ Student Response: "${answer}"
 Syllabus Context: ${JSON.stringify(syllabus)}
 ${audioInstruction}
 
-Score each metric 0-100 (use null for delivery metrics when no audio):
-1. correctness: general logical correctness and subject accuracy (0-100)
-2. completeness: depth, completeness, formula coverage (0-100)
-3. accuracy: precise technical keywords, formulas, terminology (0-100)
-4. clarity: ${hasAudio ? "acoustic voice clarity, fluency, structural flow (0-100)" : "null (no audio)"}
-5. confidence: ${hasAudio ? "vocal presence, tone stability (0-100)" : "null (no audio)"}
-6. nervousness: ${hasAudio ? "vocal tremors, jitteriness, pace anxiety (0-100)" : "null (no audio)"}
-7. hesitation: ${hasAudio ? "long pauses, silence gaps, filler words um/uh (0-100)" : "null (no audio)"}
+CRITICAL SCORING INSTRUCTIONS:
+You MUST evaluate THIS specific response individually and assign DYNAMIC, UNIQUE INTEGER SCORES (0-100) specific to this student's exact answer and voice audio. DO NOT reuse scores from previous questions or default examples.
+- Excellent, clear, and detailed responses should score high (e.g. 78 to 96).
+- Short, hesitant, or weak responses should score low (e.g. 15 to 55).
+- Vocal nervousness and hesitation should be low for confident speakers (e.g. 10 to 25) and high for anxious speakers (e.g. 50 to 85).
 
 Evaluation tag (pick one):
 - "Strong": highly correct, technically accurate, confident
@@ -463,19 +458,20 @@ Evaluation tag (pick one):
 - "Incomplete": correct but too brief (no depth)
 - "Confused": contradicts itself or completely lost
 
-Respond ONLY with a valid clean JSON object. Do not use markdown:
+Respond ONLY with a valid clean JSON object. Do not use markdown syntax.
 {
-  "correctness": 85,
-  "completeness": 70,
-  "accuracy": 80,
-  "clarity": ${hasAudio ? "88" : "null"},
-  "confidence": ${hasAudio ? "75" : "null"},
-  "nervousness": ${hasAudio ? "22" : "null"},
-  "hesitation": ${hasAudio ? "18" : "null"},
+  "correctness": 82,
+  "completeness": 68,
+  "accuracy": 76,
+  "clarity": ${hasAudio ? "84" : "null"},
+  "confidence": ${hasAudio ? "78" : "null"},
+  "nervousness": ${hasAudio ? "24" : "null"},
+  "hesitation": ${hasAudio ? "16" : "null"},
   "tag": "Strong",
   "correctAnswer": "A precise academic answer with governing equations, definitions, boundary conditions.",
   "gradingSource": "${hasAudio ? "audio+text" : "text-only"}"
-}`;
+}
+NOTE: The integers above (82, 68, 76, 84, 78, 24, 16) are ONLY structural placeholders. YOU MUST CALCULATE ORIGINAL, DISTINCT SCORES FOR THIS SPECIFIC RESPONSE.`;
 
   const responseJson = await callGeminiAPI(prompt, apiKey, audioBase64);
   return NextResponse.json(responseJson);

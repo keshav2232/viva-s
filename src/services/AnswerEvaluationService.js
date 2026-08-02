@@ -62,17 +62,17 @@ export const AnswerEvaluationService = {
 
       return {
         // Content scores — entirely from Gemini
-        correctness: geminiResult.correctness,
-        completeness: geminiResult.completeness,
-        accuracy: geminiResult.accuracy,
+        correctness: geminiResult.correctness !== null && geminiResult.correctness !== undefined ? parseInt(geminiResult.correctness, 10) : 0,
+        completeness: geminiResult.completeness !== null && geminiResult.completeness !== undefined ? parseInt(geminiResult.completeness, 10) : 0,
+        accuracy: geminiResult.accuracy !== null && geminiResult.accuracy !== undefined ? parseInt(geminiResult.accuracy, 10) : 0,
         tag: geminiResult.tag,
         correctAnswer: geminiResult.correctAnswer || null,
 
         // Delivery scores — from Gemini (audio mode) or null (text mode)
-        clarity: geminiResult.clarity ?? null,
-        confidence: geminiResult.confidence ?? null,
-        nervousness: geminiResult.nervousness ?? null,
-        hesitation: geminiResult.hesitation ?? null,
+        clarity: geminiResult.clarity !== null && geminiResult.clarity !== undefined ? parseInt(geminiResult.clarity, 10) : null,
+        confidence: geminiResult.confidence !== null && geminiResult.confidence !== undefined ? parseInt(geminiResult.confidence, 10) : null,
+        nervousness: geminiResult.nervousness !== null && geminiResult.nervousness !== undefined ? parseInt(geminiResult.nervousness, 10) : null,
+        hesitation: geminiResult.hesitation !== null && geminiResult.hesitation !== undefined ? parseInt(geminiResult.hesitation, 10) : null,
 
         // Timing fact — calculated locally from real duration
         wpm: wpm,

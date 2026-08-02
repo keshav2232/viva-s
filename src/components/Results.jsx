@@ -648,6 +648,103 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     return commentary;
   };
 
+  // Render exact numerical values AND graphical progress bars for each answer's emotional & technical metrics
+  const renderAnswerEmotionalMetrics = (emotion) => {
+    if (!emotion || emotion.isUngraded) {
+      return (
+        <div style={{
+          fontSize: "0.75rem", color: "var(--text-secondary)", fontStyle: "italic",
+          padding: "8px 12px", borderRadius: "var(--radius-xs)", backgroundColor: "var(--bg-primary)",
+          border: "1px solid var(--border-color)", marginBottom: "var(--space-sm)"
+        }}>
+          Emotional & delivery metrics not available for this round.
+        </div>
+      );
+    }
+
+    const metricsList = [
+      {
+        label: "Vocal Confidence",
+        value: emotion.confidence ?? 0,
+        color: (emotion.confidence ?? 0) >= 75 ? "#10b981" : ((emotion.confidence ?? 0) >= 50 ? "#f59e0b" : "#ef4444")
+      },
+      {
+        label: "Nervousness Level",
+        value: emotion.nervousness ?? 0,
+        color: (emotion.nervousness ?? 0) <= 30 ? "#10b981" : ((emotion.nervousness ?? 0) <= 60 ? "#f59e0b" : "#ef4444")
+      },
+      {
+        label: "Speech Hesitation",
+        value: emotion.hesitation ?? 0,
+        color: (emotion.hesitation ?? 0) <= 30 ? "#10b981" : ((emotion.hesitation ?? 0) <= 60 ? "#f59e0b" : "#ef4444")
+      },
+      {
+        label: "Acoustic Clarity",
+        value: emotion.clarity ?? 0,
+        color: (emotion.clarity ?? 0) >= 75 ? "#10b981" : ((emotion.clarity ?? 0) >= 50 ? "#f59e0b" : "#ef4444")
+      },
+      {
+        label: "Correctness",
+        value: emotion.correctness ?? 0,
+        color: (emotion.correctness ?? 0) >= 75 ? "#10b981" : ((emotion.correctness ?? 0) >= 50 ? "#f59e0b" : "#ef4444")
+      },
+      {
+        label: "Conceptual Depth",
+        value: emotion.completeness ?? 0,
+        color: (emotion.completeness ?? 0) >= 75 ? "#10b981" : ((emotion.completeness ?? 0) >= 50 ? "#f59e0b" : "#ef4444")
+      }
+    ];
+
+    return (
+      <div style={{
+        marginBottom: "var(--space-sm)",
+        padding: "10px 14px",
+        borderRadius: "var(--radius-xs)",
+        backgroundColor: "var(--bg-primary)",
+        border: "1px solid var(--border-color)"
+      }}>
+        <div style={{
+          fontSize: "0.725rem", fontWeight: "700", textTransform: "uppercase",
+          letterSpacing: "0.05em", color: "var(--accent-primary)", marginBottom: "8px"
+        }}>
+          Emotional & Technical Breakdown (Numerical Values & Visual Bars):
+        </div>
+
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gap: "10px 14px"
+        }}>
+          {metricsList.map((m, mIdx) => (
+            <div key={mIdx} style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem" }}>
+                <span style={{ color: "var(--text-secondary)", fontWeight: "500" }}>{m.label}</span>
+                <strong style={{ color: m.color }}>{m.value}%</strong>
+              </div>
+              {/* Graphical Visual Progress Bar */}
+              <div style={{
+                height: "6px",
+                width: "100%",
+                backgroundColor: "var(--bg-card)",
+                borderRadius: "var(--radius-full)",
+                overflow: "hidden",
+                border: "1px solid var(--border-color)"
+              }}>
+                <div style={{
+                  height: "100%",
+                  width: `${Math.min(Math.max(m.value, 0), 100)}%`,
+                  backgroundColor: m.color,
+                  borderRadius: "var(--radius-full)",
+                  transition: "width 0.6s ease"
+                }}></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   // 6. Confidence Coaching Tips
   const getConfidenceCoachingTip = (emotion, answer, idx) => {
     if (emotion.isUngraded) {
@@ -1193,11 +1290,8 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
           <div className="performance-left-panel" style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
             
             <div className={`card scorecard-card ${mobileTab === 'overview' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-lg)", position: "relative" }}>
-              <h3 style={{ fontSize: "1.05rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-md)", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
-                <span>Scorecard Breakdown</span>
-                <span style={{ fontSize: "0.65rem", padding: "3px 9px", borderRadius: "var(--radius-full)", background: "linear-gradient(135deg, hsl(215, 80%, 50%), hsl(258, 80%, 56%))", color: "#ffffff", fontWeight: "700", letterSpacing: "0.05em", textTransform: "uppercase" }}>
-                  Gemini Voice & Answer Evaluation
-                </span>
+              <h3 style={{ fontSize: "1.05rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-md)", textAlign: "left" }}>
+                Scorecard Breakdown
               </h3>
               
               <div className="scorecard-radial-row">
@@ -1603,10 +1697,11 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                 borderRadius: "var(--radius-sm)",
                 transition: "var(--transition-smooth)"
               }}>
-                <strong style={{ fontSize: "0.8rem", textTransform: "uppercase", color: "var(--accent-primary)" }}>Milestone commentary</strong>
-                <p style={{ margin: "2px 0 0 0", fontSize: "0.825rem", color: "var(--text-primary)", lineHeight: "1.45" }}>
+                <strong style={{ fontSize: "0.8rem", textTransform: "uppercase", color: "var(--accent-primary)" }}>Milestone commentary (Round {activeTimelineIndex + 1})</strong>
+                <p style={{ margin: "2px 0 10px 0", fontSize: "0.825rem", color: "var(--text-primary)", lineHeight: "1.45" }}>
                   {getTimelineCommentary(activeTimelineIndex)}
                 </p>
+                {renderAnswerEmotionalMetrics(detectedEmotions[activeTimelineIndex])}
               </div>
             </div>
 
@@ -1751,6 +1846,9 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                             <span>•</span>
                             <span>Tempo: <strong>{emotion.wpm ? `${emotion.wpm} WPM` : "N/A"}</strong></span>
                           </div>
+
+                          {/* Per-Answer Emotional & Technical Breakdown (Values & Visual Progress Bars) */}
+                          {renderAnswerEmotionalMetrics(emotion)}
 
                           {/* Confidence coaching tip */}
                           <div style={{

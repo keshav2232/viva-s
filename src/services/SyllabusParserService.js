@@ -1,7 +1,4 @@
-/**
- * VivaSim - Syllabus Ingestion & Hierarchy Parser Service
- * Cleans course text documents and calls Gemini endpoints to expand input keywords.
- */
+import { getFallbackSyllabus } from "@/utils/mockData";
 
 export const SyllabusParserService = {
   
@@ -24,7 +21,7 @@ export const SyllabusParserService = {
    * @param {string} fallbackTopic - Mapped defaults.
    * @returns {object} Structured syllabus tree.
    */
-  parseSyllabus(rawText, fallbackTopic = "Thermodynamics", duration = 5) {
+  parseSyllabus(rawText, fallbackTopic = "Thermodynamics", duration = 5, mode = "academic") {
     const cleaned = this.cleanRawText(rawText);
     
     // Attempt to derive a clean topic name from first line if fallbackTopic is generic
@@ -73,7 +70,7 @@ export const SyllabusParserService = {
 
     // Default heuristics if document parsing finds no explicit units
     if (units.length === 0) {
-      return this.getDefaultHierarchy(derivedTopic, duration);
+      return this.getDefaultHierarchy(derivedTopic, mode, duration);
     }
 
     return {
@@ -105,7 +102,7 @@ export const SyllabusParserService = {
       return data;
     } catch (e) {
       console.warn("Topic expansion endpoint error, falling back to static schema:", e);
-      return this.getDefaultHierarchy(topicString, duration);
+      return this.getDefaultHierarchy(topicString, mode, duration);
     }
   },
 
@@ -139,9 +136,10 @@ export const SyllabusParserService = {
     return 5;
   },
 
-  getDefaultHierarchy(topic, duration = 5) {
+  getDefaultHierarchy(topic, mode = "academic", duration = 5) {
     const numUnits = this.getTargetUnitsForDuration(duration);
-    const syllabus = getFallbackSyllabus(topic);
+    const isProfessional = mode === "professional";
+    const syllabus = getFallbackSyllabus(topic, isProfessional);
     return {
       topic: syllabus.topic,
       units: syllabus.units.slice(0, numUnits)
