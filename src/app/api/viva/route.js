@@ -6,6 +6,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { GeminiAIService } from "../../../services/GeminiAIService";
 
 // Fallback dynamic database when API key is missing
 const MOCK_TOPIC_EXPANSIONS = {
@@ -621,85 +622,14 @@ Respond ONLY with a valid, clean JSON object matching this schema. Do not enclos
 }
 
 // ==========================================
-// GEMINI API CALLER
+// GEMINI API CALLER (Delegated to GeminiAIService via @google/genai SDK)
 // ==========================================
 async function callGeminiAPI(prompt, apiKey, audioBase64 = null) {
-  const CANDIDATE_MODELS = [
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
-    "gemini-3.5-flash",
-    "gemini-3.1-flash-lite"
-  ];
-
-  let lastError = null;
-
-  for (const model of CANDIDATE_MODELS) {
-    let timeoutId;
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-      
-      const parts = [{ text: prompt }];
-      if (audioBase64) {
-        parts.push({
-          inlineData: {
-            mimeType: "audio/webm",
-            data: audioBase64
-          }
-        });
-      }
-
-      const payload = {
-        contents: [{ parts }],
-        generationConfig: {
-          responseMimeType: "application/json"
-        }
-      };
-
-      const controller = new AbortController();
-      timeoutId = setTimeout(() => controller.abort(), 25000); // 25 seconds failsafe timeout
-
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-
-      if (!res.ok) {
-        const errText = await res.text();
-        console.warn(`Model ${model} failed with status ${res.status}: ${errText}. Trying next candidate.`);
-        lastError = new Error(`Model ${model} returned status ${res.status}: ${errText}`);
-        continue;
-      }
-
-      const result = await res.json();
-      
-      if (!result.candidates || result.candidates.length === 0 || !result.candidates[0].content || !result.candidates[0].content.parts || result.candidates[0].content.parts.length === 0) {
-        console.warn(`Model ${model} returned empty candidates structure. Trying next candidate.`);
-        lastError = new Error(`Model ${model} returned empty response.`);
-        continue;
-      }
-
-      const textResponse = result.candidates[0].content.parts[0].text;
-      
-      // Clean markdown JSON ticks if model includes them despite JSON mode
-      const cleanJson = textResponse
-        .replace(/^```json\s*/i, "")
-        .replace(/```$/, "")
-        .trim();
-
-      return JSON.parse(cleanJson);
-
-    } catch (err) {
-      if (timeoutId) clearTimeout(timeoutId);
-      console.warn(`Model ${model} execution threw exception: ${err.message}. Trying next candidate.`);
-      lastError = err;
-    }
-  }
-
-  throw new Error(`All candidate models failed. Last error: ${lastError ? lastError.message : "Unknown"}`);
+  return await GeminiAIService.callGeminiInteraction({
+    prompt,
+    apiKey,
+    audioBase64
+  });
 }
 
 // ==========================================

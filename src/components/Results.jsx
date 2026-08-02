@@ -1146,8 +1146,11 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
           <div className="performance-left-panel" style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
             
             <div className={`card scorecard-card ${mobileTab === 'overview' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-lg)", position: "relative" }}>
-              <h3 style={{ fontSize: "1.05rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-md)", textAlign: "left" }}>
-                Scorecard Breakdown
+              <h3 style={{ fontSize: "1.05rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-md)", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+                <span>Scorecard Breakdown</span>
+                <span style={{ fontSize: "0.65rem", padding: "3px 9px", borderRadius: "var(--radius-full)", background: "linear-gradient(135deg, hsl(215, 80%, 50%), hsl(258, 80%, 56%))", color: "#ffffff", fontWeight: "700", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                  Gemini Voice & Answer Evaluation
+                </span>
               </h3>
               
               <div className="scorecard-radial-row">
