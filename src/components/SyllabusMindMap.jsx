@@ -389,11 +389,11 @@ export default function SyllabusMindMap({
                       y={-height / 2}
                       width={width}
                       height={height}
-                      rx={node.type === "subject" ? "20" : "8"}
-                      ry={node.type === "subject" ? "20" : "8"}
-                      fill={node.type === "subject" ? "rgba(99, 102, 241, 0.06)" : "var(--bg-secondary)"}
-                      stroke={node.type === "subject" ? "var(--accent-primary)" : "var(--border-color)"}
-                      strokeWidth={node.type === "subject" ? 2.5 : 1.5}
+                      rx={node.type === "subject" ? "20" : "10"}
+                      ry={node.type === "subject" ? "20" : "10"}
+                      fill={node.type === "subject" ? "rgba(99, 102, 241, 0.08)" : "var(--accent-light)"}
+                      stroke={node.type === "subject" ? "var(--accent-primary)" : "var(--accent-primary)"}
+                      strokeWidth={node.type === "subject" ? 2.5 : 1.75}
                     />
                     <foreignObject
                       x={-width / 2 + 10}
@@ -411,7 +411,7 @@ export default function SyllabusMindMap({
                           justifyContent: "center",
                           fontSize: node.type === "subject" ? "0.82rem" : "0.72rem",
                           fontWeight: "800",
-                          color: node.type === "subject" ? "var(--accent-primary)" : "var(--text-primary)",
+                          color: "var(--accent-primary)",
                           textAlign: "center",
                           lineHeight: "1.3",
                           wordBreak: "break-word",
@@ -419,7 +419,7 @@ export default function SyllabusMindMap({
                         }}
                       >
                         {node.type === "unit" && (
-                          <span style={{ fontSize: "0.55rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)", display: "block", marginBottom: "1px" }}>
+                          <span style={{ fontSize: "0.55rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--accent-primary)", opacity: 0.85, fontWeight: "700", display: "block", marginBottom: "1px" }}>
                             {isProfessional ? `Competency ${node.unitIndex + 1}` : `Unit ${node.unitIndex + 1}`}
                           </span>
                         )}

@@ -8,6 +8,8 @@ html {
   /* HSL-based Calm Academic Palette */
   --bg-primary: hsl(40, 10%, 98%);
   /* Warm, minimal ivory background (#FAF9F6) */
+  --bg-secondary: hsl(40, 8%, 94%);
+  /* Soft secondary neutral (#F2F1EC) */
   --bg-card: hsl(0, 0%, 100%);
   /* Pristine crisp white */
   --bg-input: hsl(40, 6%, 96%);
