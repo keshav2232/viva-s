@@ -6190,5 +6190,51 @@ main, header, footer {
   }
 }
 
+/* ==========================================
+   AUTHENTICATION NOTIFICATION BANNERS
+   ========================================== */
+
+.premium-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background-color: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+  color: #dc2626;
+  font-size: 0.9rem;
+  font-weight: 550;
+  margin-bottom: 20px;
+  text-align: left;
+  line-height: 1.4;
+}
+
+.premium-error-banner svg {
+  color: #ef4444;
+  flex-shrink: 0;
+}
+
+.premium-success-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background-color: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: 8px;
+  color: #059669;
+  font-size: 0.9rem;
+  font-weight: 550;
+  margin-bottom: 20px;
+  text-align: left;
+  line-height: 1.4;
+}
+
+.premium-success-banner svg {
+  color: #10b981;
+  flex-shrink: 0;
+}
+
 
 
