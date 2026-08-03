@@ -382,32 +382,51 @@ export default function Home() {
   };
 
   const calculateFinalScore = (summary) => {
-    let confidenceAvg = 84;
-    let clarityAvg = 82;
-    let hesitationAvg = 15;
-    let nervousnessAvg = 20;
+    // 1. If Gemini Hindsight Engine generated an overallFinalScore, use Gemini's holistic score directly
+    if (summary.hindsightData && typeof summary.hindsightData.overallFinalScore === "number") {
+      let gScore = parseInt(summary.hindsightData.overallFinalScore, 10);
+      if (summary.endedEarly) gScore = Math.round(gScore * 0.6);
+      return Math.min(Math.max(gScore, 40), 99);
+    }
 
-    if (summary.detectedEmotions.length > 0) {
-      let confSum = 0, clarSum = 0, hesSum = 0, nervSum = 0;
+    // 2. Otherwise calculate directly from Gemini's per-round AI evaluation metrics
+    if (summary.detectedEmotions && summary.detectedEmotions.length > 0) {
+      let validRounds = 0;
+      let totalGeminiScore = 0;
+
       summary.detectedEmotions.forEach(emo => {
-        confSum += emo.confidence;
-        clarSum += emo.clarity;
-        hesSum += emo.hesitation;
-        nervSum += emo.nervousness;
+        if (emo && !emo.isUngraded) {
+          const correctness = emo.correctness ?? 75;
+          const accuracy = emo.accuracy ?? 75;
+          const completeness = emo.completeness ?? 70;
+          const confidence = emo.confidence ?? 75;
+          const clarity = emo.clarity ?? 75;
+          const nervousness = emo.nervousness ?? 20;
+          const hesitation = emo.hesitation ?? 15;
+
+          // Gemini holistic score per round
+          const roundGeminiScore = Math.round(
+            (correctness * 0.35) + 
+            (accuracy * 0.25) + 
+            (completeness * 0.15) + 
+            (confidence * 0.15) + 
+            (clarity * 0.10) - 
+            (nervousness * 0.05) - 
+            (hesitation * 0.05)
+          );
+          totalGeminiScore += roundGeminiScore;
+          validRounds++;
+        }
       });
-      confidenceAvg = Math.round(confSum / summary.detectedEmotions.length);
-      clarityAvg = Math.round(clarSum / summary.detectedEmotions.length);
-      hesitationAvg = Math.round(hesSum / summary.detectedEmotions.length);
-      nervousnessAvg = Math.round(nervSum / summary.detectedEmotions.length);
+
+      if (validRounds > 0) {
+        let score = Math.round(totalGeminiScore / validRounds);
+        if (summary.endedEarly) score = Math.round(score * 0.6);
+        return Math.min(Math.max(score, 40), 99);
+      }
     }
 
-    let score = Math.round((confidenceAvg * 0.4) + (clarityAvg * 0.6) - (hesitationAvg * 0.1) - (nervousnessAvg * 0.1) + 12);
-    score = Math.min(Math.max(score, 40), 99);
-
-    if (summary.endedEarly) {
-      score = Math.round(score * 0.6);
-    }
-    return score;
+    return 75;
   };
 
   const getPersonalityName = (pType, mode) => {

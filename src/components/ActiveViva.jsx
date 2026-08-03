@@ -169,112 +169,84 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   }
 
-  // Phase 1: Examiner Greeting
-  async function triggerIntroduction() {
-    setVivaState("generating");
-    setVisualState("analyzing");
-    setStatusText(config.mode === "professional" ? "Interviewer is initializing the session..." : "Professor is initializing the exam...");
-    
+  // Phase 1: Examiner Greeting (Instant Zero-Latency Start)
+  function triggerIntroduction() {
     // Reset Session Context
     SessionContextManager.reset();
     
-    try {
-      const firstQuestion = await QuestionGraphEngine.generateNextQuestion({
-        syllabus: config.syllabusStructure,
-        personality: config.personality,
-        duration: config.duration,
-        askedList: [],
-        answersList: [],
-        lastEvaluationTag: null,
-        currentTopic: "",
-        nervousness: 20,
-        isTargetDrill: config.isTargetDrill || false,
-        targetSubtopic: config.targetSubtopic || null,
-        mode: config.mode
-      });
-      
-      if (!isMountedRef.current) return;
-      
-      setActiveQuestion(firstQuestion);
-      
-      // Dynamic intro speech: combine dynamic introductory greetings based on personality and user name
-      let greeting = "";
-      if (config.mode === "professional") {
+    // Get pregenerated question from SetupFlow or build instant sync question
+    const firstQuestion = config.pregeneratedFirstQuestion || QuestionGraphEngine.getInitialQuestionSync({
+      syllabus: config.syllabusStructure,
+      personality: config.personality,
+      duration: config.duration,
+      isTargetDrill: config.isTargetDrill || false,
+      targetSubtopic: config.targetSubtopic || null,
+      mode: config.mode
+    });
+    
+    if (!isMountedRef.current) return;
+    
+    setActiveQuestion(firstQuestion);
+    
+    // Dynamic intro speech: combine dynamic introductory greetings based on personality and user name
+    let greeting = "";
+    if (config.mode === "professional") {
+      greeting = config.isTargetDrill 
+        ? `Welcome, ${activeUser}. Let's begin the mock session on your selected competency, ${config.targetSubtopic}. `
+        : `Welcome, ${activeUser}. Let's begin the mock interview for the ${config.topic} role. `;
+        
+      if (config.personality === "terror") {
         greeting = config.isTargetDrill 
-          ? `Welcome, ${activeUser}. Let's begin the mock session on your selected competency, ${config.targetSubtopic}. `
-          : `Welcome, ${activeUser}. Let's begin the mock interview for the ${config.topic} role. `;
-          
-        if (config.personality === "terror") {
-          greeting = config.isTargetDrill 
-            ? `Hello ${activeUser}. I am Thorne, the bar raiser. Let's immediately probe your competency on ${config.targetSubtopic}. `
-            : `Hello ${activeUser}. I am Thorne, the bar raiser for this panel. Let's begin the mock interview on ${config.topic}. `;
-        } else if (config.personality === "strict") {
-          greeting = config.isTargetDrill 
-            ? `Welcome, ${activeUser}. Let's verify your competence in ${config.targetSubtopic}. `
-            : `Welcome, ${activeUser}. Let's assess your qualifications for ${config.topic}. `;
-        } else if (config.personality === "brutal") {
-          greeting = config.isTargetDrill 
-            ? `Alright, ${activeUser}. Let's test your practical limits in ${config.targetSubtopic}. `
-            : `Alright, ${activeUser}. Let's examine your experience depth for ${config.topic}. `;
-        }
-      } else {
+          ? `Hello ${activeUser}. I am Thorne, the bar raiser. Let's immediately probe your competency on ${config.targetSubtopic}. `
+          : `Hello ${activeUser}. I am Thorne, the bar raiser for this panel. Let's begin the mock interview on ${config.topic}. `;
+      } else if (config.personality === "strict") {
         greeting = config.isTargetDrill 
-          ? `Good evening, ${activeUser}. Welcome to your dynamic target drill on ${config.targetSubtopic}. `
-          : `Good evening, ${activeUser}. Welcome to your oral examination on ${config.topic}. `;
-          
-        if (config.personality === "terror") {
-          greeting = config.isTargetDrill 
-            ? `Sit down, ${activeUser}. We will begin your high-pressure board drill on ${config.targetSubtopic} now. `
-            : `Sit down, ${activeUser}. Let us begin the examination on ${config.topic}. I expect absolute precision. `;
-        } else if (config.personality === "strict") {
-          greeting = config.isTargetDrill 
-            ? `Good evening, ${activeUser}. We will now begin a focused review on ${config.targetSubtopic}. `
-            : `Good evening, ${activeUser}. We will now begin your viva on ${config.topic}. Answer concisely. `;
-        } else if (config.personality === "brutal") {
-          greeting = config.isTargetDrill 
-            ? `Alright, ${activeUser}. Let's see if you actually understand the limits of ${config.targetSubtopic}. `
-            : `Alright, ${activeUser}. Let's see how well you actually know ${config.topic}. `;
-        }
+          ? `Welcome, ${activeUser}. Let's verify your competence in ${config.targetSubtopic}. `
+          : `Welcome, ${activeUser}. Let's assess your qualifications for ${config.topic}. `;
+      } else if (config.personality === "brutal") {
+        greeting = config.isTargetDrill 
+          ? `Alright, ${activeUser}. Let's test your practical limits in ${config.targetSubtopic}. `
+          : `Alright, ${activeUser}. Let's examine your experience depth for ${config.topic}. `;
       }
-      
-      const fullSpeech = greeting + (firstQuestion.speech || firstQuestion.text);
-      
-      // Preload the intro speech
-      VoiceManager.preload(fullSpeech, config.personality);
- 
-      setVivaState("speaking");
-      VoiceManager.speak(fullSpeech, config.personality,
-        // onStart
-        () => {
-          setVisualState("speaking");
-          setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
-        },
-        // onEnd
-        () => {
-          startListeningMode();
-        }
-      );
-    } catch (err) {
-      console.error("Failed to generate first question:", err);
-      if (!isMountedRef.current) return;
-      // Fallback
-      const fallback = QuestionGraphEngine.getRuleBasedOfflineFallback(1, config.personality, config.topic, config.syllabusStructure);
-      setActiveQuestion(fallback);;
-      
-      // Preload fallback speech
-      VoiceManager.preload(fallback.speech, config.personality);
-
-      setVivaState("speaking");
-      VoiceManager.speak(fallback.speech, config.personality,
-        () => {
-          setVisualState("speaking");
-          setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
-        },
-        () => {
-          startListeningMode();
-        }
-      );
+    } else {
+      greeting = config.isTargetDrill 
+        ? `Good evening, ${activeUser}. Welcome to your dynamic target drill on ${config.targetSubtopic}. `
+        : `Good evening, ${activeUser}. Welcome to your oral examination on ${config.topic}. `;
+        
+      if (config.personality === "terror") {
+        greeting = config.isTargetDrill 
+          ? `Sit down, ${activeUser}. We will begin your high-pressure board drill on ${config.targetSubtopic} now. `
+          : `Sit down, ${activeUser}. Let us begin the examination on ${config.topic}. I expect absolute precision. `;
+      } else if (config.personality === "strict") {
+        greeting = config.isTargetDrill 
+          ? `Good evening, ${activeUser}. We will now begin a focused review on ${config.targetSubtopic}. `
+          : `Good evening, ${activeUser}. We will now begin your viva on ${config.topic}. Answer concisely. `;
+      } else if (config.personality === "brutal") {
+        greeting = config.isTargetDrill 
+          ? `Alright, ${activeUser}. Let's see if you actually understand the limits of ${config.targetSubtopic}. `
+          : `Alright, ${activeUser}. Let's see how well you actually know ${config.topic}. `;
+      }
     }
+    
+    const fullSpeech = greeting + (firstQuestion.speech || firstQuestion.text);
+    
+    // Preload the intro speech
+    VoiceManager.preload(fullSpeech, config.personality);
+
+    setVivaState("speaking");
+    VoiceManager.speak(fullSpeech, config.personality,
+      // onStart
+      () => {
+        if (!isMountedRef.current) return;
+        setVisualState("speaking");
+        setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
+      },
+      // onEnd
+      () => {
+        if (!isMountedRef.current) return;
+        startListeningMode();
+      }
+    );
   };
 
   // Phase 2: Dynamic Listening
@@ -646,21 +618,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       }
     });
 
-    let hindsightResult = null;
-    try {
-      hindsightResult = await HindsightEngine.analyze({
-        subjectName: config.topic,
-        askedQuestions: baseReport.askedQuestions,
-        askedQuestionsObjects: baseReport.askedQuestionsObjects,
-        answerTranscripts: baseReport.answerTranscripts,
-        detectedEmotions: baseReport.detectedEmotions,
-        personality: config.personality,
-        mode: config.mode
-      });
-    } catch (err) {
-      console.warn("HindsightEngine failed, results will use original data:", err);
-    }
-
     const reportPayload = {
       ...baseReport,
       askedTopics: SessionContextManager.askedTopics || [],
@@ -674,11 +631,33 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       examinerPersonality: config.personality,
       recordedAudios: audioUrls,
       mode: config.mode,
-      hindsightData: hindsightResult,
-      hindsightLoading: false
+      hindsightData: null,
+      hindsightLoading: true
     };
 
+    // Open Results screen INSTANTLY (<50ms)
     onFinishViva(reportPayload);
+
+    // Fetch Gemini Hindsight & Gemini Overall Score asynchronously in the background
+    HindsightEngine.analyze({
+      subjectName: config.topic,
+      askedQuestions: baseReport.askedQuestions,
+      askedQuestionsObjects: baseReport.askedQuestionsObjects,
+      answerTranscripts: baseReport.answerTranscripts,
+      detectedEmotions: baseReport.detectedEmotions,
+      personality: config.personality,
+      mode: config.mode
+    }).then(hindsightResult => {
+      if (hindsightResult) {
+        onFinishViva({
+          ...reportPayload,
+          hindsightData: hindsightResult,
+          hindsightLoading: false
+        });
+      }
+    }).catch(err => {
+      console.warn("Async HindsightEngine fetch completed with fallback:", err);
+    });
   };
 
   // Unified Submission for Oral & Keyboard Modes

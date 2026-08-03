@@ -45,6 +45,42 @@ export const QuestionGraphEngine = {
   },
 
   /**
+   * Instantly builds a high-quality initial question node synchronously for zero-latency exam start.
+   */
+  getInitialQuestionSync(params) {
+    const { syllabus, personality, isTargetDrill, targetSubtopic, mode } = params || {};
+    const isProfessional = mode === "professional";
+    
+    // Target drill initial question
+    if (isTargetDrill && targetSubtopic) {
+      const qText = isProfessional
+        ? `Let's focus on your competency in ${targetSubtopic}. Explain your hands-on experience, core architectural patterns, and key challenges faced.`
+        : `Let's focus on your knowledge of ${targetSubtopic}. Explain the core theoretical principles, governing equations, and practical applications.`;
+      return {
+        text: qText,
+        speech: qText,
+        topic: targetSubtopic,
+        difficulty: "Medium"
+      };
+    }
+
+    const firstUnit = syllabus?.units?.[0];
+    const unitName = firstUnit?.name || (isProfessional ? "Core Competencies" : "Unit 1: Fundamentals");
+    const firstTopic = firstUnit?.topics?.[0] || (isProfessional ? "System Architecture" : "Core Principles");
+
+    const qText = isProfessional
+      ? `To start our session on ${syllabus?.topic || "your domain"}, let's look at ${firstTopic} under ${unitName}. How do you approach designing, scaling, and managing this in a production environment?`
+      : `To begin your examination on ${syllabus?.topic || "your syllabus"}, let us focus on ${firstTopic} in ${unitName}. State the fundamental equations, physical principles, and governing boundaries.`;
+
+    return {
+      text: qText,
+      speech: qText,
+      topic: firstTopic,
+      difficulty: "Low"
+    };
+  },
+
+  /**
    * Offline rule-based branching backup if the Gemini API key is not configured or connection drops.
    */
   getRuleBasedOfflineFallback(qIndex, personality, currentTopic, syllabus) {

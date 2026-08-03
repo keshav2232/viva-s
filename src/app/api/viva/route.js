@@ -690,12 +690,14 @@ RETROSPECTIVE ANALYSIS TASKS:
 4. Detect BLUFFING PATTERNS where the candidate showed high verbal confidence but low technical accuracy across multiple rounds
 5. Identify the single strongest round (with evidence) and single weakest round (with evidence)
 6. Provide 2-3 specific, actionable improvement recommendations based on cross-session patterns
+7. Calculate the holistic overallFinalScore (integer 0 to 100) evaluating overall subject mastery, technical correctness, and delivery poise.
 
 Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown blocks:
 {
   "sessionNarrative": "2-3 sentence performance arc narrative",
   "trajectoryPattern": "ascending" | "declining" | "steady",
   "trajectoryDescription": "1 sentence explaining the confidence trajectory",
+  "overallFinalScore": 84,
   "contradictions": [
     { "rounds": [1, 3], "description": "What was contradicted and why it matters" }
   ],
@@ -721,12 +723,14 @@ RETROSPECTIVE ANALYSIS TASKS:
 4. Detect BLUFFING PATTERNS where the student showed high verbal confidence but low conceptual accuracy across multiple rounds
 5. Identify the single strongest round (with evidence) and single weakest round (with evidence)
 6. Provide 2-3 specific, actionable revision recommendations based on cross-session patterns
+7. Calculate the holistic overallFinalScore (integer 0 to 100) evaluating overall subject mastery, technical correctness, and delivery poise.
 
 Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown blocks:
 {
   "sessionNarrative": "2-3 sentence performance arc narrative",
   "trajectoryPattern": "ascending" | "declining" | "steady",
   "trajectoryDescription": "1 sentence explaining the confidence trajectory",
+  "overallFinalScore": 84,
   "contradictions": [
     { "rounds": [1, 3], "description": "What was contradicted and why it matters" }
   ],

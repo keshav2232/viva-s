@@ -312,6 +312,39 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
     return duration;
   };
 
+  const pregeneratedFirstQuestionRef = React.useRef(null);
+
+  // Background pre-fetch Question 1 in advance while user configures setup
+  useEffect(() => {
+    if (currentStep >= 2) {
+      const targetSyl = syllabusStructure || SyllabusParserService.getDefaultHierarchy(topic || (practiceMode === "academic" ? "Thermodynamics" : "Software Engineer (Backend)"), isLastMinute ? 5 : getActiveDuration());
+      fetch("/api/viva", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "generate-question",
+          syllabus: targetSyl,
+          personality: isMockExternal ? "terror" : personality,
+          duration: isLastMinute ? 5 : getActiveDuration(),
+          asked: [],
+          history: [],
+          lastTag: null,
+          activeTopic: "",
+          nervousness: 20,
+          isTargetDrill: !!selectedSubtopic,
+          targetSubtopic: selectedSubtopic ? selectedSubtopic.name : null,
+          mode: practiceMode
+        })
+      }).then(res => res.ok ? res.json() : null).then(q => {
+        if (q && q.text) {
+          pregeneratedFirstQuestionRef.current = q;
+        }
+      }).catch(e => {
+        console.warn("Background prefetch of Question 1 deferred:", e);
+      });
+    }
+  }, [currentStep, syllabusStructure, personality, practiceMode, selectedSubtopic, topic, isLastMinute, isMockExternal, duration]);
+
   const handleStartExam = () => {
     onBeginViva({
       sourceType,
@@ -324,7 +357,8 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
       isTargetDrill: !!selectedSubtopic,
       targetSubtopic: selectedSubtopic ? selectedSubtopic.name : null,
       enableInterruption,
-      mode: practiceMode
+      mode: practiceMode,
+      pregeneratedFirstQuestion: pregeneratedFirstQuestionRef.current
     });
   };
 
