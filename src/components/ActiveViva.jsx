@@ -106,6 +106,18 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
 
     // 1. Stopwatch interval
     const timer = setInterval(() => {
+      const currentState = vivaStateRef.current;
+      const currentIndex = currentQuestionIndexRef.current;
+
+      // Timer runs during:
+      // - listening (user is answering)
+      // - speaking (examiner is speaking subsequent questions or resumed session)
+      const shouldTick =
+        currentState === "listening" ||
+        (currentState === "speaking" && (currentIndex > 0 || config.isResume));
+
+      if (!shouldTick) return;
+
       setTimeRemaining(prev => {
         if (prev <= 1) {
           clearInterval(timer);
@@ -118,6 +130,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         return prev - 1;
       });
     }, 1000);
+
 
     // 2. Trigger speech sequence (Intro or Resume)
     if (config.isResume) {
