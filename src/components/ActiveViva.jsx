@@ -259,50 +259,53 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     
     speechStartTime.current = Date.now();
 
-    SpeechManager.start({
-      onResult: (interim, final) => {
-        if (vivaStateRef.current !== "listening") return;
-        if (!final && !interim) {
-          setTranscriptText("Speak now. System is listening...");
-          setIsPlaceholder(true);
-        } else {
-          setTranscriptText(final + (interim ? ` ${interim}` : ""));
-          setIsPlaceholder(false);
-        }
-      },
-      onVolumeChange: (volPct) => {
-        if (vivaStateRef.current !== "listening") return;
-        setLiveVolume(volPct);
-      },
-      onSilenceDetected: async () => {
-        if (vivaStateRef.current !== "listening") return;
-        // Hands-free auto submit — capture audio + transcript atomically
-        setVivaState("analyzing");
-        setVisualState("analyzing");
-        setStatusText(config.mode === "professional" ? "Capturing your response..." : "Capturing your response...");
+    // 400ms audio drain buffer to ensure speaker speech has completely finished before turning on mic
+    setTimeout(() => {
+      if (!isMountedRef.current || vivaStateRef.current !== "listening") return;
 
-        const captured = await SpeechManager.stopAndCapture(speechStartTime.current);
-        processResponse(captured);
-      },
-      onAudioCaptured: (audioBlob) => {
-        if (vivaStateRef.current !== "listening") return;
-        // Store for Results replay only (not for evaluation — that uses stopAndCapture)
-        const qIdx = currentQuestionIndexRef.current;
-        if (audioBlob && audioBlob.size > 100) {
-          recordedAudiosRef.current[qIdx] = audioBlob;
+      SpeechManager.start({
+        onResult: (interim, final) => {
+          if (vivaStateRef.current !== "listening") return;
+          if (!final && !interim) {
+            setTranscriptText("Speak now. System is listening...");
+            setIsPlaceholder(true);
+          } else {
+            setTranscriptText(final + (interim ? ` ${interim}` : ""));
+            setIsPlaceholder(false);
+          }
+        },
+        onVolumeChange: (volPct) => {
+          if (vivaStateRef.current !== "listening") return;
+          setLiveVolume(volPct);
+        },
+        onSilenceDetected: async () => {
+          if (vivaStateRef.current !== "listening") return;
+          setVivaState("analyzing");
+          setVisualState("analyzing");
+          setStatusText(config.mode === "professional" ? "Capturing your response..." : "Capturing your response...");
+
+          const captured = await SpeechManager.stopAndCapture(speechStartTime.current);
+          processResponse(captured);
+        },
+        onAudioCaptured: (audioBlob) => {
+          if (vivaStateRef.current !== "listening") return;
+          const qIdx = currentQuestionIndexRef.current;
+          if (audioBlob && audioBlob.size > 100) {
+            recordedAudiosRef.current[qIdx] = audioBlob;
+          }
+        },
+        onError: (err) => {
+          if (vivaStateRef.current !== "listening") return;
+          console.warn("React SpeechManager error:", err);
+          if (err === "not-allowed" || err === "service-not-allowed" || err === "not-supported") {
+            setFallbackMode(true);
+            triggerKeyboardFallback();
+          } else if (err === "no-speech") {
+            console.log("SpeechManager: Ignored 'no-speech' timeout to protect student pacing.");
+          }
         }
-      },
-      onError: (err) => {
-        if (vivaStateRef.current !== "listening") return;
-        console.warn("React SpeechManager error:", err);
-        if (err === "not-allowed" || err === "service-not-allowed" || err === "not-supported") {
-          setFallbackMode(true);
-          triggerKeyboardFallback();
-        } else if (err === "no-speech") {
-          console.log("SpeechManager: Ignored 'no-speech' timeout to protect student pacing.");
-        }
-      }
-    });
+      });
+    }, 400);
   }
 
   function triggerKeyboardFallback() {

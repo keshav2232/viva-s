@@ -1445,23 +1445,10 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
             <div className={`card hindsight-card ${mobileTab === 'plan' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-lg)", textAlign: "left", position: "relative", overflow: "hidden" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-md)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <div style={{
-                    width: "28px", height: "28px", borderRadius: "50%",
-                    background: "linear-gradient(135deg, hsl(258, 80%, 56%), hsl(280, 75%, 50%))",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: "0.85rem", flexShrink: 0
-                  }}>🔍</div>
                   <h3 style={{ fontSize: "1.05rem", fontWeight: "700", margin: 0 }}>
                     {isProfessional ? "AI Interview Retrospective" : "AI Session Retrospective"}
                   </h3>
                 </div>
-                {hindsightData && !hindsightData.isLocalFallback && (
-                  <span style={{
-                    fontSize: "0.65rem", padding: "2px 8px", borderRadius: "var(--radius-full)",
-                    background: "linear-gradient(135deg, hsl(258, 80%, 56%), hsl(280, 75%, 50%))",
-                    color: "#fff", fontWeight: "700", letterSpacing: "0.05em", textTransform: "uppercase"
-                  }}>AI Powered</span>
-                )}
               </div>
               <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "var(--space-md)", marginTop: 0 }}>
                 {isProfessional
