@@ -107,6 +107,8 @@ export async function POST(req) {
         return await handleExpandTopic(payload.topic, payload.mode, payload.duration, apiKey);
       case "parse-syllabus":
         return await handleParseSyllabus(payload.text, payload.mode, payload.duration, apiKey);
+      case "parse-resume-jd":
+        return await handleParseResumeAndJD(payload.resumeText, payload.jdText, payload.mode, payload.duration, apiKey);
       case "generate-question":
         return await handleGenerateQuestion(payload, apiKey);
       case "evaluate-answer":
@@ -229,12 +231,58 @@ async function handleParseSyllabus(rawText, mode, duration, apiKey) {
 }
 
 // ==========================================
+// 1.8. PARSE CANDIDATE RESUME + JOB DESCRIPTION
+// ==========================================
+async function handleParseResumeAndJD(resumeText, jdText, mode, duration, apiKey) {
+  const numUnits = getTargetUnitsForDuration(duration);
+  const prompt = `Act as an expert technical recruiter, talent acquisition specialist, and engineering manager.
+Analyze the provided Candidate Resume and Job Description (JD) text below.
+
+Candidate Resume Text:
+"""
+${(resumeText || "").substring(0, 6000)}
+"""
+
+Job Description / Role Requirements Text:
+"""
+${(jdText || "").substring(0, 6000)}
+"""
+
+Tasks:
+1. Extract or infer the overall Job Title / Role (e.g., "Senior Software Engineer").
+2. Extract the candidate's name if present, or default to "Candidate".
+3. Extract up to 4 specific key projects, systems, or achievements explicitly described in the candidate's resume.
+4. Extract key claimed technical or domain skills from the resume.
+5. Extract exactly ${numUnits} core Competency Areas required for this role. Each Competency Area must have a clean name (e.g., "Competency 1: System Architecture") and exactly 3 or 4 concise core subtopics/skills.
+
+Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown blocks:
+{
+  "topic": "Extracted Job Title",
+  "candidateName": "Extracted Name or Candidate",
+  "resumeProjects": [
+    "Project achievement 1",
+    "Project achievement 2"
+  ],
+  "claimedSkills": ["Skill 1", "Skill 2"],
+  "units": [
+    { "name": "Competency area name", "topics": ["skill 1", "skill 2", "skill 3"] }
+  ]
+}`;
+
+  const responseJson = await callGeminiAPI(prompt, apiKey);
+  return NextResponse.json(responseJson);
+}
+
+// ==========================================
 // 2. GENERATE QUESTION & REMARKS (ADAPTIVE BRANCHING)
 // ==========================================
 async function handleGenerateQuestion(payload, apiKey) {
   const { syllabus, personality, duration, asked, history, lastTag, activeTopic, nervousness, isTargetDrill, targetSubtopic, mode, previousInteractionId } = payload;
   const isProfessional = mode === "professional";
   
+  const resumeProjects = payload.resumeProjects || (syllabus && syllabus.resumeProjects) || [];
+  const claimedSkills = payload.claimedSkills || (syllabus && syllabus.claimedSkills) || [];
+
   // Format history for the prompt
   const conversationContext = history && history.length > 0
     ? history.map((h, idx) => `Q${idx+1}: "${asked[idx]}" -> A${idx+1}: "${h}"`).join("\n")
@@ -319,9 +367,23 @@ async function handleGenerateQuestion(payload, apiKey) {
     }
   }
 
+  let resumeCrossExamPrompt = "";
+  if (isProfessional && resumeProjects && resumeProjects.length > 0) {
+    resumeCrossExamPrompt = `
+  
+  📄 CANDIDATE RESUME CROSS-EXAMINATION CONTEXT:
+  Candidate Projects & Achievements: ${JSON.stringify(resumeProjects)}
+  Candidate Claimed Skills: ${JSON.stringify(claimedSkills)}
+  
+  RESUME CROSS-EXAMINATION DIRECTIVE:
+  - When formulating technical or behavioral questions, actively reference one of the candidate's explicit resume projects or claimed skills (e.g. "I see on your resume that you worked on [Project/Skill]. How did you handle...").
+  - Test if the candidate's actual depth matches the high-level claims on their resume.`;
+  }
+
   const prompt = isProfessional
     ? `Act as an expert corporate interviewer conducting a professional mock interview.
   ${targetDrillPrompt}
+  ${resumeCrossExamPrompt}
   
   Interviewer Personality: ${personaPrompt}
   Job Competency Framework Context: ${JSON.stringify(syllabus)}

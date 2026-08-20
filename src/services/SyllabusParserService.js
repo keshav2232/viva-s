@@ -129,6 +129,31 @@ export const SyllabusParserService = {
     return data;
   },
 
+  /**
+   * Requests the server-side Gemini API route to parse candidate Resume + Job Description in Professional Mode.
+   * @param {string} resumeText - Candidate resume text.
+   * @param {string} jdText - Job description text.
+   * @param {string} mode - "professional"
+   * @returns {Promise<object>} Structured tree with candidate projects and job competencies.
+   */
+  async parseResumeAndJDRemote(resumeText, jdText, mode = "professional", duration = 5) {
+    const response = await fetch("/api/viva", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "parse-resume-jd",
+        resumeText: resumeText || "",
+        jdText: jdText || "",
+        mode: mode,
+        duration: duration
+      })
+    });
+
+    if (!response.ok) throw new Error("API resume + JD parsing failed");
+    const data = await response.json();
+    return data;
+  },
+
   getTargetUnitsForDuration(duration = 5) {
     const mins = parseInt(duration, 10) || 5;
     if (mins <= 5) return 3;

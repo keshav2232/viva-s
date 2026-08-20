@@ -144,14 +144,24 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
           return;
         }
 
-        // Expand the custom syllabus text into a structured tree using Gemini!
+        // Expand the custom syllabus or Resume+JD text into a structured tree using Gemini!
         setIsExpandingTopic(true);
         try {
-          const parsedTree = await SyllabusParserService.parseSyllabusRemote(
-            syllabusText.trim(),
-            practiceMode,
-            getActiveDuration()
-          );
+          let parsedTree;
+          if (practiceMode === "professional") {
+            parsedTree = await SyllabusParserService.parseResumeAndJDRemote(
+              syllabusText.trim(),
+              syllabusText.trim(),
+              practiceMode,
+              getActiveDuration()
+            );
+          } else {
+            parsedTree = await SyllabusParserService.parseSyllabusRemote(
+              syllabusText.trim(),
+              practiceMode,
+              getActiveDuration()
+            );
+          }
           setSyllabusStructure(parsedTree);
         } catch (e) {
           console.warn("Syllabus remote parsing error, falling back to local heuristic:", e);
@@ -1098,6 +1108,34 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                   </button>
                 )}
               </div>
+
+              {/* PARSED CANDIDATE RESUME HIGHLIGHTS CARD */}
+              {practiceMode === "professional" && syllabusStructure?.resumeProjects && syllabusStructure.resumeProjects.length > 0 && (
+                <div style={{ marginTop: "14px", padding: "12px 16px", borderRadius: "var(--radius-sm)", backgroundColor: "rgba(59, 130, 246, 0.08)", border: "1px solid rgba(59, 130, 246, 0.3)", textAlign: "left" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--accent-primary)", fontWeight: "700", fontSize: "0.9rem", marginBottom: "8px" }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                      <polyline points="14 2 14 8 20 8"></polyline>
+                    </svg>
+                    Candidate Resume Highlights & Claims ({syllabusStructure.candidateName || "Candidate"})
+                  </div>
+                  <ul style={{ margin: "0", paddingLeft: "20px", fontSize: "0.825rem", color: "var(--text-primary)" }}>
+                    {syllabusStructure.resumeProjects.map((proj, pIdx) => (
+                      <li key={pIdx} style={{ marginBottom: "4px" }}>{proj}</li>
+                    ))}
+                  </ul>
+                  {syllabusStructure.claimedSkills && syllabusStructure.claimedSkills.length > 0 && (
+                    <div style={{ marginTop: "8px", display: "flex", flexWrap: "wrap", gap: "4px", alignItems: "center" }}>
+                      <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: "600", marginRight: "4px" }}>Claimed Skills:</span>
+                      {syllabusStructure.claimedSkills.map((sk, sIdx) => (
+                        <span key={sIdx} style={{ fontSize: "0.7rem", padding: "2px 8px", borderRadius: "10px", background: "var(--bg-card)", border: "1px solid var(--border-color)", color: "var(--accent-primary)", fontWeight: "600" }}>
+                          {sk}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* STATS PREVIEW GRID */}
               <div className="preview-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "10px", marginTop: "12px", borderTop: "1px solid var(--border-color)", paddingTop: "12px" }}>
