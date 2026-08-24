@@ -708,13 +708,13 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
       {
         label: "Nervousness Level",
         value: emotion.nervousness ?? 0,
-        fillWidth: Math.max(0, 100 - (emotion.nervousness ?? 0)),
+        fillWidth: emotion.nervousness ?? 0,
         color: getMetricColor(emotion.nervousness, true)
       },
       {
         label: "Speech Hesitation",
         value: emotion.hesitation ?? 0,
-        fillWidth: Math.max(0, 100 - (emotion.hesitation ?? 0)),
+        fillWidth: emotion.hesitation ?? 0,
         color: getMetricColor(emotion.hesitation, true)
       },
       {
