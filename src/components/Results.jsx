@@ -147,40 +147,61 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     }
   }
 
-  // Lexical Speech Diagnostics Calculations
+  // Lexical & Audio Speech Diagnostics Calculations
   const fillerCounts = { um: 0, ah: 0, like: 0, basically: 0, actually: 0, "you know": 0 };
   let totalWordsCount = 0;
   let totalFillerCount = 0;
 
+  // 1. Aggregate Gemini audio-based filler breakdown across rounds
+  detectedEmotions.forEach(emo => {
+    if (emo && emo.fillerBreakdown) {
+      Object.entries(emo.fillerBreakdown).forEach(([k, v]) => {
+        const count = parseInt(v, 10) || 0;
+        if (count > 0) {
+          if (k === "um" || k === "umm") fillerCounts["um"] += count;
+          else if (k === "ah" || k === "uh" || k === "uhm" || k === "ahh") fillerCounts["ah"] += count;
+          else if (k === "like") fillerCounts["like"] += count;
+          else if (k === "basically") fillerCounts["basically"] += count;
+          else if (k === "actually") fillerCounts["actually"] += count;
+          else if (k === "you know") fillerCounts["you know"] += count;
+          totalFillerCount += count;
+        }
+      });
+    }
+  });
+
+  // 2. Count total words and fallback lexical scanning if audio breakdown wasn't present
   answerTranscripts.forEach(text => {
     const cleanText = (text || "").toLowerCase().replace(/[^\w\s']/g, " ");
     const words = cleanText.split(/\s+/).filter(w => w.length > 0);
     totalWordsCount += words.length;
 
-    words.forEach(w => {
-      if (w === "um" || w === "umm") {
-        fillerCounts["um"]++;
-        totalFillerCount++;
-      } else if (w === "ah" || w === "ahh" || w === "uh" || w === "uhm") {
-        fillerCounts["ah"]++;
-        totalFillerCount++;
-      } else if (w === "like") {
-        fillerCounts["like"]++;
-        totalFillerCount++;
-      } else if (w === "basically") {
-        fillerCounts["basically"]++;
-        totalFillerCount++;
-      } else if (w === "actually") {
-        fillerCounts["actually"]++;
-        totalFillerCount++;
-      }
-    });
+    if (totalFillerCount === 0) {
+      words.forEach(w => {
+        if (w === "um" || w === "umm") {
+          fillerCounts["um"]++;
+          totalFillerCount++;
+        } else if (w === "ah" || w === "ahh" || w === "uh" || w === "uhm") {
+          fillerCounts["ah"]++;
+          totalFillerCount++;
+        } else if (w === "like") {
+          fillerCounts["like"]++;
+          totalFillerCount++;
+        } else if (w === "basically") {
+          fillerCounts["basically"]++;
+          totalFillerCount++;
+        } else if (w === "actually") {
+          fillerCounts["actually"]++;
+          totalFillerCount++;
+        }
+      });
 
-    let youKnowIndex = cleanText.indexOf("you know");
-    while (youKnowIndex !== -1) {
-      fillerCounts["you know"]++;
-      totalFillerCount++;
-      youKnowIndex = cleanText.indexOf("you know", youKnowIndex + 8);
+      let youKnowIndex = cleanText.indexOf("you know");
+      while (youKnowIndex !== -1) {
+        fillerCounts["you know"]++;
+        totalFillerCount++;
+        youKnowIndex = cleanText.indexOf("you know", youKnowIndex + 8);
+      }
     }
   });
 

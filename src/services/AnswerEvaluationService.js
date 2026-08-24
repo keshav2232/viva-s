@@ -77,9 +77,10 @@ export const AnswerEvaluationService = {
         nervousness: geminiResult.nervousness !== null && geminiResult.nervousness !== undefined ? parseInt(geminiResult.nervousness, 10) : null,
         hesitation: geminiResult.hesitation !== null && geminiResult.hesitation !== undefined ? parseInt(geminiResult.hesitation, 10) : null,
 
-        // Timing fact — calculated locally from real duration
+        // Timing fact & filler word analysis — Gemini audio analysis preferred, fallback to text regex
         wpm: wpm,
-        fillerCount: this.countFillers(answer),
+        fillerCount: (geminiResult.fillerCount !== undefined && geminiResult.fillerCount !== null) ? parseInt(geminiResult.fillerCount, 10) : this.countFillers(answer),
+        fillerBreakdown: geminiResult.fillerBreakdown || null,
 
         // Metadata
         gradingSource: geminiResult.gradingSource || (audioBase64 ? "audio+text" : "text-only"),
@@ -162,7 +163,8 @@ export const AnswerEvaluationService = {
         nervousness: geminiResult.nervousness !== null && geminiResult.nervousness !== undefined ? parseInt(geminiResult.nervousness, 10) : null,
         hesitation: geminiResult.hesitation !== null && geminiResult.hesitation !== undefined ? parseInt(geminiResult.hesitation, 10) : null,
         wpm: wpm,
-        fillerCount: this.countFillers(answer),
+        fillerCount: (geminiResult.fillerCount !== undefined && geminiResult.fillerCount !== null) ? parseInt(geminiResult.fillerCount, 10) : this.countFillers(answer),
+        fillerBreakdown: geminiResult.fillerBreakdown || null,
         gradingSource: geminiResult.gradingSource || (audioBase64 ? "audio+text" : "text-only"),
         isUngraded: geminiResult.isUngraded || false
       };

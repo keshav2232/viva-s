@@ -462,7 +462,7 @@ async function handleEvaluateAnswer(payload, apiKey) {
   // Unified prompt — always requests all 8 metrics.
   // Gemini evaluates audio delivery when audio is present; sets delivery fields to null for text-only.
   const audioInstruction = hasAudio
-    ? "An audio recording of the speaker's actual voice is attached. Listen carefully and evaluate BOTH the spoken content (correctness, logic, accuracy) AND the vocal delivery (clarity, confidence, nervousness, hesitation) from the audio prosody, pitch, tone, pacing, and hesitation."
+    ? "An audio recording of the speaker's actual voice is attached. Listen carefully and evaluate BOTH the spoken content (correctness, logic, accuracy) AND the vocal delivery (clarity, confidence, nervousness, hesitation) from the audio prosody, pitch, tone, pacing, and hesitation. ALSO listen to raw vocalizations and count all spoken filler words ('um', 'uh', 'ah', 'basically', 'you know', 'like') from the audio recording."
     : "No audio is attached. Evaluate based on the text transcript only. For confidence, nervousness, hesitation, and clarity: set them to null since there is no audio to assess delivery.";
 
   const prompt = isProfessional
@@ -496,6 +496,8 @@ Respond ONLY with a valid clean JSON object. Do not use markdown syntax.
   "confidence": ${hasAudio ? "78" : "null"},
   "nervousness": ${hasAudio ? "24" : "null"},
   "hesitation": ${hasAudio ? "16" : "null"},
+  "fillerCount": ${hasAudio ? "3" : "0"},
+  "fillerBreakdown": { "um": 1, "uh": 1, "ah": 0, "basically": 1, "you know": 0, "like": 0 },
   "tag": "Strong",
   "correctAnswer": "A detailed professional answer outlining design trade-offs, architecture choices, STAR highlights, and best practices.",
   "gradingSource": "${hasAudio ? "audio+text" : "text-only"}"
@@ -531,6 +533,8 @@ Respond ONLY with a valid clean JSON object. Do not use markdown syntax.
   "confidence": ${hasAudio ? "78" : "null"},
   "nervousness": ${hasAudio ? "24" : "null"},
   "hesitation": ${hasAudio ? "16" : "null"},
+  "fillerCount": ${hasAudio ? "3" : "0"},
+  "fillerBreakdown": { "um": 1, "uh": 1, "ah": 0, "basically": 1, "you know": 0, "like": 0 },
   "tag": "Strong",
   "correctAnswer": "A precise academic answer with governing equations, definitions, boundary conditions.",
   "gradingSource": "${hasAudio ? "audio+text" : "text-only"}"
@@ -608,6 +612,8 @@ Respond ONLY with a valid clean JSON object. Do not use markdown syntax:
     "confidence": ${hasAudio ? "78" : "null"},
     "nervousness": ${hasAudio ? "24" : "null"},
     "hesitation": ${hasAudio ? "16" : "null"},
+    "fillerCount": ${hasAudio ? "3" : "0"},
+    "fillerBreakdown": { "um": 1, "uh": 1, "ah": 0, "basically": 1, "you know": 0, "like": 0 },
     "tag": "Strong",
     "correctAnswer": "A detailed professional reference answer outlining design trade-offs, architecture choices, and best practices.",
     "gradingSource": "${hasAudio ? "audio+text" : "text-only"}"
@@ -645,6 +651,8 @@ Respond ONLY with a valid clean JSON object. Do not use markdown syntax:
     "confidence": ${hasAudio ? "78" : "null"},
     "nervousness": ${hasAudio ? "24" : "null"},
     "hesitation": ${hasAudio ? "16" : "null"},
+    "fillerCount": ${hasAudio ? "3" : "0"},
+    "fillerBreakdown": { "um": 1, "uh": 1, "ah": 0, "basically": 1, "you know": 0, "like": 0 },
     "tag": "Strong",
     "correctAnswer": "A precise academic reference answer with governing equations, definitions, and boundary conditions.",
     "gradingSource": "${hasAudio ? "audio+text" : "text-only"}"

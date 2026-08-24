@@ -14,34 +14,39 @@ envText.split("\n").forEach(line => {
   }
 });
 
-async function verifyFullPipeline() {
-  console.log("--- VERIFYING UPDATED GEMINI AI SERVICE WITH OGG AUDIO ---");
+async function testFillerDetection() {
+  console.log("--- TESTING AUDIO FILLER WORD DETECTION ---");
   const oggPath = path.resolve("WhatsApp Ptt 2026-08-21 at 10.10.00 PM.ogg");
   const audioBuffer = fs.readFileSync(oggPath);
   const audioBase64 = audioBuffer.toString("base64");
   const audioMimeType = "audio/ogg";
 
-  const prompt = `Act as an academic examiner grading an oral response in a college viva.
+  const prompt = `Act as an academic examiner and speech analyst grading an oral response in a college viva.
 
-Question Asked: "Explain the fundamental principles of thermodynamics and units & dimensions."
-Student Response: "(Spoken audio response)"
-Syllabus Context: {"topic":"Physics","units":[{"name":"Unit 1","topics":["Units","Dimensions"]}]}
-An audio recording of the speaker's actual voice is attached. Listen carefully and evaluate BOTH the spoken content (correctness, logic, accuracy) AND the vocal delivery (clarity, confidence, nervousness, hesitation) from the audio prosody, pitch, tone, pacing, and hesitation.
+An audio recording of the speaker's actual voice is attached. Listen carefully to the raw audio recording and perform two tasks:
+1. Evaluate content and vocal metrics (correctness, completeness, accuracy, clarity, confidence, nervousness, hesitation).
+2. LISTEN TO RAW VOCALIZATIONS in the audio recording and count every spoken filler word/vocal hesitation (such as 'um', 'uh', 'ah', 'basically', 'you know', 'like', or phrase repetitions).
 
-CRITICAL SCORING INSTRUCTIONS:
-Assign DYNAMIC, UNIQUE INTEGER SCORES (0-100) specific to this student's exact answer and voice audio.
-
-Respond ONLY with a valid clean JSON object:
+Respond ONLY with a valid clean JSON object matching this schema:
 {
-  "correctness": 82,
-  "completeness": 68,
-  "accuracy": 76,
-  "clarity": 84,
-  "confidence": 78,
-  "nervousness": 24,
-  "hesitation": 16,
-  "tag": "Strong",
-  "correctAnswer": "Ideal reference answer",
+  "correctness": 75,
+  "completeness": 60,
+  "accuracy": 70,
+  "clarity": 65,
+  "confidence": 50,
+  "nervousness": 40,
+  "hesitation": 45,
+  "fillerCount": 3,
+  "fillerBreakdown": {
+    "um": 1,
+    "uh": 1,
+    "ah": 0,
+    "basically": 1,
+    "you know": 0,
+    "like": 0
+  },
+  "tag": "Partially Correct",
+  "correctAnswer": "Reference answer",
   "gradingSource": "audio+text"
 }`;
 
@@ -53,25 +58,10 @@ Respond ONLY with a valid clean JSON object:
       audioMimeType
     });
 
-    console.log("\nVERIFICATION SUCCESSFUL!");
-    console.log("Evaluation Result:", JSON.stringify(result, null, 2));
-
-    if (
-      typeof result.correctness === "number" &&
-      typeof result.clarity === "number" &&
-      typeof result.confidence === "number" &&
-      typeof result.nervousness === "number" &&
-      typeof result.hesitation === "number"
-    ) {
-      console.log("\n✅ All 8 evaluation parameters are valid numbers!");
-    } else {
-      console.error("\n❌ Incomplete metric numbers returned!");
-      process.exit(1);
-    }
+    console.log("\nFILLER DETECTION RESULT:", JSON.stringify(result, null, 2));
   } catch (err) {
-    console.error("\n❌ Verification Failed:", err.message);
-    process.exit(1);
+    console.error("Error:", err.message);
   }
 }
 
-verifyFullPipeline();
+testFillerDetection();
