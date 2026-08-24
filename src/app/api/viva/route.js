@@ -455,14 +455,14 @@ async function handleGenerateQuestion(payload, apiKey) {
 // 3. EVALUATE TRANSCRIPT ANSWER (GEMINI-FIRST UNIFIED PROMPT)
 // ==========================================
 async function handleEvaluateAnswer(payload, apiKey) {
-  const { question, answer, syllabus, mode, audioBase64 } = payload;
+  const { question, answer, syllabus, mode, audioBase64, audioMimeType } = payload;
   const isProfessional = mode === "professional";
   const hasAudio = !!audioBase64;
 
   // Unified prompt — always requests all 8 metrics.
   // Gemini evaluates audio delivery when audio is present; sets delivery fields to null for text-only.
   const audioInstruction = hasAudio
-    ? "An audio recording of the speaker's actual voice is attached. Listen carefully and evaluate BOTH the spoken content (correctness, logic, accuracy) AND the vocal delivery (clarity, confidence, nervousness, hesitation) from the audio."
+    ? "An audio recording of the speaker's actual voice is attached. Listen carefully and evaluate BOTH the spoken content (correctness, logic, accuracy) AND the vocal delivery (clarity, confidence, nervousness, hesitation) from the audio prosody, pitch, tone, pacing, and hesitation."
     : "No audio is attached. Evaluate based on the text transcript only. For confidence, nervousness, hesitation, and clarity: set them to null since there is no audio to assess delivery.";
 
   const prompt = isProfessional
@@ -537,7 +537,7 @@ Respond ONLY with a valid clean JSON object. Do not use markdown syntax.
 }
 NOTE: The integers above (82, 68, 76, 84, 78, 24, 16) are ONLY structural placeholders. YOU MUST CALCULATE ORIGINAL, DISTINCT SCORES FOR THIS SPECIFIC RESPONSE.`;
 
-  const responseJson = await callGeminiAPI(prompt, apiKey, audioBase64);
+  const responseJson = await callGeminiAPI(prompt, apiKey, audioBase64, audioMimeType);
   return NextResponse.json(responseJson);
 }
 
@@ -551,6 +551,7 @@ async function handleEvaluateAndGenerateNext(payload, apiKey) {
     syllabus,
     mode,
     audioBase64,
+    audioMimeType,
     personality,
     asked = [],
     history = [],
@@ -562,7 +563,7 @@ async function handleEvaluateAndGenerateNext(payload, apiKey) {
   const hasAudio = !!audioBase64;
 
   const audioInstruction = hasAudio
-    ? "An audio recording of the speaker's actual voice is attached. Listen carefully and evaluate BOTH the spoken content (correctness, logic, accuracy) AND the vocal delivery (clarity, confidence, nervousness, hesitation) from the audio."
+    ? "An audio recording of the speaker's actual voice is attached. Listen carefully and evaluate BOTH the spoken content (correctness, logic, accuracy) AND the vocal delivery (clarity, confidence, nervousness, hesitation) from the audio prosody, pitch, tone, pacing, and hesitation."
     : "No audio is attached. Evaluate based on the text transcript only. For confidence, nervousness, hesitation, and clarity: set them to null since there is no audio to assess delivery.";
 
   // Extract topics for next question selection
@@ -657,7 +658,7 @@ Respond ONLY with a valid clean JSON object. Do not use markdown syntax:
 }
 NOTE: The integers above are structural placeholders. You MUST calculate distinct, dynamic scores for this response.`;
 
-  const responseJson = await callGeminiAPI(prompt, apiKey, audioBase64, previousInteractionId);
+  const responseJson = await callGeminiAPI(prompt, apiKey, audioBase64, audioMimeType, previousInteractionId);
   return NextResponse.json(responseJson);
 }
 
@@ -698,15 +699,15 @@ async function handleGenerateSubquestion(payload, apiKey) {
   Interrupt them and ask a much simpler, basic sub-question related to the topic "${topic}" to test their core understanding. Keep it direct and slightly challenging.
   Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown:
   {
-    "subQuestionText": "The sub-question text to display on screen (e.g. 'What is the standard purpose of an index in a database?')",
-    "subQuestionSpeech": "Thorne's sharp spoken remark. Incorporate fillers or a direct tone (e.g. 'Let's take a step back: what is the fundamental purpose of...')"
+    "subQuestionText": "Simpler follow-up question text here",
+    "subQuestionSpeech": "Harry's sharp spoken interruption + simpler follow-up question"
   }`
-    : `You are conducting a university oral exam as a high-pressure Viva Terror examiner. The student is struggling and has paused/hesitated on this question: "${question}". They have spoken or typed so far: "${answer || 'nothing yet'}".
-  Interrupt them and ask a much simpler, basic sub-question related to the topic "${topic}" to test their elementary understanding. Keep it direct and slightly intimidating.
+    : `You are conducting a viva as a Viva Terror. The student is struggling and has paused/hesitated on this question: "${question}". They have spoken or typed so far: "${answer || 'nothing yet'}".
+  Interrupt them and ask a much simpler, basic sub-question related to the topic "${topic}" to test their core understanding. Keep it direct and sharp.
   Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown:
   {
-    "subQuestionText": "The sub-question text to display on screen (e.g. 'What is the basic definition of entropy?')",
-    "subQuestionSpeech": "Professor Thorne's sharp spoken remark. Incorporate fillers or a stern tone (e.g. 'You seem stuck. Let's make it simpler: what is...')"
+    "subQuestionText": "Simpler follow-up question text here",
+    "subQuestionSpeech": "Harry's sharp spoken interruption + simpler follow-up question"
   }`;
 
   const responseJson = await callGeminiAPI(prompt, apiKey);
@@ -837,11 +838,12 @@ Respond ONLY with a valid, clean JSON object matching this schema. Do not enclos
 // ==========================================
 // GEMINI API CALLER (Delegated to GeminiAIService via @google/genai SDK)
 // ==========================================
-async function callGeminiAPI(prompt, apiKey, audioBase64 = null, previousInteractionId = null) {
+async function callGeminiAPI(prompt, apiKey, audioBase64 = null, audioMimeType = null, previousInteractionId = null) {
   return await GeminiAIService.callGeminiInteraction({
     prompt,
     apiKey,
     audioBase64,
+    audioMimeType,
     previousInteractionId
   });
 }

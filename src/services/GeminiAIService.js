@@ -8,25 +8,43 @@
 import { GoogleGenAI } from "@google/genai";
 
 const DEFAULT_CANDIDATE_MODELS = [
-  "gemini-2.5-flash",
-  "gemini-2.5-flash-lite",
+  "gemini-3.5-flash-lite",
+  "gemini-3.6-flash",
   "gemini-3.5-flash",
-  "gemini-3.1-flash-lite"
+  "gemini-2.0-flash"
 ];
 
 export const GeminiAIService = {
+  /**
+   * Auto-detects audio MIME type from base64 magic bytes or provided MIME type.
+   */
+  _detectMimeType(audioBase64, providedMimeType) {
+    if (providedMimeType && providedMimeType !== "audio/webm" && providedMimeType.startsWith("audio/")) {
+      return providedMimeType;
+    }
+    if (!audioBase64) return "audio/webm";
+    const header = audioBase64.substring(0, 16);
+    if (header.startsWith("T2dnUw")) return "audio/ogg";
+    if (header.startsWith("GkXf")) return "audio/webm";
+    if (header.startsWith("UklGR")) return "audio/wav";
+    if (header.startsWith("SUQz") || header.startsWith("/++")) return "audio/mpeg";
+    if (header.includes("ZnR5cA")) return "audio/mp4";
+    return providedMimeType || "audio/webm";
+  },
+
   /**
    * Main entry point for interacting with Gemini AI service.
    * 
    * @param {object} params
    * @param {string} params.prompt - Text prompt for Gemini
    * @param {string} [params.apiKey] - Gemini API Key
-   * @param {string} [params.audioBase64] - Optional WebM audio encoded in base64
+   * @param {string} [params.audioBase64] - Optional WebM/OGG/WAV audio encoded in base64
+   * @param {string} [params.audioMimeType] - Optional MIME type string (e.g. "audio/ogg")
    * @param {string[]} [params.models] - Custom list of model candidates to try
    * @param {number} [params.timeoutMs=25000] - Timeout in milliseconds per attempt
    * @returns {Promise<object>} Parsed JSON response from Gemini
    */
-  async callGeminiInteraction({ prompt, apiKey, audioBase64 = null, previousInteractionId = null, models = DEFAULT_CANDIDATE_MODELS, timeoutMs = 25000 }) {
+  async callGeminiInteraction({ prompt, apiKey, audioBase64 = null, audioMimeType = null, previousInteractionId = null, models = DEFAULT_CANDIDATE_MODELS, timeoutMs = 25000 }) {
     const key = apiKey || process.env.GEMINI_API_KEY || process.env.XAI_API_KEY;
     if (!key) {
       throw new Error("GEMINI_API_KEY is missing from environment variables or request parameters.");
@@ -37,7 +55,7 @@ export const GeminiAIService = {
 
     for (const model of models) {
       try {
-        const responseJson = await this._executeSingleAttempt(ai, model, prompt, audioBase64, previousInteractionId, timeoutMs);
+        const responseJson = await this._executeSingleAttempt(ai, model, prompt, audioBase64, audioMimeType, previousInteractionId, timeoutMs);
         return responseJson;
       } catch (err) {
         console.warn(`GeminiAIService: Model attempt failed [${model}]:`, err.message);
@@ -51,46 +69,35 @@ export const GeminiAIService = {
   /**
    * Internal helper to execute a single interaction attempt with timeout and fallback support.
    */
-  async _executeSingleAttempt(ai, model, prompt, audioBase64, previousInteractionId, timeoutMs) {
+  async _executeSingleAttempt(ai, model, prompt, audioBase64, audioMimeType, previousInteractionId, timeoutMs) {
     let timeoutId;
 
     const promise = (async () => {
       let rawText = "";
       let interactionId = null;
 
-      // Assemble contents array for multimodal (audio + prompt) or text
-      const contents = [{ text: prompt }];
+      const detectedMime = this._detectMimeType(audioBase64, audioMimeType);
+
+      // Assemble structured parts array
+      const parts = [{ text: prompt }];
       if (audioBase64) {
-        contents.push({
+        parts.push({
           inlineData: {
-            mimeType: "audio/webm",
+            mimeType: detectedMime,
             data: audioBase64
           }
         });
       }
 
-      // Try Interaction API via ai.interactions.create if supported, or ai.models.generateContent
-      try {
-        if (ai.interactions && typeof ai.interactions.create === "function") {
-          const interactionOptions = {
-            model: model,
-            input: audioBase64 ? contents : prompt
-          };
-
-          if (previousInteractionId) {
-            interactionOptions.previous_interaction_id = previousInteractionId;
-          }
-
-          const interaction = await ai.interactions.create(interactionOptions);
-          rawText = interaction.output_text || (interaction.outputs && interaction.outputs[0] && interaction.outputs[0].text) || "";
-          interactionId = interaction.id || interaction.name || null;
+      const contents = [
+        {
+          role: "user",
+          parts: parts
         }
-      } catch (interactionErr) {
-        console.warn(`GeminiAIService: interactions.create fallback to models.generateContent [${model}]:`, interactionErr.message);
-      }
+      ];
 
-      if (!rawText) {
-        // Primary SDK method: ai.models.generateContent
+      // Primary SDK method: ai.models.generateContent
+      try {
         const response = await ai.models.generateContent({
           model: model,
           contents: contents,
@@ -99,6 +106,17 @@ export const GeminiAIService = {
           }
         });
         rawText = response.text || "";
+      } catch (genErr) {
+        console.warn(`GeminiAIService: models.generateContent error [${model}], attempting interactions API:`, genErr.message);
+        if (ai.interactions && typeof ai.interactions.create === "function") {
+          const interactionOptions = { model: model, input: prompt };
+          if (previousInteractionId) interactionOptions.previous_interaction_id = previousInteractionId;
+          const interaction = await ai.interactions.create(interactionOptions);
+          rawText = interaction.output_text || (interaction.outputs && interaction.outputs[0] && interaction.outputs[0].text) || "";
+          interactionId = interaction.id || interaction.name || null;
+        } else {
+          throw genErr;
+        }
       }
 
       if (!rawText) {

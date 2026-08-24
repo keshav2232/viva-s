@@ -30,9 +30,11 @@ export const AnswerEvaluationService = {
 
     // Convert audioBlob to base64 if present
     let audioBase64 = null;
+    let audioMimeType = null;
     if (audioBlob && audioBlob.size > 100) {
       try {
         audioBase64 = await this.blobToBase64(audioBlob);
+        audioMimeType = audioBlob.type || "audio/webm";
       } catch (encErr) {
         console.warn("AnswerEvaluationService: Failed to encode audio blob:", encErr);
       }
@@ -48,7 +50,8 @@ export const AnswerEvaluationService = {
           answer,
           syllabus,
           mode,
-          audioBase64
+          audioBase64,
+          audioMimeType
         })
       });
 
@@ -113,9 +116,11 @@ export const AnswerEvaluationService = {
     const wpm = this.calculateWpm(answer, speechDurationMs);
 
     let audioBase64 = null;
+    let audioMimeType = null;
     if (audioBlob && audioBlob.size > 100) {
       try {
         audioBase64 = await this.blobToBase64(audioBlob);
+        audioMimeType = audioBlob.type || "audio/webm";
       } catch (encErr) {
         console.warn("AnswerEvaluationService: Failed to encode audio blob:", encErr);
       }
@@ -132,6 +137,7 @@ export const AnswerEvaluationService = {
           syllabus,
           mode,
           audioBase64,
+          audioMimeType,
           personality,
           asked: asked || [],
           history: history || [],

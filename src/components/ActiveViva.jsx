@@ -408,6 +408,11 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         });
       }
 
+      // Preload next question speech audio immediately in parallel if available!
+      if (precomputedNextQ && precomputedNextQ.speech) {
+        VoiceManager.preload(precomputedNextQ.speech, config.personality);
+      }
+
       // Save visual reaction state
       setLastEvalRecord({
         correctness: resultMetrics.correctness,
@@ -423,7 +428,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       }
       setStatusText(reactionText);
 
-      // Delay transition to let user register visual reaction
+      // Fast, natural reaction transition (500ms pause instead of 2000ms)
       transitionTimeoutRef.current = setTimeout(async () => {
         if (!isMountedRef.current) return;
         // Clear evaluation reaction so face resets
@@ -459,7 +464,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         if (!isMountedRef.current) return;
 
         setActiveQuestion(finalNextQ);
-        // Preload next question speech!
+        // Ensure preloaded speech is ready
         VoiceManager.preload(finalNextQ.speech, config.personality);
 
         setVivaState("speaking");
@@ -474,7 +479,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
             startListeningMode();
           }
         );
-      }, 2000);
+      }, 500);
 
     } catch (err) {
       console.error("Failed to process answer evaluation:", err);
