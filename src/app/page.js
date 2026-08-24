@@ -322,15 +322,18 @@ export default function Home() {
       month: 'short', day: 'numeric', year: 'numeric'
     });
 
+    const sessionId = generateSessionId();
+    const summaryWithId = { ...summary, id: sessionId, sessionId };
+    
     const newSession = {
-      id: generateSessionId(),
+      id: sessionId,
       subject: summary.subjectName,
       duration: vivaConfig.duration,
       personality: getPersonalityName(vivaConfig.personality, summary.mode),
       score: finalScore,
       date: sessionDateStr,
       gradeClass: finalScore >= 80 ? "high" : (finalScore >= 65 ? "med" : "low"),
-      reportData: summary,
+      reportData: summaryWithId,
       mode: summary.mode
     };
 
@@ -377,7 +380,7 @@ export default function Home() {
       saveToStorage(updatedSessions, updatedStats);
     }
 
-    setResultsData(summary);
+    setResultsData(summaryWithId);
     setActiveScreen("results");
   };
 

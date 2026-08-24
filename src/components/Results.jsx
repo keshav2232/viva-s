@@ -382,6 +382,8 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
 
 
 
+  const currentSessionId = resultsData?.id || resultsData?.sessionId;
+
   // Load prior average score for historical growth computation
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -389,20 +391,29 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
         const stored = localStorage.getItem("vivasim_sessions");
         if (stored) {
           const parsed = JSON.parse(stored);
-          // Filter out this current session to find previous ones
-          const past = parsed.filter(p => p.subject === subjectName);
+          // Strictly exclude the active session when computing prior subject average
+          const past = parsed.filter(p => {
+            if (p.subject !== subjectName) return false;
+            if (currentSessionId && (p.id === currentSessionId || p.reportData?.id === currentSessionId || p.reportData?.sessionId === currentSessionId)) {
+              return false;
+            }
+            return true;
+          });
+
           if (past.length > 0) {
             const sum = past.reduce((acc, curr) => acc + curr.score, 0);
             setTimeout(() => {
               setPastSessionsAvg(Math.round(sum / past.length));
             }, 0);
+          } else {
+            setPastSessionsAvg(null);
           }
         }
       } catch (e) {
         console.warn("Failed loading historic sessions averages:", e);
       }
     }
-  }, [subjectName]);
+  }, [subjectName, currentSessionId]);
 
   const generate5DayPlan = () => {
     // Collect all concepts that need revision
