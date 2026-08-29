@@ -6,6 +6,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { GeminiAIService } from "../../../services/GeminiAIService";
 
 // Fallback dynamic database when API key is missing
 const MOCK_TOPIC_EXPANSIONS = {
@@ -106,10 +107,14 @@ export async function POST(req) {
         return await handleExpandTopic(payload.topic, payload.mode, payload.duration, apiKey);
       case "parse-syllabus":
         return await handleParseSyllabus(payload.text, payload.mode, payload.duration, apiKey);
+      case "parse-resume-jd":
+        return await handleParseResumeAndJD(payload.resumeText, payload.jdText, payload.mode, payload.duration, apiKey);
       case "generate-question":
         return await handleGenerateQuestion(payload, apiKey);
       case "evaluate-answer":
         return await handleEvaluateAnswer(payload, apiKey);
+      case "evaluate-and-generate-next":
+        return await handleEvaluateAndGenerateNext(payload, apiKey);
       case "generate-hint":
         return await handleGenerateHint(payload, apiKey);
       case "generate-subquestion":
@@ -122,6 +127,8 @@ export async function POST(req) {
         return NextResponse.json(humeResult);
       case "hindsight-analyze":
         return await handleHindsightAnalyze(payload, apiKey);
+      case "interactive-dialogue":
+        return await handleInteractiveDialogue(payload, apiKey);
       default:
         return NextResponse.json({ error: "Invalid action type" }, { status: 400 });
     }
@@ -224,12 +231,58 @@ async function handleParseSyllabus(rawText, mode, duration, apiKey) {
 }
 
 // ==========================================
+// 1.8. PARSE CANDIDATE RESUME + JOB DESCRIPTION
+// ==========================================
+async function handleParseResumeAndJD(resumeText, jdText, mode, duration, apiKey) {
+  const numUnits = getTargetUnitsForDuration(duration);
+  const prompt = `Act as an expert technical recruiter, talent acquisition specialist, and engineering manager.
+Analyze the provided Candidate Resume and Job Description (JD) text below.
+
+Candidate Resume Text:
+"""
+${(resumeText || "").substring(0, 6000)}
+"""
+
+Job Description / Role Requirements Text:
+"""
+${(jdText || "").substring(0, 6000)}
+"""
+
+Tasks:
+1. Extract or infer the overall Job Title / Role (e.g., "Senior Software Engineer").
+2. Extract the candidate's name if present, or default to "Candidate".
+3. Extract up to 4 specific key projects, systems, or achievements explicitly described in the candidate's resume.
+4. Extract key claimed technical or domain skills from the resume.
+5. Extract exactly ${numUnits} core Competency Areas required for this role. Each Competency Area must have a clean name (e.g., "Competency 1: System Architecture") and exactly 3 or 4 concise core subtopics/skills.
+
+Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown blocks:
+{
+  "topic": "Extracted Job Title",
+  "candidateName": "Extracted Name or Candidate",
+  "resumeProjects": [
+    "Project achievement 1",
+    "Project achievement 2"
+  ],
+  "claimedSkills": ["Skill 1", "Skill 2"],
+  "units": [
+    { "name": "Competency area name", "topics": ["skill 1", "skill 2", "skill 3"] }
+  ]
+}`;
+
+  const responseJson = await callGeminiAPI(prompt, apiKey);
+  return NextResponse.json(responseJson);
+}
+
+// ==========================================
 // 2. GENERATE QUESTION & REMARKS (ADAPTIVE BRANCHING)
 // ==========================================
 async function handleGenerateQuestion(payload, apiKey) {
-  const { syllabus, personality, duration, asked, history, lastTag, activeTopic, nervousness, isTargetDrill, targetSubtopic, mode } = payload;
+  const { syllabus, personality, duration, asked, history, lastTag, activeTopic, nervousness, isTargetDrill, targetSubtopic, mode, previousInteractionId } = payload;
   const isProfessional = mode === "professional";
   
+  const resumeProjects = payload.resumeProjects || (syllabus && syllabus.resumeProjects) || [];
+  const claimedSkills = payload.claimedSkills || (syllabus && syllabus.claimedSkills) || [];
+
   // Format history for the prompt
   const conversationContext = history && history.length > 0
     ? history.map((h, idx) => `Q${idx+1}: "${asked[idx]}" -> A${idx+1}: "${h}"`).join("\n")
@@ -314,9 +367,23 @@ async function handleGenerateQuestion(payload, apiKey) {
     }
   }
 
+  let resumeCrossExamPrompt = "";
+  if (isProfessional && resumeProjects && resumeProjects.length > 0) {
+    resumeCrossExamPrompt = `
+  
+  📄 CANDIDATE RESUME CROSS-EXAMINATION CONTEXT:
+  Candidate Projects & Achievements: ${JSON.stringify(resumeProjects)}
+  Candidate Claimed Skills: ${JSON.stringify(claimedSkills)}
+  
+  RESUME CROSS-EXAMINATION DIRECTIVE:
+  - When formulating technical or behavioral questions, actively reference one of the candidate's explicit resume projects or claimed skills (e.g. "I see on your resume that you worked on [Project/Skill]. How did you handle...").
+  - Test if the candidate's actual depth matches the high-level claims on their resume.`;
+  }
+
   const prompt = isProfessional
     ? `Act as an expert corporate interviewer conducting a professional mock interview.
   ${targetDrillPrompt}
+  ${resumeCrossExamPrompt}
   
   Interviewer Personality: ${personaPrompt}
   Job Competency Framework Context: ${JSON.stringify(syllabus)}
@@ -380,95 +447,226 @@ async function handleGenerateQuestion(payload, apiKey) {
     "correctAnswer": "A highly precise academic explanation of what the correct answer must include, outlining key definitions, relevant formulas/equations, and necessary boundary conditions."
   }`;
 
-  const responseJson = await callGeminiAPI(prompt, apiKey);
+  const responseJson = await callGeminiAPI(prompt, apiKey, null, previousInteractionId);
   return NextResponse.json(responseJson);
 }
 
 // ==========================================
-// 3. EVALUATE TRANSCRIPT ANSWER
+// 3. EVALUATE TRANSCRIPT ANSWER (GEMINI-FIRST UNIFIED PROMPT)
 // ==========================================
 async function handleEvaluateAnswer(payload, apiKey) {
-  const { question, answer, syllabus, mode, audioBase64 } = payload;
+  const { question, answer, syllabus, mode, audioBase64, audioMimeType } = payload;
   const isProfessional = mode === "professional";
   const hasAudio = !!audioBase64;
 
+  // Unified prompt — always requests all 8 metrics.
+  // Gemini evaluates audio delivery when audio is present; sets delivery fields to null for text-only.
+  const audioInstruction = hasAudio
+    ? "An audio recording of the speaker's actual voice is attached. Listen carefully and evaluate BOTH the spoken content (correctness, logic, accuracy) AND the vocal delivery (clarity, confidence, nervousness, hesitation) from the audio prosody, pitch, tone, pacing, and hesitation. ALSO listen to raw vocalizations and count all spoken filler words ('um', 'uh', 'ah', 'basically', 'you know', 'like') from the audio recording."
+    : "No audio is attached. Evaluate based on the text transcript only. For confidence, nervousness, hesitation, and clarity: set them to null since there is no audio to assess delivery.";
+
   const prompt = isProfessional
     ? `Act as an expert industry interviewer grading a candidate's response in a mock interview.
-  
-  Question Asked: "${question}"
-  Candidate Response: "${answer}"
-  Job Competency Context: ${JSON.stringify(syllabus)}
-  ${hasAudio ? "An audio recording of the candidate's actual speech is attached to this request. Listen to it carefully to evaluate both content and voice delivery." : "No audio recording is attached. Grade based on the text response."}
-  
-  Evaluate the response across the following metrics out of 100:
-  1. correctness: logical correctness, technical depth, and industry validity of the explanation (0-100)
-  2. completeness: coverage of edge cases, trade-offs, and details using the STAR format if applicable (0-100)
-  3. accuracy: use of precise engineering terminology, patterns, and architectural accuracy (0-100)
-  4. clarity: structural flow, articulation, and professional delivery (0-100) ${hasAudio ? "(based on both text flow and acoustic voice clarity)" : ""}
-  ${hasAudio ? `5. nervousness: level of nervousness, vocal tremors, or jitteriness (0-100)
-  6. confidence: vocal presence, assertiveness, and tone stability (0-100)
-  7. hesitation: frequency of long pauses, silence gaps, and verbal filler words (like "um", "uh", "basically") (0-100)` : ""}
-  
-  Also select a singular evaluation tag:
-  - "Strong": highly correct, technically accurate, confident.
-  - "Weak": incorrect, extremely short, or blank.
-  - "Partially Correct": correct direction but lacks precise design trade-offs/STAR details.
-  - "Bluffing": uses lots of general filler words or corporate buzzwords but has near-zero real competence.
-  - "Incomplete": correct direction but way too brief (no depth/examples).
-  - "Confused": contradicts itself or completely lost.
-  
-  Response Format:
-  Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown:
-  {
-    "correctness": 85,
-    "completeness": 70,
-    "accuracy": 80,
-    "clarity": 90,
-    "tag": "Strong" | "Weak" | "Partially Correct" | "Bluffing" | "Incomplete" | "Confused",
-    "correctAnswer": "A detailed and professional response showing how a top-tier candidate should answer, outlining key design trade-offs, architecture choices, industry standards, or STAR highlights."${hasAudio ? `,
-    "nervousness": 20,
-    "confidence": 85,
-    "hesitation": 10` : ""}
-  }`
-    : `Act as an academic examiner grading an oral response in a college viva.
-  
-  Question Asked: "${question}"
-  Student Response: "${answer}"
-  Syllabus Context: ${JSON.stringify(syllabus)}
-  ${hasAudio ? "An audio recording of the student's actual speech is attached to this request. Listen to it carefully to evaluate both content and voice delivery." : "No audio recording is attached. Grade based on the text response."}
-  
-  Evaluate the response across the following metrics out of 100:
-  1. correctness: general logical correctness (0-100)
-  2. completeness: depth, details, and completeness of explanation (0-100)
-  3. accuracy: technical formulas, precise keywords, and terminology (0-100)
-  4. clarity: fluency, structural flow (0-100) ${hasAudio ? "(based on both text flow and acoustic voice clarity)" : ""}
-  ${hasAudio ? `5. nervousness: level of nervousness, vocal tremors, or jitteriness (0-100)
-  6. confidence: vocal presence, assertiveness, and tone stability (0-100)
-  7. hesitation: frequency of long pauses, silence gaps, and verbal filler words (like "um", "uh", "basically") (0-100)` : ""}
-  
-  Also select a singular evaluation tag:
-  - "Strong": highly correct, technically accurate, confident.
-  - "Weak": incorrect, extremely short, or blank.
-  - "Partially Correct": correct direction but lacks precise terms/equations.
-  - "Bluffing": uses lots of general filler words but has near-zero academic accuracy.
-  - "Incomplete": correct answer but way too short (lacks explanations).
-  - "Confused": contradicts itself or completely lost.
-  
-  Response Format:
-  Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown:
-  {
-    "correctness": 85,
-    "completeness": 70,
-    "accuracy": 80,
-    "clarity": 90,
-    "tag": "Strong" | "Weak" | "Partially Correct" | "Bluffing" | "Incomplete" | "Confused",
-    "correctAnswer": "A detailed and unique correct answer that fully explains the concept, stating any critical equations/formulas, definitions, and physical parameters."${hasAudio ? `,
-    "nervousness": 20,
-    "confidence": 85,
-    "hesitation": 10` : ""}
-  }`;
 
-  const responseJson = await callGeminiAPI(prompt, apiKey, audioBase64);
+Question Asked: "${question}"
+Candidate Response: "${answer}"
+Job Competency Context: ${JSON.stringify(syllabus)}
+${audioInstruction}
+
+CRITICAL SCORING INSTRUCTIONS:
+You MUST evaluate THIS specific response individually and assign DYNAMIC, UNIQUE INTEGER SCORES (0-100) specific to this candidate's exact answer and voice audio. DO NOT reuse scores from previous questions or default examples.
+- Excellent, clear, and detailed responses should score high (e.g. 78 to 96).
+- Short, hesitant, or weak responses should score low (e.g. 15 to 55).
+- Vocal nervousness and hesitation should be low for confident speakers (e.g. 10 to 25) and high for anxious speakers (e.g. 50 to 85).
+
+Evaluation tag (pick one):
+- "Strong": highly correct, technically accurate, confident
+- "Weak": incorrect, blank, or extremely short
+- "Partially Correct": correct direction but lacks precise trade-offs or STAR details
+- "Bluffing": general filler phrases, near-zero real technical competence
+- "Incomplete": correct but too brief (no depth)
+- "Confused": contradicts itself or completely lost
+
+Respond ONLY with a valid clean JSON object. Do not use markdown syntax.
+{
+  "correctness": 82,
+  "completeness": 68,
+  "accuracy": 76,
+  "clarity": ${hasAudio ? "84" : "null"},
+  "confidence": ${hasAudio ? "78" : "null"},
+  "nervousness": ${hasAudio ? "24" : "null"},
+  "hesitation": ${hasAudio ? "16" : "null"},
+  "fillerCount": ${hasAudio ? "3" : "0"},
+  "fillerBreakdown": { "um": 1, "uh": 1, "ah": 0, "basically": 1, "you know": 0, "like": 0 },
+  "tag": "Strong",
+  "correctAnswer": "A detailed professional answer outlining design trade-offs, architecture choices, STAR highlights, and best practices.",
+  "gradingSource": "${hasAudio ? "audio+text" : "text-only"}"
+}
+NOTE: The integers above (82, 68, 76, 84, 78, 24, 16) are ONLY structural placeholders. YOU MUST CALCULATE ORIGINAL, DISTINCT SCORES FOR THIS SPECIFIC RESPONSE.`
+    : `Act as an academic examiner grading an oral response in a college viva.
+
+Question Asked: "${question}"
+Student Response: "${answer}"
+Syllabus Context: ${JSON.stringify(syllabus)}
+${audioInstruction}
+
+CRITICAL SCORING INSTRUCTIONS:
+You MUST evaluate THIS specific response individually and assign DYNAMIC, UNIQUE INTEGER SCORES (0-100) specific to this student's exact answer and voice audio. DO NOT reuse scores from previous questions or default examples.
+- Excellent, clear, and detailed responses should score high (e.g. 78 to 96).
+- Short, hesitant, or weak responses should score low (e.g. 15 to 55).
+- Vocal nervousness and hesitation should be low for confident speakers (e.g. 10 to 25) and high for anxious speakers (e.g. 50 to 85).
+
+Evaluation tag (pick one):
+- "Strong": highly correct, technically accurate, confident
+- "Weak": incorrect, blank, or extremely short
+- "Partially Correct": correct direction but lacks precise equations/terms
+- "Bluffing": general filler phrases, near-zero academic accuracy
+- "Incomplete": correct but too brief (no depth)
+- "Confused": contradicts itself or completely lost
+
+Respond ONLY with a valid clean JSON object. Do not use markdown syntax.
+{
+  "correctness": 82,
+  "completeness": 68,
+  "accuracy": 76,
+  "clarity": ${hasAudio ? "84" : "null"},
+  "confidence": ${hasAudio ? "78" : "null"},
+  "nervousness": ${hasAudio ? "24" : "null"},
+  "hesitation": ${hasAudio ? "16" : "null"},
+  "fillerCount": ${hasAudio ? "3" : "0"},
+  "fillerBreakdown": { "um": 1, "uh": 1, "ah": 0, "basically": 1, "you know": 0, "like": 0 },
+  "tag": "Strong",
+  "correctAnswer": "A precise academic answer with governing equations, definitions, boundary conditions.",
+  "gradingSource": "${hasAudio ? "audio+text" : "text-only"}"
+}
+NOTE: The integers above (82, 68, 76, 84, 78, 24, 16) are ONLY structural placeholders. YOU MUST CALCULATE ORIGINAL, DISTINCT SCORES FOR THIS SPECIFIC RESPONSE.`;
+
+  const responseJson = await callGeminiAPI(prompt, apiKey, audioBase64, audioMimeType);
+  return NextResponse.json(responseJson);
+}
+
+// ==========================================
+// 3.4. UNIFIED EVALUATION & NEXT QUESTION GENERATION (SINGLE CALL PER TURN)
+// ==========================================
+async function handleEvaluateAndGenerateNext(payload, apiKey) {
+  const {
+    question,
+    answer,
+    syllabus,
+    mode,
+    audioBase64,
+    audioMimeType,
+    personality,
+    asked = [],
+    history = [],
+    isFinalRound = false,
+    previousInteractionId
+  } = payload;
+
+  const isProfessional = mode === "professional";
+  const hasAudio = !!audioBase64;
+
+  const audioInstruction = hasAudio
+    ? "An audio recording of the speaker's actual voice is attached. Listen carefully and evaluate BOTH the spoken content (correctness, logic, accuracy) AND the vocal delivery (clarity, confidence, nervousness, hesitation) from the audio prosody, pitch, tone, pacing, and hesitation."
+    : "No audio is attached. Evaluate based on the text transcript only. For confidence, nervousness, hesitation, and clarity: set them to null since there is no audio to assess delivery.";
+
+  // Extract topics for next question selection
+  let allTopics = [];
+  try {
+    if (syllabus && syllabus.units && syllabus.units.length > 0) {
+      syllabus.units.forEach(u => {
+        if (u.topics && u.topics.length > 0) {
+          u.topics.forEach(t => {
+            allTopics.push({ unitName: u.name, topicName: t });
+          });
+        }
+      });
+    }
+  } catch (e) {
+    console.warn("Failed parsing syllabus units:", e);
+  }
+
+  const prompt = isProfessional
+    ? `Act as an expert industry interviewer (${personality || "friendly"} mode).
+You are performing TWO tasks in a SINGLE turn:
+1. EVALUATE the candidate's answer & audio for the question: "${question}".
+Candidate Response: "${answer}"
+Job Competency Context: ${JSON.stringify(syllabus)}
+${audioInstruction}
+
+CRITICAL SCORING INSTRUCTIONS:
+Calculate DYNAMIC, UNIQUE INTEGER SCORES (0-100) specific to this candidate's exact answer and voice audio.
+- Excellent, clear, detailed responses score high (78-96).
+- Short, hesitant, or weak responses score low (15-55).
+- Nervousness and hesitation should be low for confident speakers (10-25) and high for anxious speakers (50-85).
+
+2. ${isFinalRound ? "This is the final round. Generate a brief, professional closing wrap-up remark as the interviewer." : `GENERATE THE NEXT INTERVIEW QUESTION based on the candidate's performance. Available Competency Topics: ${JSON.stringify(allTopics.map(t => t.topicName))}. Already Asked Topics: ${JSON.stringify(asked)}. Choose an unasked topic.`}
+
+Respond ONLY with a valid clean JSON object. Do not use markdown syntax:
+{
+  "evaluation": {
+    "correctness": 82,
+    "completeness": 68,
+    "accuracy": 76,
+    "clarity": ${hasAudio ? "84" : "null"},
+    "confidence": ${hasAudio ? "78" : "null"},
+    "nervousness": ${hasAudio ? "24" : "null"},
+    "hesitation": ${hasAudio ? "16" : "null"},
+    "fillerCount": ${hasAudio ? "3" : "0"},
+    "fillerBreakdown": { "um": 1, "uh": 1, "ah": 0, "basically": 1, "you know": 0, "like": 0 },
+    "tag": "Strong",
+    "correctAnswer": "A detailed professional reference answer outlining design trade-offs, architecture choices, and best practices.",
+    "gradingSource": "${hasAudio ? "audio+text" : "text-only"}"
+  },
+  "nextQuestion": ${isFinalRound ? "null" : `{
+    "text": "The next interview question string",
+    "speech": "Interviewer's spoken reaction to the candidate's last answer + seamless transition into the next question",
+    "topic": "Selected Subtopic Name",
+    "difficulty": "Medium"
+  }`}
+}
+NOTE: The integers above are structural placeholders. You MUST calculate distinct, dynamic scores for this response.`
+    : `Act as an academic examiner (${personality || "friendly"} mode) conducting a college viva.
+You are performing TWO tasks in a SINGLE turn:
+1. EVALUATE the student's oral answer & audio for the question: "${question}".
+Student Response: "${answer}"
+Syllabus Context: ${JSON.stringify(syllabus)}
+${audioInstruction}
+
+CRITICAL SCORING INSTRUCTIONS:
+Calculate DYNAMIC, UNIQUE INTEGER SCORES (0-100) specific to this student's exact answer and voice audio.
+- Excellent, clear, detailed responses score high (78-96).
+- Short, hesitant, or weak responses score low (15-55).
+- Nervousness and hesitation should be low for confident speakers (10-25) and high for anxious speakers (50-85).
+
+2. ${isFinalRound ? "This is the final round. Generate a brief, encouraging closing wrap-up remark as the examiner." : `GENERATE THE NEXT VIVA QUESTION based on the student's performance. Available Syllabus Topics: ${JSON.stringify(allTopics.map(t => t.topicName))}. Already Asked Topics: ${JSON.stringify(asked)}. Choose an unasked topic.`}
+
+Respond ONLY with a valid clean JSON object. Do not use markdown syntax:
+{
+  "evaluation": {
+    "correctness": 82,
+    "completeness": 68,
+    "accuracy": 76,
+    "clarity": ${hasAudio ? "84" : "null"},
+    "confidence": ${hasAudio ? "78" : "null"},
+    "nervousness": ${hasAudio ? "24" : "null"},
+    "hesitation": ${hasAudio ? "16" : "null"},
+    "fillerCount": ${hasAudio ? "3" : "0"},
+    "fillerBreakdown": { "um": 1, "uh": 1, "ah": 0, "basically": 1, "you know": 0, "like": 0 },
+    "tag": "Strong",
+    "correctAnswer": "A precise academic reference answer with governing equations, definitions, and boundary conditions.",
+    "gradingSource": "${hasAudio ? "audio+text" : "text-only"}"
+  },
+  "nextQuestion": ${isFinalRound ? "null" : `{
+    "text": "The next viva question string",
+    "speech": "Examiner's spoken reaction to the student's last answer + seamless transition into the next question",
+    "topic": "Selected Subtopic Name",
+    "difficulty": "Medium"
+  }`}
+}
+NOTE: The integers above are structural placeholders. You MUST calculate distinct, dynamic scores for this response.`;
+
+  const responseJson = await callGeminiAPI(prompt, apiKey, audioBase64, audioMimeType, previousInteractionId);
   return NextResponse.json(responseJson);
 }
 
@@ -509,15 +707,15 @@ async function handleGenerateSubquestion(payload, apiKey) {
   Interrupt them and ask a much simpler, basic sub-question related to the topic "${topic}" to test their core understanding. Keep it direct and slightly challenging.
   Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown:
   {
-    "subQuestionText": "The sub-question text to display on screen (e.g. 'What is the standard purpose of an index in a database?')",
-    "subQuestionSpeech": "Thorne's sharp spoken remark. Incorporate fillers or a direct tone (e.g. 'Let's take a step back: what is the fundamental purpose of...')"
+    "subQuestionText": "Simpler follow-up question text here",
+    "subQuestionSpeech": "Harry's sharp spoken interruption + simpler follow-up question"
   }`
-    : `You are conducting a university oral exam as a high-pressure Viva Terror examiner. The student is struggling and has paused/hesitated on this question: "${question}". They have spoken or typed so far: "${answer || 'nothing yet'}".
-  Interrupt them and ask a much simpler, basic sub-question related to the topic "${topic}" to test their elementary understanding. Keep it direct and slightly intimidating.
+    : `You are conducting a viva as a Viva Terror. The student is struggling and has paused/hesitated on this question: "${question}". They have spoken or typed so far: "${answer || 'nothing yet'}".
+  Interrupt them and ask a much simpler, basic sub-question related to the topic "${topic}" to test their core understanding. Keep it direct and sharp.
   Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown:
   {
-    "subQuestionText": "The sub-question text to display on screen (e.g. 'What is the basic definition of entropy?')",
-    "subQuestionSpeech": "Professor Thorne's sharp spoken remark. Incorporate fillers or a stern tone (e.g. 'You seem stuck. Let's make it simpler: what is...')"
+    "subQuestionText": "Simpler follow-up question text here",
+    "subQuestionSpeech": "Harry's sharp spoken interruption + simpler follow-up question"
   }`;
 
   const responseJson = await callGeminiAPI(prompt, apiKey);
@@ -563,12 +761,14 @@ RETROSPECTIVE ANALYSIS TASKS:
 4. Detect BLUFFING PATTERNS where the candidate showed high verbal confidence but low technical accuracy across multiple rounds
 5. Identify the single strongest round (with evidence) and single weakest round (with evidence)
 6. Provide 2-3 specific, actionable improvement recommendations based on cross-session patterns
+7. Calculate the holistic overallFinalScore (integer 0 to 100) evaluating overall subject mastery, technical correctness, and delivery poise.
 
 Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown blocks:
 {
   "sessionNarrative": "2-3 sentence performance arc narrative",
   "trajectoryPattern": "ascending" | "declining" | "steady",
   "trajectoryDescription": "1 sentence explaining the confidence trajectory",
+  "overallFinalScore": 84,
   "contradictions": [
     { "rounds": [1, 3], "description": "What was contradicted and why it matters" }
   ],
@@ -594,12 +794,14 @@ RETROSPECTIVE ANALYSIS TASKS:
 4. Detect BLUFFING PATTERNS where the student showed high verbal confidence but low conceptual accuracy across multiple rounds
 5. Identify the single strongest round (with evidence) and single weakest round (with evidence)
 6. Provide 2-3 specific, actionable revision recommendations based on cross-session patterns
+7. Calculate the holistic overallFinalScore (integer 0 to 100) evaluating overall subject mastery, technical correctness, and delivery poise.
 
 Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown blocks:
 {
   "sessionNarrative": "2-3 sentence performance arc narrative",
   "trajectoryPattern": "ascending" | "declining" | "steady",
   "trajectoryDescription": "1 sentence explaining the confidence trajectory",
+  "overallFinalScore": 84,
   "contradictions": [
     { "rounds": [1, 3], "description": "What was contradicted and why it matters" }
   ],
@@ -615,85 +817,43 @@ Respond ONLY with a valid, clean JSON object matching this schema. Do not enclos
 }
 
 // ==========================================
-// GEMINI API CALLER
+// 6.5. INTERACTIVE SOCRATIC DIALOGUE
 // ==========================================
-async function callGeminiAPI(prompt, apiKey, audioBase64 = null) {
-  const CANDIDATE_MODELS = [
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
-    "gemini-3.5-flash",
-    "gemini-3.1-flash-lite"
-  ];
+async function handleInteractiveDialogue(payload, apiKey) {
+  const { question, studentAnswer, userPrompt, personality, mode, previousInteractionId } = payload;
+  const isProfessional = mode === "professional";
 
-  let lastError = null;
+  const prompt = isProfessional
+    ? `You are an expert industry interviewer (${personality || "strict"} mode) engaged in an interactive Socratic dialogue with a candidate after their mock interview.
+The candidate asked: "${userPrompt}" regarding the interview question: "${question}" and their response: "${studentAnswer}".
+Provide a clear, highly constructive, and conversational response (2-3 paragraphs) as the interviewer.
+Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown:
+{
+  "replyText": "Your helpful, detailed response string as the interviewer."
+}`
+    : `You are a university examiner (${personality || "strict"} mode) engaged in an interactive Socratic dialogue with a student after their oral viva.
+The student asked: "${userPrompt}" regarding the viva question: "${question}" and their response: "${studentAnswer}".
+Provide a clear, highly educational, and encouraging response (2-3 paragraphs) explaining the concept, formulas, or trade-offs.
+Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown:
+{
+  "replyText": "Your helpful, detailed response string as the examiner."
+}`;
 
-  for (const model of CANDIDATE_MODELS) {
-    let timeoutId;
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-      
-      const parts = [{ text: prompt }];
-      if (audioBase64) {
-        parts.push({
-          inlineData: {
-            mimeType: "audio/webm",
-            data: audioBase64
-          }
-        });
-      }
+  const responseJson = await callGeminiAPI(prompt, apiKey, null, previousInteractionId);
+  return NextResponse.json(responseJson);
+}
 
-      const payload = {
-        contents: [{ parts }],
-        generationConfig: {
-          responseMimeType: "application/json"
-        }
-      };
-
-      const controller = new AbortController();
-      timeoutId = setTimeout(() => controller.abort(), 25000); // 25 seconds failsafe timeout
-
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-
-      if (!res.ok) {
-        const errText = await res.text();
-        console.warn(`Model ${model} failed with status ${res.status}: ${errText}. Trying next candidate.`);
-        lastError = new Error(`Model ${model} returned status ${res.status}: ${errText}`);
-        continue;
-      }
-
-      const result = await res.json();
-      
-      if (!result.candidates || result.candidates.length === 0 || !result.candidates[0].content || !result.candidates[0].content.parts || result.candidates[0].content.parts.length === 0) {
-        console.warn(`Model ${model} returned empty candidates structure. Trying next candidate.`);
-        lastError = new Error(`Model ${model} returned empty response.`);
-        continue;
-      }
-
-      const textResponse = result.candidates[0].content.parts[0].text;
-      
-      // Clean markdown JSON ticks if model includes them despite JSON mode
-      const cleanJson = textResponse
-        .replace(/^```json\s*/i, "")
-        .replace(/```$/, "")
-        .trim();
-
-      return JSON.parse(cleanJson);
-
-    } catch (err) {
-      if (timeoutId) clearTimeout(timeoutId);
-      console.warn(`Model ${model} execution threw exception: ${err.message}. Trying next candidate.`);
-      lastError = err;
-    }
-  }
-
-  throw new Error(`All candidate models failed. Last error: ${lastError ? lastError.message : "Unknown"}`);
+// ==========================================
+// GEMINI API CALLER (Delegated to GeminiAIService via @google/genai SDK)
+// ==========================================
+async function callGeminiAPI(prompt, apiKey, audioBase64 = null, audioMimeType = null, previousInteractionId = null) {
+  return await GeminiAIService.callGeminiInteraction({
+    prompt,
+    apiKey,
+    audioBase64,
+    audioMimeType,
+    previousInteractionId
+  });
 }
 
 // ==========================================
@@ -929,72 +1089,58 @@ function handleOfflineFallback(payload) {
   }
 
   if (action === "evaluate-answer") {
-    const { question, answer } = payload;
+    // Gemini API is offline — return honest Ungraded response.
+    // Never use keyword-match heuristics that inflate scores.
+    const { answer } = payload;
     const cleanAnswer = (answer || "").trim();
     const lowerAnswer = cleanAnswer.toLowerCase();
-    const wordsCount = lowerAnswer.split(/\s+/).filter(w => w.length > 0).length;
-    
-    let correctness = 60;
-    let accuracy = 55;
-    let completeness = 50;
-    let tag = "Partially Correct";
-    
-    if (wordsCount < 6 || lowerAnswer.includes("student remained silent") || lowerAnswer.includes("candidate remained silent")) {
-      correctness = 25;
-      accuracy = 20;
-      completeness = 15;
-      tag = "Weak";
-    } else if (lowerAnswer.includes("don't know") || lowerAnswer.includes("not sure") || lowerAnswer.includes("skip")) {
-      correctness = 20;
-      accuracy = 15;
-      completeness = 10;
-      tag = "Weak";
-    } else {
-      // Check keyword matches from the question topic/text
-      const topicKeywords = question.toLowerCase().replace(/[^\w\s]/g, "").split(/\s+/).filter(w => w.length > 4);
-      let matchCount = 0;
-      topicKeywords.forEach(kw => {
-        if (lowerAnswer.includes(kw)) matchCount++;
-      });
-      
-      const matchRatio = topicKeywords.length > 0 ? matchCount / topicKeywords.length : 0.5;
-      
-      if (matchRatio >= 0.5) {
-        correctness = Math.round(78 + matchRatio * 18);
-        accuracy = Math.round(75 + matchRatio * 20);
-        completeness = Math.round(70 + matchRatio * 25);
-        tag = "Strong";
-      } else if (wordsCount > 28 && matchRatio < 0.25) {
-        correctness = 45;
-        accuracy = 35;
-        completeness = 40;
-        tag = "Bluffing";
-      } else if (wordsCount < 16) {
-        correctness = 62;
-        accuracy = 55;
-        completeness = 45;
-        tag = "Incomplete";
-      }
-    }
+    const isSilent = cleanAnswer.length < 10
+      || lowerAnswer.includes("remained silent")
+      || lowerAnswer.includes("no substantive answer");
 
-    const questionLower = (question || "").toLowerCase();
-    let correctAnswer = isProfessional
-      ? `A correct response should explain the underlying engineering principles, state any design trade-offs/STAR details, and outline architectural best practices.`
-      : `A correct response should explain the underlying technical principles, state any governing formulas/relationships, and outline how parameters behave under boundary conditions.`;
-    for (const [key, val] of Object.entries(DEFAULT_CORRECT_ANSWERS)) {
-      if (questionLower.includes(key.toLowerCase()) || key.toLowerCase().includes(questionLower)) {
-        correctAnswer = val;
-        break;
-      }
-    }
-    
     return NextResponse.json({
-      correctness,
-      completeness,
-      accuracy,
-      clarity: Math.round(correctness * 0.95),
-      tag,
-      correctAnswer: correctAnswer
+      correctness: isSilent ? 0 : null,
+      completeness: isSilent ? 0 : null,
+      accuracy: isSilent ? 0 : null,
+      clarity: null,
+      confidence: null,
+      nervousness: null,
+      hesitation: null,
+      tag: isSilent ? "Weak" : "Ungraded",
+      correctAnswer: null,
+      gradingSource: "offline",
+      isUngraded: true
+    });
+  }
+
+  if (action === "evaluate-and-generate-next") {
+    const { answer } = payload;
+    const cleanAnswer = (answer || "").trim();
+    const lowerAnswer = cleanAnswer.toLowerCase();
+    const isSilent = cleanAnswer.length < 10
+      || lowerAnswer.includes("remained silent")
+      || lowerAnswer.includes("no substantive answer");
+
+    return NextResponse.json({
+      evaluation: {
+        correctness: isSilent ? 0 : null,
+        completeness: isSilent ? 0 : null,
+        accuracy: isSilent ? 0 : null,
+        clarity: null,
+        confidence: null,
+        nervousness: null,
+        hesitation: null,
+        tag: isSilent ? "Weak" : "Ungraded",
+        correctAnswer: null,
+        gradingSource: "offline",
+        isUngraded: true
+      },
+      nextQuestion: payload.isFinalRound ? null : {
+        text: `Let's examine the next key concept in ${payload.syllabus?.topic || "this subject"}. Can you explain its core principles?`,
+        speech: `Good. Let's examine the next key concept in ${payload.syllabus?.topic || "this subject"}. Can you explain its core principles?`,
+        topic: payload.syllabus?.units?.[0]?.topics?.[0] || "Core Concept",
+        difficulty: "Medium"
+      }
     });
   }
 
@@ -1176,7 +1322,10 @@ function handleOfflineFallback(payload) {
 // ==========================================
 async function handleSynthesizeSpeech(text, personality) {
   try {
-    const apiKey = process.env.ELEVENLABS_API_KEY || "sk_f62554d4fb66affbb50f3b699c3527f54c7763d3b8fcf99f";
+    const apiKey = process.env.ELEVENLABS_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json({ error: "ElevenLabs is not configured on the server." }, { status: 503 });
+    }
 
     // Dynamic Voice IDs mapped to personalities
     const voiceMap = {

@@ -12,7 +12,7 @@ export const QuestionGraphEngine = {
    * @returns {Promise<object>} The next question node { text, speech, topic, difficulty }
    */
   async generateNextQuestion(params) {
-    const { syllabus, personality, duration, askedList, answersList, lastEvaluationTag, currentTopic, nervousness, isTargetDrill, targetSubtopic, mode } = params;
+    const { syllabus, personality, duration, askedList, answersList, lastEvaluationTag, currentTopic, nervousness, isTargetDrill, targetSubtopic, mode, previousInteractionId } = params;
 
     try {
       const response = await fetch("/api/viva", {
@@ -30,7 +30,8 @@ export const QuestionGraphEngine = {
           nervousness: nervousness || 0,
           isTargetDrill,
           targetSubtopic,
-          mode
+          mode,
+          previousInteractionId
         })
       });
 
@@ -41,6 +42,42 @@ export const QuestionGraphEngine = {
       console.warn("QuestionGraphEngine API error. Falling back to rule-based offline generation:", e);
       return this.getRuleBasedOfflineFallback(askedList.length + 1, personality, currentTopic, syllabus);
     }
+  },
+
+  /**
+   * Instantly builds a high-quality initial question node synchronously for zero-latency exam start.
+   */
+  getInitialQuestionSync(params) {
+    const { syllabus, personality, isTargetDrill, targetSubtopic, mode } = params || {};
+    const isProfessional = mode === "professional";
+    
+    // Target drill initial question
+    if (isTargetDrill && targetSubtopic) {
+      const qText = isProfessional
+        ? `Let's focus on your competency in ${targetSubtopic}. Explain your hands-on experience, core architectural patterns, and key challenges faced.`
+        : `Let's focus on your knowledge of ${targetSubtopic}. Explain the core theoretical principles, governing equations, and practical applications.`;
+      return {
+        text: qText,
+        speech: qText,
+        topic: targetSubtopic,
+        difficulty: "Medium"
+      };
+    }
+
+    const firstUnit = syllabus?.units?.[0];
+    const unitName = firstUnit?.name || (isProfessional ? "Core Competencies" : "Unit 1: Fundamentals");
+    const firstTopic = firstUnit?.topics?.[0] || (isProfessional ? "System Architecture" : "Core Principles");
+
+    const qText = isProfessional
+      ? `To start our session on ${syllabus?.topic || "your domain"}, let's look at ${firstTopic} under ${unitName}. How do you approach designing, scaling, and managing this in a production environment?`
+      : `To begin your examination on ${syllabus?.topic || "your syllabus"}, let us focus on ${firstTopic} in ${unitName}. State the fundamental equations, physical principles, and governing boundaries.`;
+
+    return {
+      text: qText,
+      speech: qText,
+      topic: firstTopic,
+      difficulty: "Low"
+    };
   },
 
   /**

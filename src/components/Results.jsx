@@ -2,19 +2,65 @@
 
 import React, { useState, useEffect } from "react";
 import { VoiceManager } from "@/services/voiceManager";
+import GaugeMetric from "./GaugeMetric";
 
 export default function Results({ resultsData, onRestart, onGoDashboard }) {
   const [activeTimelineIndex, setActiveTimelineIndex] = useState(0);
   const [expandedReplayIndex, setExpandedReplayIndex] = useState(null);
   const [playingReplayIndex, setPlayingReplayIndex] = useState(null);
   const [pastSessionsAvg, setPastSessionsAvg] = useState(null);
-  const [scoreOffset, setScoreOffset] = useState(314.16);
   const [activeRightTab, setActiveRightTab] = useState("timeline"); // "timeline" | "fluency"
   const [mobileTab, setMobileTab] = useState("overview"); // "overview" | "metrics" | "qa" | "plan"
-  const [displayedScore, setDisplayedScore] = useState(0);
-  const [hindsightData, setHindsightData] = useState(resultsData.hindsightData || null);
-  const [hindsightLoading, setHindsightLoading] = useState(resultsData.hindsightLoading || false);
+  const [socraticInputs, setSocraticInputs] = useState({});
+  const [socraticDialogues, setSocraticDialogues] = useState({});
+  const [socraticLoading, setSocraticLoading] = useState({});
 
+  const hindsightData = resultsData.hindsightData || null;
+  const hindsightLoading = false;
+
+  async function handleSendSocraticQuery(roundIdx, questionText, studentAnswerText) {
+    const userText = (socraticInputs[roundIdx] || "").trim();
+    if (!userText || socraticLoading[roundIdx]) return;
+
+    setSocraticDialogues(prev => ({
+      ...prev,
+      [roundIdx]: [...(prev[roundIdx] || []), { sender: "user", text: userText }]
+    }));
+    setSocraticInputs(prev => ({ ...prev, [roundIdx]: "" }));
+    setSocraticLoading(prev => ({ ...prev, [roundIdx]: true }));
+
+    try {
+      const res = await fetch("/api/viva", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "interactive-dialogue",
+          question: questionText,
+          studentAnswer: studentAnswerText,
+          userPrompt: userText,
+          personality: resultsData.examinerPersonality || "strict",
+          mode: resultsData.mode || "academic",
+          previousInteractionId: resultsData.lastInteractionId || null
+        })
+      });
+      if (!res.ok) throw new Error("Socratic dialogue request failed");
+      const data = await res.json();
+      const replyText = data.replyText || data.text || "I am glad to help clarify. Keep practicing!";
+
+      setSocraticDialogues(prev => ({
+        ...prev,
+        [roundIdx]: [...(prev[roundIdx] || []), { sender: "examiner", text: replyText }]
+      }));
+    } catch (err) {
+      console.error("Socratic Dialogue Error:", err);
+      setSocraticDialogues(prev => ({
+        ...prev,
+        [roundIdx]: [...(prev[roundIdx] || []), { sender: "examiner", text: "I couldn't process that follow-up question right now. Try rephrasing your question." }]
+      }));
+    } finally {
+      setSocraticLoading(prev => ({ ...prev, [roundIdx]: false }));
+    }
+  }
 
   const {
     endedEarly,
@@ -40,30 +86,9 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     };
   }, []);
 
-  // Poll for async hindsight data resolution
-  useEffect(() => {
-    if (hindsightData || !resultsData.hindsightLoading) {
-      // Already resolved or never loading
-      if (resultsData.hindsightData && !hindsightData) {
-        setHindsightData(resultsData.hindsightData);
-        setHindsightLoading(false);
-      }
-      return;
-    }
-    const pollInterval = setInterval(() => {
-      if (resultsData.hindsightData) {
-        setHindsightData(resultsData.hindsightData);
-        setHindsightLoading(false);
-        clearInterval(pollInterval);
-      } else if (!resultsData.hindsightLoading) {
-        setHindsightLoading(false);
-        clearInterval(pollInterval);
-      }
-    }, 800);
-    return () => clearInterval(pollInterval);
-  }, [resultsData, hindsightData]);
-
-  // 1. Calculate Scorecard Averages
+  // 1. Calculate Scorecard Averages (Filtering out ungraded rounds)
+  const gradedEmotions = detectedEmotions.filter(emo => !emo.isUngraded && emo.gradingSource !== "offline");
+  const gradedRounds = gradedEmotions.length;
   const totalRounds = detectedEmotions.length;
   
   let subjectUnderstanding = 0;
@@ -73,66 +98,110 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
   let handlingPressure = 0;
   let consistency = 0;
 
-  if (detectedEmotions.length > 0) {
+  if (gradedRounds > 0) {
     let correctnessSum = 0, confSum = 0, clarSum = 0, depthSum = 0, pressureSum = 0;
-    detectedEmotions.forEach(emo => {
-      correctnessSum += emo.correctness || 80;
-      confSum += emo.confidence || 80;
-      clarSum += emo.clarity || 80;
-      depthSum += emo.completeness || 75;
-      pressureSum += (100 - (emo.nervousness || 20));
+    let validCorrectness = 0, validConf = 0, validClar = 0, validDepth = 0, validPressure = 0;
+
+    gradedEmotions.forEach(emo => {
+      if (emo.correctness !== undefined && emo.correctness !== null) {
+        correctnessSum += emo.correctness;
+        validCorrectness++;
+      }
+      if (emo.confidence !== undefined && emo.confidence !== null) {
+        confSum += emo.confidence;
+        validConf++;
+      }
+      if (emo.clarity !== undefined && emo.clarity !== null) {
+        clarSum += emo.clarity;
+        validClar++;
+      }
+      if (emo.completeness !== undefined && emo.completeness !== null) {
+        depthSum += emo.completeness;
+        validDepth++;
+      }
+      if (emo.nervousness !== undefined && emo.nervousness !== null) {
+        pressureSum += (100 - emo.nervousness);
+        validPressure++;
+      }
     });
     
-    subjectUnderstanding = Math.round(correctnessSum / totalRounds);
-    vocalConfidence = Math.round(confSum / totalRounds);
-    clarityOfComm = Math.round(clarSum / totalRounds);
-    conceptualDepth = Math.round(depthSum / totalRounds);
-    handlingPressure = Math.round(pressureSum / totalRounds);
+    subjectUnderstanding = validCorrectness > 0 ? Math.round(correctnessSum / validCorrectness) : 0;
+    vocalConfidence = validConf > 0 ? Math.round(confSum / validConf) : 0;
+    clarityOfComm = validClar > 0 ? Math.round(clarSum / validClar) : 0;
+    conceptualDepth = validDepth > 0 ? Math.round(depthSum / validDepth) : 0;
+    handlingPressure = validPressure > 0 ? Math.round(pressureSum / validPressure) : 0;
     
     // Consistency is calculated based on correctness variation (higher consistency = smaller differences)
-    let differences = 0;
-    const avgCorrectness = correctnessSum / totalRounds;
-    detectedEmotions.forEach(emo => {
-      differences += Math.pow((emo.correctness || 80) - avgCorrectness, 2);
-    });
-    const standardDev = Math.sqrt(differences / totalRounds);
-    consistency = Math.round(Math.max(100 - (standardDev * 2.2), 58));
+    if (validCorrectness > 1) {
+      let differences = 0;
+      const avgCorrectness = correctnessSum / validCorrectness;
+      gradedEmotions.forEach(emo => {
+        if (emo.correctness !== undefined && emo.correctness !== null) {
+          differences += Math.pow(emo.correctness - avgCorrectness, 2);
+        }
+      });
+      const standardDev = Math.sqrt(differences / validCorrectness);
+      consistency = Math.round(Math.max(100 - (standardDev * 2.2), 0));
+    } else {
+      consistency = 100;
+    }
   }
 
-  // Lexical Speech Diagnostics Calculations
+  // Lexical & Audio Speech Diagnostics Calculations
   const fillerCounts = { um: 0, ah: 0, like: 0, basically: 0, actually: 0, "you know": 0 };
   let totalWordsCount = 0;
   let totalFillerCount = 0;
 
+  // 1. Aggregate Gemini audio-based filler breakdown across rounds
+  detectedEmotions.forEach(emo => {
+    if (emo && emo.fillerBreakdown) {
+      Object.entries(emo.fillerBreakdown).forEach(([k, v]) => {
+        const count = parseInt(v, 10) || 0;
+        if (count > 0) {
+          if (k === "um" || k === "umm") fillerCounts["um"] += count;
+          else if (k === "ah" || k === "uh" || k === "uhm" || k === "ahh") fillerCounts["ah"] += count;
+          else if (k === "like") fillerCounts["like"] += count;
+          else if (k === "basically") fillerCounts["basically"] += count;
+          else if (k === "actually") fillerCounts["actually"] += count;
+          else if (k === "you know") fillerCounts["you know"] += count;
+          totalFillerCount += count;
+        }
+      });
+    }
+  });
+
+  // 2. Count total words and fallback lexical scanning if audio breakdown wasn't present
   answerTranscripts.forEach(text => {
     const cleanText = (text || "").toLowerCase().replace(/[^\w\s']/g, " ");
     const words = cleanText.split(/\s+/).filter(w => w.length > 0);
     totalWordsCount += words.length;
 
-    words.forEach(w => {
-      if (w === "um" || w === "umm") {
-        fillerCounts["um"]++;
-        totalFillerCount++;
-      } else if (w === "ah" || w === "ahh" || w === "uh" || w === "uhm") {
-        fillerCounts["ah"]++;
-        totalFillerCount++;
-      } else if (w === "like") {
-        fillerCounts["like"]++;
-        totalFillerCount++;
-      } else if (w === "basically") {
-        fillerCounts["basically"]++;
-        totalFillerCount++;
-      } else if (w === "actually") {
-        fillerCounts["actually"]++;
-        totalFillerCount++;
-      }
-    });
+    if (totalFillerCount === 0) {
+      words.forEach(w => {
+        if (w === "um" || w === "umm") {
+          fillerCounts["um"]++;
+          totalFillerCount++;
+        } else if (w === "ah" || w === "ahh" || w === "uh" || w === "uhm") {
+          fillerCounts["ah"]++;
+          totalFillerCount++;
+        } else if (w === "like") {
+          fillerCounts["like"]++;
+          totalFillerCount++;
+        } else if (w === "basically") {
+          fillerCounts["basically"]++;
+          totalFillerCount++;
+        } else if (w === "actually") {
+          fillerCounts["actually"]++;
+          totalFillerCount++;
+        }
+      });
 
-    let youKnowIndex = cleanText.indexOf("you know");
-    while (youKnowIndex !== -1) {
-      fillerCounts["you know"]++;
-      totalFillerCount++;
-      youKnowIndex = cleanText.indexOf("you know", youKnowIndex + 8);
+      let youKnowIndex = cleanText.indexOf("you know");
+      while (youKnowIndex !== -1) {
+        fillerCounts["you know"]++;
+        totalFillerCount++;
+        youKnowIndex = cleanText.indexOf("you know", youKnowIndex + 8);
+      }
     }
   });
 
@@ -259,22 +328,27 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     return detections;
   };
 
-  let avgWpm = 0;
+  let avgWpm = null;
+  let validWpmCount = 0;
   if (detectedEmotions.length > 0) {
     let wpmSum = 0;
-    detectedEmotions.forEach((emo, idx) => {
-      const answer = answerTranscripts[idx] || "";
-      const wordCount = answer.split(/\s+/).filter(w => w.length > 0).length;
-      const wpmVal = emo.wpm || Math.round(wordCount / 0.4); // assume 24s answers as fallback
-      wpmSum += wpmVal;
+    detectedEmotions.forEach((emo) => {
+      if (emo.wpm !== undefined && emo.wpm !== null) {
+        wpmSum += emo.wpm;
+        validWpmCount++;
+      }
     });
-    avgWpm = Math.round(wpmSum / totalRounds);
+    avgWpm = validWpmCount > 0 ? Math.round(wpmSum / validWpmCount) : null;
   }
 
   let pacingCategory = "Optimal Professional";
   let pacingColor = "var(--color-success)";
   let pacingBg = "var(--color-success-bg)";
-  if (avgWpm < 90) {
+  if (avgWpm === null) {
+    pacingCategory = "No Data";
+    pacingColor = "var(--text-muted)";
+    pacingBg = "var(--bg-primary)";
+  } else if (avgWpm < 90) {
     pacingCategory = "Hesitant & Slow";
     pacingColor = "hsl(0, 60%, 42%)";
     pacingBg = "hsl(0, 50%, 93%)";
@@ -292,7 +366,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     pacingBg = "hsl(38, 70%, 93%)";
   }
 
-  const needleAngle = Math.min(Math.max((avgWpm / 240) * 180 - 90, -90), 90);
+  const needleAngle = avgWpm === null ? -90 : Math.min(Math.max((avgWpm / 240) * 180 - 90, -90), 90);
   
   let overallScore = Math.round(
     (subjectUnderstanding * 0.35) + 
@@ -301,46 +375,14 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     (conceptualDepth * 0.2) + 
     (handlingPressure * 0.1)
   );
-  overallScore = totalRounds > 0 ? Math.min(Math.max(overallScore, 40), 99) : 0;
-  if (endedEarly && totalRounds > 0) {
+  overallScore = gradedRounds > 0 ? Math.min(overallScore, 99) : 0;
+  if (endedEarly && gradedRounds > 0) {
     overallScore = Math.round(overallScore * 0.6);
   }
 
-  // Radial score stroke offset animation
-  useEffect(() => {
-    const offset = 314.16 - (314.16 * overallScore) / 100;
-    const timer = setTimeout(() => {
-      setScoreOffset(offset);
-    }, 150);
-    return () => clearTimeout(timer);
-  }, [overallScore]);
 
-  // Decryption / Rolling animation for overall score number
-  useEffect(() => {
-    if (overallScore <= 0) {
-      setDisplayedScore(0);
-      return;
-    }
 
-    const duration = 1200; // Animation duration in ms
-    const intervalTime = 30; // Update rate in ms
-    const totalSteps = duration / intervalTime;
-    let step = 0;
-
-    const timer = setInterval(() => {
-      step++;
-      if (step >= totalSteps) {
-        clearInterval(timer);
-        setDisplayedScore(overallScore);
-      } else {
-        // Fast random rolling sequence to simulate decryption scan
-        const randomVal = Math.floor(Math.random() * 90) + 10;
-        setDisplayedScore(randomVal);
-      }
-    }, intervalTime);
-
-    return () => clearInterval(timer);
-  }, [overallScore]);
+  const currentSessionId = resultsData?.id || resultsData?.sessionId;
 
   // Load prior average score for historical growth computation
   useEffect(() => {
@@ -349,20 +391,29 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
         const stored = localStorage.getItem("vivasim_sessions");
         if (stored) {
           const parsed = JSON.parse(stored);
-          // Filter out this current session to find previous ones
-          const past = parsed.filter(p => p.subject === subjectName);
+          // Strictly exclude the active session when computing prior subject average
+          const past = parsed.filter(p => {
+            if (p.subject !== subjectName) return false;
+            if (currentSessionId && (p.id === currentSessionId || p.reportData?.id === currentSessionId || p.reportData?.sessionId === currentSessionId)) {
+              return false;
+            }
+            return true;
+          });
+
           if (past.length > 0) {
             const sum = past.reduce((acc, curr) => acc + curr.score, 0);
             setTimeout(() => {
               setPastSessionsAvg(Math.round(sum / past.length));
             }, 0);
+          } else {
+            setPastSessionsAvg(null);
           }
         }
       } catch (e) {
         console.warn("Failed loading historic sessions averages:", e);
       }
     }
-  }, [subjectName]);
+  }, [subjectName, currentSessionId]);
 
   const generate5DayPlan = () => {
     // Collect all concepts that need revision
@@ -528,6 +579,9 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     evaluationVerdict = isProfessional
       ? "The mock interview session was terminated before any questions were answered. No metrics or diagnostics could be recorded."
       : "The oral examination was terminated before any questions were answered. No metrics or diagnostics could be recorded.";
+  } else if (gradedRounds === 0) {
+    gradeLabel = "Ungraded Session";
+    evaluationVerdict = "No valid evaluation metrics could be parsed for this session. Please check your Gemini API key configuration and microphone/audio settings.";
   } else if (overallScore >= 80) {
     gradeLabel = isProfessional ? "Recommended Hire" : "First Class Honor (Distinction)";
     evaluationVerdict = isProfessional
@@ -608,6 +662,9 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     const topicText = qObj ? qObj.topic : "Syllabus Concept";
     
     if (!emotion) return "Loading timeline logs...";
+    if (emotion.isUngraded) {
+      return `Round #${idx + 1} (${topicText}): This round was not evaluated by Gemini due to an offline network fallback.`;
+    }
     
     let commentary = `Round #${idx + 1} (${topicText}): Solid semantic response. Articulated the primary definitions with standard pacing.`;
     
@@ -616,20 +673,141 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     } else if (emotion.nervousness > 45) {
       commentary = `Round #${idx + 1} (${topicText}): The examiner pressed heavily on this topic. You experienced elevated anxiety levels; speaking rate shifted rapidly but logical accuracy remained stable.`;
     } else if (emotion.hesitation > 40) {
-      commentary = `Round #${idx + 1} (${topicText}): Long pause blocks and lexical hesitation markers ('umm', 'uh') occurred. Response lacked structural velocity.`;
+      commentary = `Round #${idx + 1} (${topicText}): Long pause blocks and lexical hesitation markers occurred. Response lacked structural velocity.`;
     } else if (emotion.correctness >= 80) {
       commentary = `Round #${idx + 1} (${topicText}): Outstanding cognitive clarity. Precision phrasing, strict technical nomenclature, and absolute zero vocal hesitation.`;
     }
     return commentary;
   };
 
+  // Render exact numerical values AND graphical progress bars for each answer's emotional & technical metrics
+  const renderAnswerEmotionalMetrics = (emotion) => {
+    if (!emotion || emotion.isUngraded) {
+      return (
+        <div style={{
+          fontSize: "0.75rem", color: "var(--text-secondary)", fontStyle: "italic",
+          padding: "8px 12px", borderRadius: "var(--radius-xs)", backgroundColor: "var(--bg-primary)",
+          border: "1px solid var(--border-color)", marginBottom: "var(--space-sm)"
+        }}>
+          Emotional & delivery metrics not available for this round.
+        </div>
+      );
+    }
+
+    const getMetricColor = (val, isInverse = false) => {
+      const v = Math.min(Math.max(val ?? 0, 0), 100);
+      if (isInverse) {
+        // Lower nervousness/hesitation is better
+        if (v <= 40) return "#10b981"; // Green (Low nervousness/hesitation)
+        if (v <= 60) return "#f59e0b"; // Amber (Moderate nervousness/hesitation)
+        return "#ef4444";             // Red (High nervousness/hesitation)
+      } else {
+        // Higher confidence/clarity/correctness/depth is better
+        if (v >= 60) return "#10b981"; // Green
+        if (v >= 45) return "#f59e0b"; // Amber
+        return "#ef4444";             // Red
+      }
+    };
+
+    const metricsList = [
+      {
+        label: "Vocal Confidence",
+        value: emotion.confidence ?? 0,
+        fillWidth: emotion.confidence ?? 0,
+        color: getMetricColor(emotion.confidence, false)
+      },
+      {
+        label: "Nervousness Level",
+        value: emotion.nervousness ?? 0,
+        fillWidth: emotion.nervousness ?? 0,
+        color: getMetricColor(emotion.nervousness, true)
+      },
+      {
+        label: "Speech Hesitation",
+        value: emotion.hesitation ?? 0,
+        fillWidth: emotion.hesitation ?? 0,
+        color: getMetricColor(emotion.hesitation, true)
+      },
+      {
+        label: "Acoustic Clarity",
+        value: emotion.clarity ?? 0,
+        fillWidth: emotion.clarity ?? 0,
+        color: getMetricColor(emotion.clarity, false)
+      },
+      {
+        label: "Correctness",
+        value: emotion.correctness ?? 0,
+        fillWidth: emotion.correctness ?? 0,
+        color: getMetricColor(emotion.correctness, false)
+      },
+      {
+        label: "Conceptual Depth",
+        value: emotion.completeness ?? 0,
+        fillWidth: emotion.completeness ?? 0,
+        color: getMetricColor(emotion.completeness, false)
+      }
+    ];
+
+    return (
+      <div style={{
+        marginBottom: "var(--space-sm)",
+        padding: "10px 14px",
+        borderRadius: "var(--radius-xs)",
+        backgroundColor: "var(--bg-primary)",
+        border: "1px solid var(--border-color)"
+      }}>
+        <div style={{
+          fontSize: "0.725rem", fontWeight: "700", textTransform: "uppercase",
+          letterSpacing: "0.05em", color: "var(--accent-primary)", marginBottom: "8px"
+        }}>
+          Emotional & Technical Breakdown (Numerical Values & Visual Bars):
+        </div>
+
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gap: "10px 14px"
+        }}>
+          {metricsList.map((m, mIdx) => (
+            <div key={mIdx} style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem" }}>
+                <span style={{ color: "var(--text-secondary)", fontWeight: "500" }}>{m.label}</span>
+                <strong style={{ color: m.color }}>{m.value}%</strong>
+              </div>
+              {/* Graphical Visual Progress Bar */}
+              <div style={{
+                height: "6px",
+                width: "100%",
+                backgroundColor: "var(--bg-card)",
+                borderRadius: "var(--radius-full)",
+                overflow: "hidden",
+                border: "1px solid var(--border-color)"
+              }}>
+                <div style={{
+                  height: "100%",
+                  width: `${Math.min(Math.max(m.fillWidth, 0), 100)}%`,
+                  backgroundColor: m.color,
+                  borderRadius: "var(--radius-full)",
+                  transition: "width 0.6s ease"
+                }}></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   // 6. Confidence Coaching Tips
   const getConfidenceCoachingTip = (emotion, answer, idx) => {
-    const WPM = Math.round((answer || "").split(/\s+/).length / 0.5); // assume 30 secs WPM
+    if (emotion.isUngraded) {
+      return "Coaching: This round was not graded by Gemini because the API was offline. No vocal delivery metrics were computed.";
+    }
+    const WPM = emotion.wpm ?? null;
     
     if (emotion.tag === "Bluffing") {
       return "Coaching: You spoke with strong confidence but lacked technical formulas. Focus strictly on governing equations rather than descriptive, general paragraphs.";
-    } else if (emotion.nervousness > 40 && WPM > 170) {
+    } else if (emotion.nervousness > 40 && WPM !== null && WPM > 170) {
       return `Coaching: You spoke very rapidly (${WPM} WPM) when experiencing nervousness. Intentionally insert slow, deliberate silence pauses to collect your thoughts.`;
     } else if (emotion.hesitation > 35) {
       return "Coaching: Autonomic speech gaps detected. Take a deep breath before answering and map out three core keywords in your mind before speaking.";
@@ -754,10 +932,12 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     const fillerRatio = parseFloat(fillerConcentration);
     fluencyBase -= (fillerRatio * 4);
     
-    if (avgWpm < 90 || avgWpm > 170) {
-      fluencyBase -= 25;
-    } else if (avgWpm < 110 || avgWpm > 150) {
-      fluencyBase -= 10;
+    if (avgWpm !== null) {
+      if (avgWpm < 90 || avgWpm > 170) {
+        fluencyBase -= 25;
+      } else if (avgWpm < 110 || avgWpm > 150) {
+        fluencyBase -= 10;
+      }
     }
     
     const fluencyScore = Math.min(Math.max(Math.round(fluencyBase), 45), 99);
@@ -824,7 +1004,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                 <line x1="100" y1="20" x2="100" y2="30" stroke="var(--border-color)" strokeWidth="2" />
                 <line x1="180" y1="100" x2="170" y2="100" stroke="var(--border-color)" strokeWidth="2" />
 
-                <g transform="translate(100, 100)">
+                <g transform="translate(100, 100)" style={{ opacity: avgWpm === null ? 0 : 0.85 }}>
                   <line x1="0" y1="0" x2="0" y2="-72" stroke="var(--accent-primary)" strokeWidth="3.5" strokeLinecap="round" style={{ transform: `rotate(${needleAngle}deg)`, transformOrigin: "0% 0%", transition: "transform 1.5s cubic-bezier(0.25, 0.8, 0.25, 1)" }} />
                   <circle cx="0" cy="0" r="7" fill="var(--accent-primary)" />
                   <circle cx="0" cy="0" r="3.5" fill="var(--bg-card)" />
@@ -834,9 +1014,15 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                 <text x="175" y="108" textAnchor="middle" fontSize="8px" fontWeight="600" fill="var(--text-muted)">240+</text>
               </svg>
               <div style={{ marginTop: "4px", textAlign: "center" }}>
-                <span style={{ fontSize: "0.85rem", fontWeight: "700", color: pacingColor, backgroundColor: pacingBg, padding: "2px 8px", borderRadius: "var(--radius-full)" }}>
-                  {avgWpm} WPM ({pacingCategory})
-                </span>
+                {avgWpm === null ? (
+                  <span style={{ fontSize: "0.85rem", fontWeight: "700", color: pacingColor, backgroundColor: pacingBg, padding: "2px 8px", borderRadius: "var(--radius-full)" }}>
+                    No pacing data available
+                  </span>
+                ) : (
+                  <span style={{ fontSize: "0.85rem", fontWeight: "700", color: pacingColor, backgroundColor: pacingBg, padding: "2px 8px", borderRadius: "var(--radius-full)" }}>
+                    {avgWpm} WPM ({pacingCategory})
+                  </span>
+                )}
               </div>
             </div>
 
@@ -938,31 +1124,35 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
       return height - paddingY - pct * (height - paddingY * 2);
     };
 
-    let confidencePath = "";
-    let nervousnessPath = "";
-    let hesitationPath = "";
+    let confidencePoints = [];
+    let nervousnessPoints = [];
+    let hesitationPoints = [];
     const nodes = [];
 
     for (let i = 0; i < totalRounds; i++) {
-      const emo = detectedEmotions[i] || { confidence: 80, nervousness: 20, hesitation: 15 };
+      const emo = detectedEmotions[i] || {};
       const cx = paddingX + i * stepX;
       
-      const cyConf = mapY(emo.confidence || 80);
-      const cyNerv = mapY(100 - (emo.nervousness || 20)); // Inverse so high value is good/calm
-      const cyHes = mapY(100 - (emo.hesitation || 15));
-
-      if (i === 0) {
-        confidencePath = `M ${cx} ${cyConf}`;
-        nervousnessPath = `M ${cx} ${cyNerv}`;
-        hesitationPath = `M ${cx} ${cyHes}`;
+      const hasDelivery = emo.confidence !== undefined && emo.confidence !== null;
+      
+      if (hasDelivery) {
+        const cyConf = mapY(emo.confidence);
+        const cyNerv = mapY(100 - emo.nervousness);
+        const cyHes = mapY(100 - emo.hesitation);
+        
+        confidencePoints.push(`${cx},${cyConf}`);
+        nervousnessPoints.push(`${cx},${cyNerv}`);
+        hesitationPoints.push(`${cx},${cyHes}`);
+        
+        nodes.push({ index: i, cx, cyConf, cyNerv, cyHes, ...emo, hasDelivery: true });
       } else {
-        confidencePath += ` L ${cx} ${cyConf}`;
-        nervousnessPath += ` L ${cx} ${cyNerv}`;
-        hesitationPath += ` L ${cx} ${cyHes}`;
+        nodes.push({ index: i, cx, cyConf: null, cyNerv: null, cyHes: null, ...emo, hasDelivery: false });
       }
-
-      nodes.push({ index: i, cx, cyConf, cyNerv, cyHes, ...emo });
     }
+
+    const confidencePath = confidencePoints.length > 0 ? "M " + confidencePoints.join(" L ") : "";
+    const nervousnessPath = nervousnessPoints.length > 0 ? "M " + nervousnessPoints.join(" L ") : "";
+    const hesitationPath = hesitationPoints.length > 0 ? "M " + hesitationPoints.join(" L ") : "";
 
     return (
       <div className="graph-canvas-box" style={{ width: "100%", height: "180px", position: "relative" }}>
@@ -978,23 +1168,43 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
           {hesitationPath && <path d={hesitationPath} fill="none" stroke="hsl(0, 60%, 42%)" strokeWidth="1.5" strokeDasharray="1 3" strokeLinecap="round" strokeLinejoin="round" />}
 
           {/* Grid nodes */}
-          {nodes.map((node) => (
-            <g key={node.index}>
-              <circle 
-                cx={node.cx} 
-                cy={node.cyConf} 
-                r={activeTimelineIndex === node.index ? 7 : 4} 
-                fill={activeTimelineIndex === node.index ? "hsl(215, 35%, 26%)" : "var(--bg-card)"} 
-                stroke="hsl(215, 35%, 26%)" 
-                strokeWidth="2" 
-                style={{ cursor: "pointer", transition: "var(--transition-smooth)" }}
-                onClick={() => setActiveTimelineIndex(node.index)}
-              />
-              <text x={node.cx} y={height - 5} textAnchor="middle" fontSize="9px" fontWeight="600" fill="var(--text-muted)">
-                Q{node.index + 1}
-              </text>
-            </g>
-          ))}
+          {nodes.map((node) => {
+            if (!node.hasDelivery) {
+              return (
+                <g key={node.index}>
+                  <circle 
+                    cx={node.cx} 
+                    cy={mapY(50)} 
+                    r={3} 
+                    fill="var(--border-color)" 
+                    stroke="var(--border-color)" 
+                    style={{ cursor: "pointer" }}
+                    onClick={() => setActiveTimelineIndex(node.index)}
+                  />
+                  <text x={node.cx} y={height - 5} textAnchor="middle" fontSize="9px" fontWeight="600" fill="var(--text-muted)">
+                    Q{node.index + 1}
+                  </text>
+                </g>
+              );
+            }
+            return (
+              <g key={node.index}>
+                <circle 
+                  cx={node.cx} 
+                  cy={node.cyConf} 
+                  r={activeTimelineIndex === node.index ? 7 : 4} 
+                  fill={activeTimelineIndex === node.index ? "hsl(215, 35%, 26%)" : "var(--bg-card)"} 
+                  stroke="hsl(215, 35%, 26%)" 
+                  strokeWidth="2" 
+                  style={{ cursor: "pointer", transition: "var(--transition-smooth)" }}
+                  onClick={() => setActiveTimelineIndex(node.index)}
+                />
+                <text x={node.cx} y={height - 5} textAnchor="middle" fontSize="9px" fontWeight="600" fill="var(--text-muted)">
+                  Q{node.index + 1}
+                </text>
+              </g>
+            );
+          })}
         </svg>
       </div>
     );
@@ -1139,28 +1349,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
               
               <div className="scorecard-radial-row">
                 {/* Radial Score Circle */}
-                <div className="radial-svg-wrapper" style={{ width: "110px", height: "110px", flexShrink: 0 }}>
-                  <svg viewBox="0 0 120 120" style={{ width: "100%", height: "100%" }}>
-                    <circle className="radial-svg-circle-bg" cx="60" cy="60" r="50" />
-                    <circle 
-                      className="radial-svg-circle-fill" 
-                      cx="60" 
-                      cy="60" 
-                      r="50" 
-                      strokeDasharray="314.16" 
-                      strokeDashoffset={scoreOffset}
-                      style={{
-                        fill: "none",
-                        stroke: "var(--accent-primary)",
-                        strokeWidth: 10,
-                        strokeLinecap: "round",
-                        transform: "rotate(-90deg)",
-                        transition: "stroke-dashoffset 1.2s cubic-bezier(0.34, 1.56, 0.64, 1)"
-                      }}
-                    />
-                  </svg>
-                  <div className="radial-score-value" style={{ fontSize: "1.6rem", fontWeight: "800", color: "var(--accent-primary)" }}>{displayedScore}%</div>
-                </div>
+                <GaugeMetric percentage={overallScore} isLarge={true} />
 
                 <div style={{ textAlign: "left", flex: 1 }}>
                   <span style={{ fontSize: "0.8rem", textTransform: "uppercase", fontWeight: "600", color: "var(--text-secondary)", letterSpacing: "0.05em" }}>Overall Standing</span>
@@ -1171,30 +1360,12 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
 
               {/* Six detailed score fields */}
               <div className="scorecard-details-grid" style={{ gap: "var(--space-sm)", marginTop: "var(--space-lg)", borderTop: "1px solid var(--border-color)", paddingTop: "var(--space-md)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Technical/Domain Competence" : "Subject Understanding"}</span>
-                  <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{subjectUnderstanding}%</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Communication Confidence" : "Speaking Confidence"}</span>
-                  <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{vocalConfidence}%</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Clarity & Delivery" : "Speaking Clarity"}</span>
-                  <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{clarityOfComm}%</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Problem-Solving Depth" : "Conceptual Depth"}</span>
-                  <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{conceptualDepth}%</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Stress Tolerance" : "Handling Pressure"}</span>
-                  <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{handlingPressure}%</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Role Consistency" : "Consistency"}</span>
-                  <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{consistency}%</strong>
-                </div>
+                <GaugeMetric percentage={subjectUnderstanding} label={isProfessional ? "Technical/Domain Competence" : "Subject Understanding"} />
+                <GaugeMetric percentage={vocalConfidence} label={isProfessional ? "Communication Confidence" : "Speaking Confidence"} />
+                <GaugeMetric percentage={clarityOfComm} label={isProfessional ? "Clarity & Delivery" : "Speaking Clarity"} />
+                <GaugeMetric percentage={conceptualDepth} label={isProfessional ? "Problem-Solving Depth" : "Conceptual Depth"} />
+                <GaugeMetric percentage={handlingPressure} label={isProfessional ? "Stress Tolerance" : "Handling Pressure"} />
+                <GaugeMetric percentage={consistency} label={isProfessional ? "Role Consistency" : "Consistency"} />
               </div>
             </div>
 
@@ -1306,23 +1477,10 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
             <div className={`card hindsight-card ${mobileTab === 'plan' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-lg)", textAlign: "left", position: "relative", overflow: "hidden" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-md)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <div style={{
-                    width: "28px", height: "28px", borderRadius: "50%",
-                    background: "linear-gradient(135deg, hsl(258, 80%, 56%), hsl(280, 75%, 50%))",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: "0.85rem", flexShrink: 0
-                  }}>🔍</div>
                   <h3 style={{ fontSize: "1.05rem", fontWeight: "700", margin: 0 }}>
                     {isProfessional ? "AI Interview Retrospective" : "AI Session Retrospective"}
                   </h3>
                 </div>
-                {hindsightData && !hindsightData.isLocalFallback && (
-                  <span style={{
-                    fontSize: "0.65rem", padding: "2px 8px", borderRadius: "var(--radius-full)",
-                    background: "linear-gradient(135deg, hsl(258, 80%, 56%), hsl(280, 75%, 50%))",
-                    color: "#fff", fontWeight: "700", letterSpacing: "0.05em", textTransform: "uppercase"
-                  }}>AI Powered</span>
-                )}
               </div>
               <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "var(--space-md)", marginTop: 0 }}>
                 {isProfessional
@@ -1514,124 +1672,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
               )}
             </div>
 
-            <div className={`card lexical-card ${mobileTab === 'metrics' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-lg)", textAlign: "left" }}>
-              <h3 style={{ fontSize: "1.05rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
-                Lexical Range & Vocabulary Maturity
-              </h3>
-              <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "var(--space-md)" }}>
-                Syntactic analysis of speech variety, word complexity, and terminology usage.
-              </p>
-              
-              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-md)", marginBottom: "var(--space-md)" }}>
-                <div style={{
-                  width: "56px",
-                  height: "56px",
-                  borderRadius: "50%",
-                  backgroundColor: "rgba(99, 102, 241, 0.08)",
-                  border: "1.5px solid rgba(99, 102, 241, 0.2)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "1.4rem",
-                  color: "#6366f1",
-                  flexShrink: 0
-                }}>
-                  🎓
-                </div>
-                <div>
-                  <span style={{ fontSize: "0.75rem", textTransform: "uppercase", fontWeight: "700", color: "var(--text-secondary)", letterSpacing: "0.05em" }}>Lexical Standing</span>
-                  <h4 style={{ margin: "2px 0 0 0", fontSize: "1.1rem", fontWeight: "800", color: "var(--accent-primary)" }}>{maturityLevel}</h4>
-                </div>
-              </div>
-
-              <div style={{ height: "6px", backgroundColor: "var(--bg-primary)", borderRadius: "var(--radius-full)", position: "relative", marginBottom: "var(--space-sm)" }}>
-                <div style={{
-                  height: "100%",
-                  width: `${lexicalScore}%`,
-                  borderRadius: "var(--radius-full)",
-                  backgroundColor: "#6366f1",
-                  transition: "width 0.8s ease"
-                }}></div>
-              </div>
-              
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: "500", marginBottom: "var(--space-md)" }}>
-                <span>Standard Vocabulary</span>
-                <span>Principal Level</span>
-              </div>
-
-              <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--text-secondary)", lineHeight: "1.4" }}>
-                {maturityDesc}
-              </p>
-              
-              <div className="lexical-stats-grid">
-                <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
-                  Unique Words: <strong style={{ color: "var(--text-primary)" }}>{uniqueWordsCount}</strong>
-                </div>
-                <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
-                  Advanced Keywords: <strong style={{ color: "var(--text-primary)" }}>{advancedWordsCount}</strong>
-                </div>
-              </div>
-            </div>
-
-            <div className={`card fallacies-card ${mobileTab === 'metrics' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-lg)", textAlign: "left" }}>
-              <h3 style={{ fontSize: "1.05rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
-                Argumentation & Fallacy Diagnostics
-              </h3>
-              <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "var(--space-md)" }}>
-                Lexical deflection scanning and reasoning pattern checks.
-              </p>
-
-              {detectFallacies().length === 0 ? (
-                <div style={{
-                  display: "flex",
-                  gap: "10px",
-                  alignItems: "flex-start",
-                  padding: "12px",
-                  borderRadius: "var(--radius-sm)",
-                  backgroundColor: "var(--color-success-bg)",
-                  border: "1px solid rgba(22, 163, 74, 0.2)",
-                  color: "var(--color-success)"
-                }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" style={{ width: "20px", height: "20px", marginTop: "2px", flexShrink: 0 }}>
-                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-                    <polyline points="22 4 12 14.01 9 11.01"/>
-                  </svg>
-                  <div style={{ fontSize: "0.8rem", lineHeight: "1.4" }}>
-                    <strong>Zero Fallacies Flagged</strong>
-                    <p style={{ margin: "2px 0 0 0", color: "var(--text-secondary)" }}>
-                      Outstanding logical consistency. You avoided vague qualifier patterns, repetitive circularity, and unqualified absolutes.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
-                  {detectFallacies().map((det, dIdx) => (
-                    <div key={dIdx} style={{
-                      padding: "10px var(--space-md)",
-                      border: "1px solid var(--border-color)",
-                      borderRadius: "var(--radius-sm)",
-                      backgroundColor: "var(--bg-primary)"
-                    }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span style={{ fontSize: "0.75rem", fontWeight: "700", color: "var(--color-error)", textTransform: "uppercase" }}>
-                          🚨 {det.type} • Round {det.round}
-                        </span>
-                      </div>
-                      <h4 style={{ margin: "4px 0 2px 0", fontSize: "0.85rem", fontWeight: "700", color: "var(--text-primary)" }}>
-                        Topic: {det.topic}
-                      </h4>
-                      <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--text-muted)", fontStyle: "italic" }}>
-                        Indicator: {det.marker}
-                      </p>
-                      <p style={{ margin: "6px 0 0 0", fontSize: "0.78rem", color: "var(--text-secondary)", lineHeight: "1.4", borderTop: "1px dashed var(--border-color)", paddingTop: "4px" }}>
-                        <strong>Coach Advice</strong>: {det.fix}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
+            {/* Removed Lexical Range and Argumentation Fallacies cards */}
           </div>
 
           {/* RIGHT PANEL: Emotion Timelines, Professor Mode Replay, Recommends */}
@@ -1696,10 +1737,11 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                 borderRadius: "var(--radius-sm)",
                 transition: "var(--transition-smooth)"
               }}>
-                <strong style={{ fontSize: "0.8rem", textTransform: "uppercase", color: "var(--accent-primary)" }}>Milestone commentary</strong>
-                <p style={{ margin: "2px 0 0 0", fontSize: "0.825rem", color: "var(--text-primary)", lineHeight: "1.45" }}>
+                <strong style={{ fontSize: "0.8rem", textTransform: "uppercase", color: "var(--accent-primary)" }}>Milestone commentary (Round {activeTimelineIndex + 1})</strong>
+                <p style={{ margin: "2px 0 10px 0", fontSize: "0.825rem", color: "var(--text-primary)", lineHeight: "1.45" }}>
                   {getTimelineCommentary(activeTimelineIndex)}
                 </p>
+                {renderAnswerEmotionalMetrics(detectedEmotions[activeTimelineIndex])}
               </div>
             </div>
 
@@ -1720,11 +1762,20 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                 ) : (
                   askedQuestions.map((qText, idx) => {
                   const isExpanded = expandedReplayIndex === idx;
-                  const emotion = detectedEmotions[idx] || { correctness: 80, confidence: 80 };
+                  const emotion = detectedEmotions[idx] || {};
                   const answer = answerTranscripts[idx] || "";
                   const qObj = askedQuestionsObjects && askedQuestionsObjects[idx] ? askedQuestionsObjects[idx] : null;
                   const topicText = qObj ? qObj.topic : (isProfessional ? "Competency Skill" : "Syllabus Concept");
                   
+                  // Setup clean colors based on score, or grey for ungraded fallback
+                  let tagBg = "var(--bg-primary)";
+                  let tagColor = "var(--text-muted)";
+                  if (!emotion.isUngraded) {
+                    const isGood = (emotion.correctness ?? 0) >= 75;
+                    tagBg = isGood ? "var(--color-success-bg)" : "var(--color-error-bg)";
+                    tagColor = isGood ? "var(--color-success)" : "var(--color-error)";
+                  }
+
                   return (
                     <div key={idx} style={{ border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", overflow: "hidden", transition: "var(--transition-smooth)" }}>
                       
@@ -1751,10 +1802,10 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                             padding: "2px 8px",
                             borderRadius: "var(--radius-full)",
                             fontWeight: "600",
-                            backgroundColor: emotion.correctness >= 75 ? "var(--color-success-bg)" : "var(--color-error-bg)",
-                            color: emotion.correctness >= 75 ? "var(--color-success)" : "var(--color-error)"
+                            backgroundColor: tagBg,
+                            color: tagColor
                           }}>
-                            {emotion.tag || "Correct"}
+                            {emotion.isUngraded ? "Ungraded" : (emotion.tag || "Correct")}
                           </span>
                           <svg 
                             width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" 
@@ -1791,15 +1842,15 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                           {/* Local Audio Recording Replay */}
                           {resultsData.recordedAudios && resultsData.recordedAudios[idx] && (
                             <div className="audio-replay-container" style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "var(--space-sm)",
-                              backgroundColor: "var(--bg-primary)",
-                              padding: "8px 12px",
-                              borderRadius: "var(--radius-xs)",
-                              border: "1px solid var(--border-color)",
-                              marginBottom: "var(--space-sm)"
-                            }}>
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "var(--space-sm)",
+                                backgroundColor: "var(--bg-primary)",
+                                padding: "8px 12px",
+                                borderRadius: "var(--radius-xs)",
+                                border: "1px solid var(--border-color)",
+                                marginBottom: "var(--space-sm)"
+                              }}>
                               <span style={{ fontSize: "0.75rem", fontWeight: "600", color: "var(--text-secondary)", flexShrink: 0 }}>
                                 Listen back:
                               </span>
@@ -1831,10 +1882,13 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
 
                           {/* Performance tags, WPM pacing */}
                           <div style={{ display: "flex", gap: "var(--space-sm)", flexWrap: "wrap", fontSize: "0.75rem", color: "var(--text-secondary)", marginBottom: "var(--space-sm)" }}>
-                            <span>Lexical correctness: <strong>{emotion.correctness}%</strong></span>
+                            <span>Lexical correctness: <strong>{emotion.isUngraded ? "N/A" : `${emotion.correctness}%`}</strong></span>
                             <span>•</span>
-                            <span>Tempo: <strong>{Math.round(answer.split(/\s+/).length / 0.5)} WPM</strong></span>
+                            <span>Tempo: <strong>{emotion.wpm ? `${emotion.wpm} WPM` : "N/A"}</strong></span>
                           </div>
+
+                          {/* Per-Answer Emotional & Technical Breakdown (Values & Visual Progress Bars) */}
+                          {renderAnswerEmotionalMetrics(emotion)}
 
                           {/* Confidence coaching tip */}
                           <div style={{
@@ -1847,6 +1901,70 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                             border: "1px solid rgba(31, 42, 56, 0.15)"
                           }}>
                             {getConfidenceCoachingTip(emotion, answer, idx)}
+                          </div>
+
+                          {/* Interactive Socratic Dialogue */}
+                          <div style={{
+                            marginTop: "var(--space-md)",
+                            padding: "12px",
+                            borderRadius: "var(--radius-sm)",
+                            backgroundColor: "var(--bg-primary)",
+                            border: "1px solid var(--border-color)"
+                          }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+                              <span style={{ fontSize: "0.85rem" }}>💬</span>
+                              <strong style={{ fontSize: "0.8rem", color: "var(--accent-primary)" }}>
+                                {isProfessional ? "Ask Interviewer a Follow-up Question:" : "Ask Examiner a Socratic Follow-up Question:"}
+                              </strong>
+                            </div>
+
+                            {/* Dialogue Messages History */}
+                            {socraticDialogues[idx] && socraticDialogues[idx].length > 0 && (
+                              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "10px" }}>
+                                {socraticDialogues[idx].map((msg, mIdx) => (
+                                  <div key={mIdx} style={{
+                                    alignSelf: msg.sender === "user" ? "flex-end" : "flex-start",
+                                    maxWidth: "88%",
+                                    padding: "8px 12px",
+                                    borderRadius: "var(--radius-sm)",
+                                    backgroundColor: msg.sender === "user" ? "var(--accent-primary)" : "var(--bg-card)",
+                                    color: msg.sender === "user" ? "#ffffff" : "var(--text-primary)",
+                                    fontSize: "0.8rem",
+                                    border: msg.sender === "user" ? "none" : "1px solid var(--border-color)",
+                                    lineHeight: "1.45"
+                                  }}>
+                                    <strong>{msg.sender === "user" ? "You" : (isProfessional ? "Interviewer" : "Examiner")}:</strong> {msg.text}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            <div style={{ display: "flex", gap: "8px" }}>
+                              <input 
+                                type="text"
+                                placeholder={isProfessional ? "e.g., 'How can I structure this with STAR?'" : "e.g., 'Can you derive the formula step-by-step?'"}
+                                value={socraticInputs[idx] || ""}
+                                onChange={(e) => setSocraticInputs(prev => ({ ...prev, [idx]: e.target.value }))}
+                                onKeyDown={(e) => { if (e.key === "Enter") handleSendSocraticQuery(idx, qObj ? qObj.text : qText, answer); }}
+                                style={{
+                                  flex: 1,
+                                  padding: "8px 12px",
+                                  borderRadius: "var(--radius-xs)",
+                                  border: "1px solid var(--border-color)",
+                                  backgroundColor: "var(--bg-card)",
+                                  color: "var(--text-primary)",
+                                  fontSize: "0.8rem"
+                                }}
+                              />
+                              <button
+                                className="btn btn-primary"
+                                disabled={socraticLoading[idx]}
+                                onClick={() => handleSendSocraticQuery(idx, qObj ? qObj.text : qText, answer)}
+                                style={{ padding: "8px 14px", fontSize: "0.8rem", flexShrink: 0, cursor: "pointer" }}
+                              >
+                                {socraticLoading[idx] ? "Asking..." : "Ask AI"}
+                              </button>
+                            </div>
                           </div>
 
                         </div>
