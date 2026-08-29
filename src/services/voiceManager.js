@@ -285,12 +285,9 @@ export const VoiceManager = {
       }
 
       let speechCompleted = false;
-      let heartbeatInterval = null;
-
       const handleEnd = (event) => {
         if (speechCompleted) return;
         speechCompleted = true;
-        if (heartbeatInterval) clearInterval(heartbeatInterval);
         if (this.activeSpeakId === speakId) {
           this.activeUtterance = null;
           if (onEnd) onEnd(event);
@@ -314,20 +311,12 @@ export const VoiceManager = {
 
       window.speechSynthesis.speak(this.activeUtterance);
 
-      // Chrome long-utterance bug fix: heartbeat ping every 10s to keep Web Speech API alive during long questions
-      heartbeatInterval = setInterval(() => {
-        if (typeof window !== "undefined" && window.speechSynthesis && window.speechSynthesis.speaking && !speechCompleted) {
-          window.speechSynthesis.pause();
-          window.speechSynthesis.resume();
-        }
-      }, 10000);
-
-      // Extended failsafe timeout so examiner has full time to finish speaking long questions in Terror/Strict/all modes
+      // Failsafe timeout to prevent stuck states
       const wordCount = text.split(/\s+/).length;
-      const failsafeDelay = Math.max((wordCount * 700) + 12000, 35000);
+      const failsafeDelay = (wordCount * 380) + 3000;
       setTimeout(() => {
         if (!speechCompleted && this.activeSpeakId === speakId) {
-          console.warn("SpeechSynthesis extended failsafe triggered.");
+          console.warn("SpeechSynthesis onend failed to fire, forcing end.");
           handleEnd(null);
         }
       }, failsafeDelay);

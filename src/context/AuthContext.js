@@ -7,8 +7,7 @@ import {
   signOut, 
   signInWithPopup, 
   onAuthStateChanged,
-  updateProfile,
-  sendPasswordResetEmail
+  updateProfile
 } from "firebase/auth";
 import { 
   doc, 
@@ -37,8 +36,7 @@ const AuthContext = createContext({
   loginWithGoogle: async () => {},
   logout: async () => {},
   syncGuestData: async () => {},
-  addSessionToCloud: async () => {},
-  sendPasswordReset: async () => {}
+  addSessionToCloud: async () => {}
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -215,20 +213,6 @@ export function AuthProvider({ children }) {
     await signOut(auth);
   };
 
-  // 4.5. Send Password Reset Email
-  const sendPasswordReset = async (email) => {
-    if (!isConfigured) throw new Error("Firebase is not configured in environment variables.");
-    try {
-      await sendPasswordResetEmail(auth, email);
-    } catch (error) {
-      if (error.code === "auth/user-not-found") {
-        // Swallowed to prevent disclosing registered accounts (security)
-        return;
-      }
-      throw error;
-    }
-  };
-
   // 5. Add completed Session and update Stats
   const addSessionToCloud = async (newSessionData, updatedStatsData) => {
     if (!user || !isConfigured) return;
@@ -330,8 +314,7 @@ export function AuthProvider({ children }) {
     loginWithGoogle,
     logout,
     syncGuestData,
-    addSessionToCloud,
-    sendPasswordReset
+    addSessionToCloud
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
