@@ -1196,6 +1196,52 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                   <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{consistency}%</strong>
                 </div>
               </div>
+
+              {/* Per-Question Evaluation Breakdown Grid */}
+              {askedQuestions && askedQuestions.length > 0 && (
+                <div style={{ marginTop: "var(--space-md)", borderTop: "1px solid var(--border-color)", paddingTop: "var(--space-md)", textAlign: "left" }}>
+                  <h4 style={{ fontSize: "0.8rem", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)", marginBottom: "var(--space-sm)" }}>
+                    🎯 Per-Question Evaluation Breakdown
+                  </h4>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    {askedQuestions.map((qText, idx) => {
+                      const emo = detectedEmotions[idx] || { correctness: 80 };
+                      const qObj = askedQuestionsObjects && askedQuestionsObjects[idx] ? askedQuestionsObjects[idx] : null;
+                      const topic = qObj ? qObj.topic : `Question ${idx + 1}`;
+                      const score = emo.correctness !== undefined ? emo.correctness : 80;
+                      const badgeColor = score >= 75 ? "var(--color-success)" : (score >= 50 ? "hsl(38, 85%, 40%)" : "var(--color-error)");
+                      const badgeBg = score >= 75 ? "var(--color-success-bg)" : (score >= 50 ? "hsla(38, 85%, 45%, 0.1)" : "var(--color-error-bg)");
+                      return (
+                        <div key={idx} style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          padding: "6px 12px",
+                          borderRadius: "var(--radius-xs)",
+                          backgroundColor: "var(--bg-primary)",
+                          border: "1px solid var(--border-color)",
+                          fontSize: "0.8rem"
+                        }}>
+                          <span style={{ color: "var(--text-primary)", fontWeight: "500", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "70%" }}>
+                            <strong>Q{idx + 1}:</strong> {topic}
+                          </span>
+                          <span style={{
+                            fontWeight: "800",
+                            color: badgeColor,
+                            backgroundColor: badgeBg,
+                            padding: "2px 8px",
+                            borderRadius: "var(--radius-full)",
+                            fontSize: "0.75rem",
+                            flexShrink: 0
+                          }}>
+                            {score}% Correct
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className={`card bluff-card ${mobileTab === 'metrics' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-md) var(--space-lg)" }}>
@@ -1632,11 +1678,18 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
             </div>
 
             <div className={`card replay-card ${mobileTab === 'qa' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-lg)", textAlign: "left" }}>
-              <h3 style={{ fontSize: "1.05rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-md)" }}>
-                {isProfessional ? "Interviewer Feedback Replay" : "Professor Mode Replay"}
-              </h3>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-md)" }}>
+                <div>
+                  <h3 style={{ fontSize: "1.05rem", fontWeight: "700", margin: 0 }}>
+                    {isProfessional ? "Interviewer Feedback & Per-Question Evaluation" : "Examiner Evaluation & Question Breakdown"}
+                  </h3>
+                  <p style={{ margin: "2px 0 0 0", fontSize: "0.8rem", color: "var(--text-secondary)" }}>
+                    Per-question correctness scores, semantic accuracy, completeness, and voice delivery analysis.
+                  </p>
+                </div>
+              </div>
               
-              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
                 {askedQuestions.length === 0 ? (
                   <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", textAlign: "center", padding: "16px 0", margin: 0 }}>
                     {isProfessional ? "No recorded rounds. Answer at least one question to replay the interviewer's evaluation." : "No recorded rounds. Answer at least one question to replay the examiner's evaluation."}
@@ -1644,15 +1697,27 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                 ) : (
                   askedQuestions.map((qText, idx) => {
                   const isExpanded = expandedReplayIndex === idx;
-                  const emotion = detectedEmotions[idx] || { correctness: 80, confidence: 80 };
+                  const emotion = detectedEmotions[idx] || { correctness: 80, accuracy: 80, completeness: 75, clarity: 85, confidence: 80 };
                   const answer = answerTranscripts[idx] || "";
                   const qObj = askedQuestionsObjects && askedQuestionsObjects[idx] ? askedQuestionsObjects[idx] : null;
                   const topicText = qObj ? qObj.topic : (isProfessional ? "Competency Skill" : "Syllabus Concept");
+                  const correctnessVal = emotion.correctness !== undefined ? emotion.correctness : 80;
+                  const accuracyVal = emotion.accuracy !== undefined ? emotion.accuracy : correctnessVal;
+                  const completenessVal = emotion.completeness !== undefined ? emotion.completeness : Math.max(correctnessVal - 10, 40);
+                  const clarityVal = emotion.clarity !== undefined ? emotion.clarity : 85;
+
+                  const getScoreColor = (score) => {
+                    if (score >= 75) return { bg: "var(--color-success-bg)", text: "var(--color-success)", border: "rgba(22, 163, 74, 0.2)" };
+                    if (score >= 50) return { bg: "hsla(38, 85%, 45%, 0.1)", text: "hsl(38, 85%, 35%)", border: "hsla(38, 85%, 45%, 0.25)" };
+                    return { bg: "var(--color-error-bg)", text: "var(--color-error)", border: "hsla(0, 60%, 42%, 0.2)" };
+                  };
+
+                  const scoreColors = getScoreColor(correctnessVal);
                   
                   return (
                     <div key={idx} style={{ border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", overflow: "hidden", transition: "var(--transition-smooth)" }}>
                       
-                      {/* Accordion trigger row */}
+                      {/* Accordion trigger row with explicit Correctness Score Badge */}
                       <div 
                         onClick={() => setExpandedReplayIndex(isExpanded ? null : idx)}
                         style={{
@@ -1665,21 +1730,41 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                           transition: "var(--transition-smooth)"
                         }}
                       >
-                        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px" }}>
-                          <span style={{ fontSize: "0.8rem", fontWeight: "700", color: "var(--accent-primary)" }}>Q{idx + 1}</span>
-                          <span style={{ fontSize: "0.8rem", color: "var(--text-primary)" }}>Topic: <strong>{topicText}</strong></span>
+                        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px" }}>
+                          <span style={{ fontSize: "0.85rem", fontWeight: "800", color: "var(--accent-primary)" }}>Q{idx + 1}</span>
+                          <span style={{ fontSize: "0.85rem", color: "var(--text-primary)" }}>Topic: <strong>{topicText}</strong></span>
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+                        
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                          {/* Correctness Percentage Badge */}
+                          <div style={{
+                            fontSize: "0.775rem",
+                            fontWeight: "800",
+                            padding: "3px 10px",
+                            borderRadius: "var(--radius-full)",
+                            backgroundColor: scoreColors.bg,
+                            color: scoreColors.text,
+                            border: `1px solid ${scoreColors.border}`,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px"
+                          }}>
+                            <span>{correctnessVal}% Correct</span>
+                          </div>
+
+                          {/* Tag Badge */}
                           <span style={{
                             fontSize: "0.7rem",
                             padding: "2px 8px",
                             borderRadius: "var(--radius-full)",
                             fontWeight: "600",
-                            backgroundColor: emotion.correctness >= 75 ? "var(--color-success-bg)" : "var(--color-error-bg)",
-                            color: emotion.correctness >= 75 ? "var(--color-success)" : "var(--color-error)"
+                            backgroundColor: "var(--bg-primary)",
+                            border: "1px solid var(--border-color)",
+                            color: "var(--text-secondary)"
                           }}>
-                            {emotion.tag || "Correct"}
+                            {emotion.tag || (correctnessVal >= 75 ? "Strong" : correctnessVal >= 50 ? "Partially Correct" : "Weak")}
                           </span>
+
                           <svg 
                             width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" 
                             style={{ transform: isExpanded ? "rotate(180deg)" : "none", transition: "var(--transition-smooth)" }}
@@ -1693,10 +1778,10 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                       {isExpanded && (
                         <div style={{ padding: "var(--space-md)", borderTop: "1px solid var(--border-color)", backgroundColor: "var(--bg-card)", textAlign: "left" }}>
                           
-                          {/* Question row with Replay speaker */}
+                          {/* Question prompt row with Replay Voice button */}
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
-                            <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", fontStyle: "italic" }}>
-                              <strong>{isProfessional ? "Interviewer prompt:" : "Examiner prompt:"}</strong> &quot;{qObj ? qObj.text : qText}&quot;
+                            <div style={{ fontSize: "0.85rem", color: "var(--text-primary)" }}>
+                              <strong>{isProfessional ? "Interviewer Question:" : "Examiner Question:"}</strong> &quot;{qObj ? qObj.text : qText}&quot;
                             </div>
                             <button 
                               className="btn btn-secondary"
@@ -1708,8 +1793,85 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                           </div>
 
                           {/* Student answer transcript */}
-                          <div style={{ fontSize: "0.85rem", color: "var(--text-primary)", backgroundColor: "var(--bg-primary)", padding: "10px", borderRadius: "var(--radius-xs)", border: "1px solid var(--border-color)", marginBottom: "var(--space-sm)" }}>
-                            <strong>Your Transcript:</strong> &quot;{answer}&quot;
+                          <div style={{ fontSize: "0.85rem", color: "var(--text-primary)", backgroundColor: "var(--bg-primary)", padding: "10px", borderRadius: "var(--radius-xs)", border: "1px solid var(--border-color)", marginBottom: "var(--space-md)" }}>
+                            <strong style={{ color: "var(--accent-primary)" }}>Your Answer:</strong> &quot;{answer}&quot;
+                          </div>
+
+                          {/* PER-QUESTION EVALUATION BREAKDOWN CARD */}
+                          <div style={{
+                            padding: "var(--space-md)",
+                            backgroundColor: "var(--bg-primary)",
+                            borderRadius: "var(--radius-sm)",
+                            border: `1.5px solid ${scoreColors.border}`,
+                            marginBottom: "var(--space-md)"
+                          }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-sm)" }}>
+                              <span style={{ fontSize: "0.75rem", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)" }}>
+                                📊 Round {idx + 1} Evaluation Breakdown
+                              </span>
+                              <span style={{ fontSize: "0.85rem", fontWeight: "800", color: scoreColors.text }}>
+                                Score: {correctnessVal} / 100
+                              </span>
+                            </div>
+
+                            {/* Detailed 4-Metric Bar Grid */}
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "var(--space-sm)" }}>
+                              
+                              {/* Correctness Bar */}
+                              <div>
+                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", marginBottom: "3px" }}>
+                                  <span style={{ fontWeight: "600" }}>Correctness</span>
+                                  <strong style={{ color: scoreColors.text }}>{correctnessVal}%</strong>
+                                </div>
+                                <div style={{ height: "6px", backgroundColor: "var(--bg-card)", borderRadius: "var(--radius-full)", overflow: "hidden" }}>
+                                  <div style={{ height: "100%", width: `${correctnessVal}%`, backgroundColor: scoreColors.text, borderRadius: "var(--radius-full)" }}></div>
+                                </div>
+                              </div>
+
+                              {/* Accuracy Bar */}
+                              <div>
+                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", marginBottom: "3px" }}>
+                                  <span style={{ fontWeight: "600" }}>Technical Accuracy</span>
+                                  <strong>{accuracyVal}%</strong>
+                                </div>
+                                <div style={{ height: "6px", backgroundColor: "var(--bg-card)", borderRadius: "var(--radius-full)", overflow: "hidden" }}>
+                                  <div style={{ height: "100%", width: `${accuracyVal}%`, backgroundColor: "hsl(215, 35%, 26%)", borderRadius: "var(--radius-full)" }}></div>
+                                </div>
+                              </div>
+
+                              {/* Completeness Bar */}
+                              <div>
+                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", marginBottom: "3px" }}>
+                                  <span style={{ fontWeight: "600" }}>Completeness</span>
+                                  <strong>{completenessVal}%</strong>
+                                </div>
+                                <div style={{ height: "6px", backgroundColor: "var(--bg-card)", borderRadius: "var(--radius-full)", overflow: "hidden" }}>
+                                  <div style={{ height: "100%", width: `${completenessVal}%`, backgroundColor: "hsl(258, 60%, 55%)", borderRadius: "var(--radius-full)" }}></div>
+                                </div>
+                              </div>
+
+                              {/* Clarity Bar */}
+                              <div>
+                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", marginBottom: "3px" }}>
+                                  <span style={{ fontWeight: "600" }}>Articulation & Clarity</span>
+                                  <strong>{clarityVal}%</strong>
+                                </div>
+                                <div style={{ height: "6px", backgroundColor: "var(--bg-card)", borderRadius: "var(--radius-full)", overflow: "hidden" }}>
+                                  <div style={{ height: "100%", width: `${clarityVal}%`, backgroundColor: "hsl(180, 60%, 40%)", borderRadius: "var(--radius-full)" }}></div>
+                                </div>
+                              </div>
+
+                            </div>
+
+                            {/* Per-Question Evaluation Verdict */}
+                            <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--text-secondary)", lineHeight: "1.4" }}>
+                              <strong>Evaluation Verdict:</strong> {correctnessVal >= 75
+                                ? `Strong answer. The explanation correctly addresses the core principles of ${topicText} with high technical accuracy.`
+                                : correctnessVal >= 50
+                                ? `Partially correct answer. Good direction, but missing some key formulas, edge case trade-offs, or precise terminology.`
+                                : `Weak answer. The explanation was incomplete or lacked essential technical details for ${topicText}.`
+                              }
+                            </p>
                           </div>
 
                           {/* Local Audio Recording Replay */}
@@ -1725,7 +1887,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                               marginBottom: "var(--space-sm)"
                             }}>
                               <span style={{ fontSize: "0.75rem", fontWeight: "600", color: "var(--text-secondary)", flexShrink: 0 }}>
-                                Listen back:
+                                Listen back to your voice:
                               </span>
                               <audio 
                                 src={resultsData.recordedAudios[idx]} 
@@ -1751,13 +1913,6 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                           }}>
                             <strong style={{ display: "block", color: "hsl(145, 60%, 20%)", marginBottom: "4px", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>{isProfessional ? "Optimal Professional Response:" : "Expected Correct Answer:"}</strong>
                             {emotion.correctAnswer || qObj?.correctAnswer || getExpectedCorrectAnswer(topicText, qObj ? qObj.text : qText, qObj)}
-                          </div>
-
-                          {/* Performance tags, WPM pacing */}
-                          <div style={{ display: "flex", gap: "var(--space-sm)", flexWrap: "wrap", fontSize: "0.75rem", color: "var(--text-secondary)", marginBottom: "var(--space-sm)" }}>
-                            <span>Lexical correctness: <strong>{emotion.correctness}%</strong></span>
-                            <span>•</span>
-                            <span>Tempo: <strong>{Math.round(answer.split(/\s+/).length / 0.5)} WPM</strong></span>
                           </div>
 
                           {/* Confidence coaching tip */}
