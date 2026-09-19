@@ -617,12 +617,32 @@ Respond ONLY with a valid, clean JSON object matching this schema. Do not enclos
 // ==========================================
 // GEMINI API CALLER
 // ==========================================
-async function callGeminiAPI(prompt, apiKey, audioBase64 = null) {
+async function callGeminiAPI(prompt, apiKey, rawAudioInput = null) {
+  let audioBase64 = null;
+  let audioMimeType = "audio/webm";
+
+  if (rawAudioInput) {
+    if (typeof rawAudioInput === "string" && rawAudioInput.startsWith("data:")) {
+      const match = rawAudioInput.match(/^data:(audio\/[a-zA-Z0-9\-\+]+);base64,(.+)$/);
+      if (match) {
+        audioMimeType = match[1];
+        audioBase64 = match[2];
+      } else {
+        audioBase64 = rawAudioInput.replace(/^data:audio\/[a-zA-Z0-9\-\+]+;base64,/, "");
+      }
+    } else {
+      audioBase64 = rawAudioInput;
+    }
+  }
+
+  // Optimized candidate models ordered strictly by speed and stability:
+  // 1. gemini-2.5-flash-lite (~1.1s latency for text & ~2.7s for audio)
+  // 2. gemini-3.1-flash-lite (~1.9s latency)
+  // 3. gemini-2.5-flash (~4.9s latency backup)
   const CANDIDATE_MODELS = [
-    "gemini-2.5-flash",
     "gemini-2.5-flash-lite",
-    "gemini-3.5-flash",
-    "gemini-3.1-flash-lite"
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash"
   ];
 
   let lastError = null;
@@ -636,7 +656,7 @@ async function callGeminiAPI(prompt, apiKey, audioBase64 = null) {
       if (audioBase64) {
         parts.push({
           inlineData: {
-            mimeType: "audio/webm",
+            mimeType: audioMimeType,
             data: audioBase64
           }
         });
@@ -650,7 +670,7 @@ async function callGeminiAPI(prompt, apiKey, audioBase64 = null) {
       };
 
       const controller = new AbortController();
-      timeoutId = setTimeout(() => controller.abort(), 25000); // 25 seconds failsafe timeout
+      timeoutId = setTimeout(() => controller.abort(), 7000); // 7 seconds per-model failsafe timeout
 
       const res = await fetch(url, {
         method: "POST",
@@ -698,9 +718,6 @@ async function callGeminiAPI(prompt, apiKey, audioBase64 = null) {
 
 // ==========================================
 // RESILIENT OFFLINE FALLBACK MOCK ENGINE
-// ==========================================
-// ==========================================
-// RESILIENT OFFLINE FALLBACK HEURISTIC NLP ENGINE
 // ==========================================
 function handleOfflineFallback(payload) {
   const { action, mode } = payload;
