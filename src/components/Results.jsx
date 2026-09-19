@@ -1123,7 +1123,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
               <line x1="8" y1="2" x2="8" y2="6" />
               <line x1="3" y1="10" x2="21" y2="10" />
             </svg>
-            Study Plan
+            Retrospective
           </button>
         </div>
 
@@ -1224,82 +1224,6 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                   ? "Note: Lexical metrics indicate confident and structured speaking structure, but with low correlation to specific technical formulas. Recommend reducing generic filler explanations during technical concepts."
                   : "Note: Outstanding logical congruence. The technical accuracy matches speaking volume perfectly, indicating no memorize-bluff attempts."}
               </p>
-            </div>
-
-            <div className={`card historical-card ${mobileTab === 'overview' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-md) var(--space-lg)", textAlign: "left" }}>
-              <h3 style={{ fontSize: "0.95rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
-                Historical Progress Comparison
-              </h3>
-              {pastSessionsAvg !== null ? (
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "6px 0" }}>
-                    <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Previous Role Average" : "Previous Subject Average"}</span>
-                    <strong style={{ fontSize: "0.85rem", color: "var(--text-primary)" }}>{pastSessionsAvg}%</strong>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "6px 0" }}>
-                    <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Current Interview Score" : "Current Viva Score"}</span>
-                    <strong style={{ fontSize: "0.85rem", color: "var(--accent-primary)" }}>{overallScore}%</strong>
-                  </div>
-                  <div style={{
-                    marginTop: "var(--space-sm)",
-                    padding: "8px 12px",
-                    borderRadius: "var(--radius-xs)",
-                    backgroundColor: overallScore >= pastSessionsAvg ? "var(--color-success-bg)" : "var(--color-error-bg)",
-                    color: overallScore >= pastSessionsAvg ? "var(--color-success)" : "var(--color-error)",
-                    fontSize: "0.8rem",
-                    fontWeight: "600",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px"
-                  }}>
-                    {overallScore >= pastSessionsAvg ? (
-                      <>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                          <polyline points="18 15 12 9 6 15"/>
-                        </svg>
-                        Performance increase of +{overallScore - pastSessionsAvg}% compared to baseline.
-                      </>
-                    ) : (
-                      <>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                          <polyline points="6 9 12 15 18 9"/>
-                        </svg>
-                        Score is -{pastSessionsAvg - overallScore}% below your historical baseline.
-                      </>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--text-secondary)" }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: "20px", height: "20px" }}>
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <line x1="12" y1="16" x2="12" y2="12"></line>
-                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                  </svg>
-                  <span style={{ fontSize: "0.8rem" }}>{isProfessional ? "First session registered for this role. Subsequent practice will unlock delta progress metrics." : "First viva registered for this subject. Subsequent exams will unlock delta progress metrics."}</span>
-                </div>
-              )}
-            </div>
-
-            <div className={`card suggested-revision-card smart-revision-card ${mobileTab === 'plan' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-lg)" }}>
-              <h3 style={{ fontSize: "1.05rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-sm)", textAlign: "left" }}>
-                {isProfessional ? "Targeted Development Plan" : "Smart Revision Plan"}
-              </h3>
-              <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "var(--space-md)", textAlign: "left" }}>
-                {isProfessional ? "Prioritized development queue compiled from detected competency gaps." : "Prioritized revision queue compiled from detected conceptual gaps."}
-              </p>
-              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
-                {getSuggestedRevisionPills().map((rev, idx) => (
-                  <div key={idx} className="suggested-revision-row">
-                    <span style={{ fontSize: "0.85rem", fontWeight: "600", color: "var(--accent-primary)" }}>
-                      {idx + 1}. {rev.topic}
-                    </span>
-                    <span style={{ fontSize: "0.75rem", padding: "2px 8px", borderRadius: "var(--radius-full)", backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)", color: "var(--text-secondary)" }}>
-                      {rev.time}
-                    </span>
-                  </div>
-                ))}
-              </div>
             </div>
 
             {/* AI Hindsight Retrospective Card */}
