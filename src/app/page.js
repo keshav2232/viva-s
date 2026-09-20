@@ -6,6 +6,7 @@ import AuthScreen from "@/components/AuthScreen";
 import Dashboard from "@/components/Dashboard";
 import SetupFlow from "@/components/SetupFlow";
 import ActiveViva from "@/components/ActiveViva";
+import ActivePresentation from "@/components/ActivePresentation";
 import Results from "@/components/Results";
 
 import { useAuth } from "@/context/AuthContext";
@@ -204,6 +205,11 @@ export default function Home() {
       setCurrentMode(config.mode);
     }
     setActiveScreen("active-viva");
+  };
+
+  const handleFinishPresentation = (presentationData) => {
+    setResultsData(presentationData);
+    setActiveScreen("results");
   };
 
   const handleClearPausedSession = () => {
@@ -672,11 +678,19 @@ export default function Home() {
 
           {/* Exam Simulator View */}
           {activeScreen === "active-viva" && (
-            <ActiveViva 
-              config={vivaConfig} 
-              activeUser={activeUserName} 
-              onFinishViva={handleFinishViva} 
-            />
+            vivaConfig?.mode === "presentation" ? (
+              <ActivePresentation
+                config={vivaConfig}
+                activeUser={activeUserName}
+                onFinishPresentation={handleFinishPresentation}
+              />
+            ) : (
+              <ActiveViva 
+                config={vivaConfig} 
+                activeUser={activeUserName} 
+                onFinishViva={handleFinishViva} 
+              />
+            )
           )}
 
           {/* Results Summary View */}

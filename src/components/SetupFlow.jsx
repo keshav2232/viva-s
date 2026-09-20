@@ -4,13 +4,15 @@ import React, { useState, useEffect } from "react";
 import { EXAMINER_PERSONALITIES } from "@/utils/mockData";
 import { PDFExtractionService } from "@/services/PDFExtractionService";
 import { SyllabusParserService } from "@/services/SyllabusParserService";
+import { SlideParserService } from "@/services/SlideParserService";
 import { VoiceManager } from "@/services/voiceManager";
 import ExaminerAvatar from "@/components/ExaminerAvatar";
 
 export default function SetupFlow({ onCancel, onBeginViva }) {
   const [currentStep, setCurrentStep] = useState(1);
-  const [practiceMode, setPracticeMode] = useState("academic"); // "academic" | "professional"
+  const [practiceMode, setPracticeMode] = useState("academic"); // "academic" | "professional" | "presentation"
   const [sourceType, setSourceType] = useState("syllabus"); // "syllabus" | "topic"
+  const [parsedDeck, setParsedDeck] = useState(null);
   
   // Input fields
   const [topic, setTopic] = useState("");
@@ -150,6 +152,15 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
   const handleProceedStep = async (nextStep) => {
     // Step 1 Validation & parsing
     if (nextStep === 2 && currentStep === 1) {
+      if (practiceMode === "presentation") {
+        if (!parsedDeck) {
+          const sample = SlideParserService.getDefaultSampleSlides(topic || "System Architecture & Scalability");
+          setParsedDeck({ topic: topic || "System Architecture & Scalability", slides: sample });
+        }
+        setCurrentStep(2);
+        return;
+      }
+
       if (sourceType === "topic") {
         if (!topic.trim()) {
           alert(practiceMode === "academic" ? "Please enter a subject topic to proceed." : "Please enter a job role to proceed.");
@@ -259,6 +270,17 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
         continue;
       }
       try {
+        if (practiceMode === "presentation") {
+          setUploadStatus("Parsing presentation slides...");
+          const deck = await SlideParserService.parseDeck(file);
+          setParsedDeck(deck);
+          if (deck.topic) setTopic(deck.topic);
+          setSyllabusUploaded(true);
+          setUploadStatus(`Parsed ${deck.slides.length} presentation slides!`);
+          setIsExtractingText(false);
+          return;
+        }
+
         const extractedText = await PDFExtractionService.extractText(file);
         newFiles.push({
           name: file.name,
@@ -364,7 +386,7 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
   const handleStartExam = () => {
     onBeginViva({
       sourceType,
-      topic: syllabusStructure ? syllabusStructure.topic : (topic || (practiceMode === "academic" ? "Custom Syllabus" : "Custom Job Role")),
+      topic: syllabusStructure ? syllabusStructure.topic : (topic || (practiceMode === "academic" ? "Custom Syllabus" : practiceMode === "presentation" ? "Presentation Deck" : "Custom Job Role")),
       syllabusStructure: syllabusStructure || SyllabusParserService.getDefaultHierarchy(topic || (practiceMode === "academic" ? "Thermodynamics" : "Software Engineer (Backend)"), isLastMinute ? 5 : getActiveDuration()),
       duration: isLastMinute ? 5 : getActiveDuration(),
       personality: isMockExternal ? "terror" : personality, // Force high stress terror examiner if mock external is on!
@@ -373,7 +395,8 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
       isTargetDrill: !!selectedSubtopic,
       targetSubtopic: selectedSubtopic ? selectedSubtopic.name : null,
       enableInterruption,
-      mode: practiceMode
+      mode: practiceMode,
+      slides: parsedDeck ? parsedDeck.slides : SlideParserService.getDefaultSampleSlides(topic || "System Architecture & Scalability")
     });
   };
 
@@ -736,6 +759,19 @@ export default function SetupFlow({ onCancel, onBeginViva }) {
                 style={{ flex: 1, padding: "8px 16px", fontSize: "0.9rem", borderRadius: "var(--radius-sm)", border: "none" }}
               >
                 💼 Professional Mock Interview
+              </button>
+              <button
+                type="button"
+                className={`btn ${practiceMode === "presentation" ? "btn-primary" : "btn-secondary"}`}
+                onClick={() => {
+                  setPracticeMode("presentation");
+                  setSyllabusStructure(null);
+                  setSelectedSubtopic(null);
+                  setTopic("System Architecture & Scalability");
+                }}
+                style={{ flex: 1, padding: "8px 16px", fontSize: "0.9rem", borderRadius: "var(--radius-sm)", border: "none" }}
+              >
+                📊 Presentation Sim Mode
               </button>
             </div>
 

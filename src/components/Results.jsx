@@ -32,6 +32,11 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
   } = resultsData;
 
   const isProfessional = mode === "professional";
+  const isPresentation = mode === "presentation";
+  const presEval = resultsData.evaluationData || {};
+  const presRadar = presEval.radarScores || { topicMastery: 84, storytelling: 85, vocalDelivery: 80, pacingControl: 78, qaDefense: 85 };
+  const verbatimPct = presEval.verbatimRatioPct || 15;
+  const valueAddPct = presEval.valueAddRatioPct || 85;
 
   // Cleanup active audio playbacks on unmount
   useEffect(() => {
@@ -301,8 +306,11 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     (conceptualDepth * 0.2) +
     (handlingPressure * 0.1)
   );
-  overallScore = totalRounds > 0 ? Math.min(Math.max(overallScore, 40), 99) : 0;
-  if (endedEarly && totalRounds > 0) {
+  overallScore = (totalRounds > 0 || isPresentation) ? Math.min(Math.max(overallScore, 40), 99) : 0;
+  if (isPresentation) {
+    overallScore = presEval.topicMasteryScore !== undefined ? presEval.topicMasteryScore : 84;
+  }
+  if (endedEarly && totalRounds > 0 && !isPresentation) {
     overallScore = Math.round(overallScore * 0.6);
   }
 
@@ -523,7 +531,10 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     ? "Competent general performance. Addressed core competencies confidently with minor pauses when pressed on deep technical trade-offs."
     : "Competent general understanding. Handled core subjects confidently with minor pauses when pressed on deep mechanisms.";
 
-  if (totalRounds === 0) {
+  if (isPresentation) {
+    gradeLabel = "Presentation Topic Mastery";
+    evaluationVerdict = presEval.narrativeArcSummary || "You delivered a structured presentation across your slide deck with high explanation clarity and value-add.";
+  } else if (totalRounds === 0) {
     gradeLabel = "No Responses Submitted";
     evaluationVerdict = isProfessional
       ? "The mock interview session was terminated before any questions were answered. No metrics or diagnostics could be recorded."
@@ -1172,30 +1183,61 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
 
               {/* Six detailed score fields */}
               <div className="scorecard-details-grid" style={{ gap: "var(--space-sm)", marginTop: "var(--space-lg)", borderTop: "1px solid var(--border-color)", paddingTop: "var(--space-md)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Technical/Domain Competence" : "Subject Understanding"}</span>
-                  <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{subjectUnderstanding}%</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Communication Confidence" : "Speaking Confidence"}</span>
-                  <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{vocalConfidence}%</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Clarity & Delivery" : "Speaking Clarity"}</span>
-                  <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{clarityOfComm}%</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Problem-Solving Depth" : "Conceptual Depth"}</span>
-                  <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{conceptualDepth}%</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Stress Tolerance" : "Handling Pressure"}</span>
-                  <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{handlingPressure}%</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Role Consistency" : "Consistency"}</span>
-                  <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{consistency}%</strong>
-                </div>
+                {isPresentation ? (
+                  <>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
+                      <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Topic Mastery & Depth</span>
+                      <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{presRadar.topicMastery}%</strong>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
+                      <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Storytelling & Narrative Flow</span>
+                      <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{presRadar.storytelling}%</strong>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
+                      <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Vocal Delivery & Tone</span>
+                      <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{presRadar.vocalDelivery}%</strong>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
+                      <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Slide Pacing Control</span>
+                      <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{presRadar.pacingControl}%</strong>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
+                      <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Panel Q&A Defense</span>
+                      <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{presRadar.qaDefense}%</strong>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
+                      <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Spoken Value-Add Ratio</span>
+                      <strong style={{ fontSize: "0.9rem", color: "var(--color-success)" }}>{valueAddPct}%</strong>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
+                      <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Technical/Domain Competence" : "Subject Understanding"}</span>
+                      <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{subjectUnderstanding}%</strong>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
+                      <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Communication Confidence" : "Speaking Confidence"}</span>
+                      <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{vocalConfidence}%</strong>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
+                      <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Clarity & Delivery" : "Speaking Clarity"}</span>
+                      <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{clarityOfComm}%</strong>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
+                      <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Problem-Solving Depth" : "Conceptual Depth"}</span>
+                      <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{conceptualDepth}%</strong>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
+                      <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Stress Tolerance" : "Handling Pressure"}</span>
+                      <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{handlingPressure}%</strong>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
+                      <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Role Consistency" : "Consistency"}</span>
+                      <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{consistency}%</strong>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Per-Question Evaluation Breakdown Grid */}

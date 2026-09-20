@@ -124,6 +124,8 @@ export async function POST(req) {
         return NextResponse.json(humeResult);
       case "hindsight-analyze":
         return await handleHindsightAnalyze(payload, apiKey);
+      case "evaluate-presentation":
+        return await handleEvaluatePresentation(payload, apiKey);
       default:
         return NextResponse.json({ error: "Invalid action type" }, { status: 400 });
     }
@@ -668,6 +670,68 @@ Respond ONLY with a valid, clean JSON object matching this schema. Do not enclos
   "weakestRound": { "round": 3, "topic": "Topic Name", "score": 45, "evidence": "Why this was the weakest" },
   "recommendations": ["Actionable revision tip 1", "Actionable revision tip 2"],
   "adjustedScores": null
+}`;
+
+  const responseJson = await callGeminiAPI(prompt, apiKey);
+  return NextResponse.json(responseJson);
+}
+
+// ==========================================
+// 7. PRESENTATION SIMULATOR HOLISTIC EVALUATOR
+// ==========================================
+async function handleEvaluatePresentation(payload, apiKey) {
+  const { topic, slides, slideTimes, fullTranscript, personality, durationSecs } = payload;
+
+  const slidesSummary = slides && slides.length > 0
+    ? slides.map((s, i) => `Slide ${i+1}: "${s.title}" -> Content: "${s.text.substring(0, 300)}"`).join("\n")
+    : "Standard Presentation Deck";
+
+  const numSlides = slides ? slides.length : 1;
+  const avgSecs = Math.round((durationSecs || 300) / numSlides);
+
+  const prompt = `Act as an expert presentation coach and executive pitch evaluator. You have access to a COMPLETE presentation delivered live by a candidate.
+Your job is to perform a HOLISTIC presentation evaluation — judging how effectively the presenter explained the overall topic, their narrative flow, delivery presence, and value-add over slide bullet text.
+
+Presentation Topic: "${topic || "Presentation Deck"}"
+Evaluator Panel Style: "${personality}"
+Total Duration: ${Math.round((durationSecs || 300) / 60)} minutes (${durationSecs || 300} seconds across ${numSlides} slides, avg ${avgSecs}s/slide)
+
+PRESENTATION SLIDE DECK CONTENT:
+${slidesSummary}
+
+CANDIDATE SPOKEN TRANSCRIPT:
+"""
+${fullTranscript.substring(0, 8000)}
+"""
+
+HOLISTIC EVALUATION TASKS:
+1. Grade overall Topic Explanation Mastery (0-100) — how effectively did the presenter explain the core subject to an audience?
+2. Write a 2-3 sentence Narrative Arc Summary describing their presentation flow (opening hook, transition quality, technical clarity, and conclusion).
+3. Compute 5 Radar Metric Scores out of 100:
+   - topicMastery (0-100)
+   - storytelling (0-100)
+   - vocalDelivery (0-100)
+   - pacingControl (0-100)
+   - qaDefense (0-100)
+4. Estimate Verbatim Reading Ratio % (percentage of speech that just read slide text word-for-word) vs Value-Add Ratio % (percentage of speech that explained concepts, trade-offs, or insights in their own words).
+5. Identify 3 specific Strengths of the presentation.
+6. Provide 3 specific Actionable Recommendations to improve future presentations.
+
+Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown blocks:
+{
+  "topicMasteryScore": 85,
+  "narrativeArcSummary": "2-3 sentence narrative arc summary",
+  "radarScores": {
+    "topicMastery": 85,
+    "storytelling": 88,
+    "vocalDelivery": 82,
+    "pacingControl": 80,
+    "qaDefense": 85
+  },
+  "verbatimRatioPct": 15,
+  "valueAddRatioPct": 85,
+  "strengths": ["Strength 1", "Strength 2", "Strength 3"],
+  "recommendations": ["Recommendation 1", "Recommendation 2", "Recommendation 3"]
 }`;
 
   const responseJson = await callGeminiAPI(prompt, apiKey);
