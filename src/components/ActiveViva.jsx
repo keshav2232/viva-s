@@ -342,8 +342,9 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     setVisualState("analyzing");
     setStatusText(config.mode === "professional" ? "Interviewer is initializing the session..." : "Professor is initializing the exam...");
     
-    // Reset Session Context
+    // Reset Session Context & trigger Strategy B context caching in background
     SessionContextManager.reset();
+    SessionContextManager.refreshSessionCache(config).catch(() => {});
     
     try {
       const firstQuestion = await QuestionGraphEngine.generateNextQuestion({
@@ -357,7 +358,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         nervousness: 20,
         isTargetDrill: config.isTargetDrill || false,
         targetSubtopic: config.targetSubtopic || null,
-        mode: config.mode
+        mode: config.mode,
+        cacheId: SessionContextManager.activeCacheId
       });
       
       if (!isMountedRef.current) return;
@@ -534,7 +536,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         liveMetrics: liveMetricsVal,
         isHesitationPenalty: hasPenalty,
         mode: config.mode,
-        audioBase64
+        audioBase64,
+        cacheId: SessionContextManager.activeCacheId
       });
 
       console.log(`Background evaluation resolved for question #${qIdx + 1}:`, resultMetrics);
@@ -874,7 +877,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         pauseCount: pauseCount,
         liveMetrics: metricsVal,
         isHesitationPenalty: hasPenalty,
-        mode: config.mode
+        mode: config.mode,
+        cacheId: SessionContextManager.activeCacheId
       });
 
       // Track nervousness for dynamic pressure adaptations
@@ -887,6 +891,9 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         metrics: resultMetrics,
         questionObj: currentQ
       });
+
+      // Strategy B: Refresh context cache in background after recording round
+      SessionContextManager.refreshSessionCache(config).catch(() => {});
 
       // Also record the topic asked for custom strengths computation
       if (currentQ.topic) {
@@ -945,7 +952,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
             nervousness: latestNervousnessRef.current,
             isTargetDrill: config.isTargetDrill || false,
             targetSubtopic: config.targetSubtopic || null,
-            mode: config.mode
+            mode: config.mode,
+            cacheId: SessionContextManager.activeCacheId
           });
 
           if (!isMountedRef.current) return;

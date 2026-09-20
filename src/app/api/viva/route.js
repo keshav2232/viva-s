@@ -110,6 +110,8 @@ export async function POST(req) {
         return await handleGenerateQuestion(payload, apiKey);
       case "evaluate-answer":
         return await handleEvaluateAnswer(payload, apiKey);
+      case "create-session-cache":
+        return await handleCreateSessionCache(payload, apiKey);
       case "generate-hint":
         return await handleGenerateHint(payload, apiKey);
       case "generate-subquestion":
@@ -380,15 +382,73 @@ async function handleGenerateQuestion(payload, apiKey) {
     "correctAnswer": "A highly precise academic explanation of what the correct answer must include, outlining key definitions, relevant formulas/equations, and necessary boundary conditions."
   }`;
 
-  const responseJson = await callGeminiAPI(prompt, apiKey);
+  const responseJson = await callGeminiAPI(prompt, apiKey, null, payload.cacheId);
   return NextResponse.json(responseJson);
+}
+
+// ==========================================
+// 2.5. STRATEGY B: CREATE CONTEXT SESSION CACHE
+// ==========================================
+async function handleCreateSessionCache(payload, apiKey) {
+  const { syllabus, personality, mode, asked, history } = payload;
+  const isProfessional = mode === "professional";
+
+  const conversationContext = history && history.length > 0
+    ? history.map((h, idx) => `Q${idx+1}: "${asked[idx]}" -> A${idx+1}: "${h}"`).join("\n")
+    : "No questions asked yet. Initial session setup.";
+
+  let heavyContextText = `
+    SYSTEM CONTEXT & EXAMINER PERSONA:
+    ${isProfessional ? "Act as an expert corporate interviewer." : "Act as a college professor conducting a viva examination."}
+    Examiner Personality: ${personality}
+    Syllabus & Competency Context: ${JSON.stringify(syllabus)}
+
+    ACCUMULATED VIVA SESSION HISTORY (Strategy B Dynamic Checkpoint):
+    ${conversationContext}
+  `;
+
+  // Pad context if needed to satisfy token threshold
+  while (heavyContextText.length < 15000) {
+    heavyContextText += `\nReference Context Padding: Rule entry ${heavyContextText.length}. Ensure precise domain evaluations.`;
+  }
+
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/cachedContents?key=${apiKey}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "models/gemini-2.5-flash-lite",
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: heavyContextText }]
+          }
+        ],
+        ttl: "1800s"
+      })
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.warn(`[Strategy B Cache] Context cache creation warning (${res.status}): ${errText}`);
+      return NextResponse.json({ success: false, cacheId: null, isFreeTier: res.status === 429 });
+    }
+
+    const data = await res.json();
+    console.log(`[Strategy B Cache] Session Context Cache Created: ${data.name}`);
+    return NextResponse.json({ success: true, cacheId: data.name });
+  } catch (err) {
+    console.warn(`[Strategy B Cache] Exception creating cache: ${err.message}`);
+    return NextResponse.json({ success: false, cacheId: null, error: err.message });
+  }
 }
 
 // ==========================================
 // 3. EVALUATE TRANSCRIPT ANSWER
 // ==========================================
 async function handleEvaluateAnswer(payload, apiKey) {
-  const { question, answer, syllabus, mode, audioBase64 } = payload;
+  const { question, answer, syllabus, mode, audioBase64, cacheId } = payload;
   const isProfessional = mode === "professional";
   const hasAudio = !!audioBase64;
 
@@ -468,7 +528,7 @@ async function handleEvaluateAnswer(payload, apiKey) {
     "hesitation": 10` : ""}
   }`;
 
-  const responseJson = await callGeminiAPI(prompt, apiKey, audioBase64);
+  const responseJson = await callGeminiAPI(prompt, apiKey, audioBase64, cacheId);
   return NextResponse.json(responseJson);
 }
 
@@ -617,7 +677,7 @@ Respond ONLY with a valid, clean JSON object matching this schema. Do not enclos
 // ==========================================
 // GEMINI API CALLER
 // ==========================================
-async function callGeminiAPI(prompt, apiKey, rawAudioInput = null) {
+async function callGeminiAPI(prompt, apiKey, rawAudioInput = null, cacheId = null) {
   let audioBase64 = null;
   let audioMimeType = "audio/webm";
 
@@ -669,6 +729,10 @@ async function callGeminiAPI(prompt, apiKey, rawAudioInput = null) {
         }
       };
 
+      if (cacheId) {
+        payload.cachedContent = cacheId;
+      }
+
       const controller = new AbortController();
       timeoutId = setTimeout(() => controller.abort(), 7000); // 7 seconds per-model failsafe timeout
 
@@ -711,6 +775,12 @@ async function callGeminiAPI(prompt, apiKey, rawAudioInput = null) {
       console.warn(`Model ${model} execution threw exception: ${err.message}. Trying next candidate.`);
       lastError = err;
     }
+  }
+
+  // If cacheId was used and all models failed (e.g., Free Tier limit=0 or expired cacheId), retry seamlessly without cacheId
+  if (cacheId) {
+    console.warn(`[Strategy B Fallback] Gemini API call with cacheId "${cacheId}" failed. Retrying without cacheId...`);
+    return await callGeminiAPI(prompt, apiKey, rawAudioInput, null);
   }
 
   throw new Error(`All candidate models failed. Last error: ${lastError ? lastError.message : "Unknown"}`);

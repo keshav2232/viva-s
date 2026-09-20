@@ -65,7 +65,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
 
   // 1. Calculate Scorecard Averages
   const totalRounds = detectedEmotions.length;
-  
+
   let subjectUnderstanding = 0;
   let vocalConfidence = 0;
   let clarityOfComm = 0;
@@ -82,13 +82,13 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
       depthSum += emo.completeness || 75;
       pressureSum += (100 - (emo.nervousness || 20));
     });
-    
+
     subjectUnderstanding = Math.round(correctnessSum / totalRounds);
     vocalConfidence = Math.round(confSum / totalRounds);
     clarityOfComm = Math.round(clarSum / totalRounds);
     conceptualDepth = Math.round(depthSum / totalRounds);
     handlingPressure = Math.round(pressureSum / totalRounds);
-    
+
     // Consistency is calculated based on correctness variation (higher consistency = smaller differences)
     let differences = 0;
     const avgCorrectness = correctnessSum / totalRounds;
@@ -136,25 +136,25 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     }
   });
 
-  const fillerConcentration = totalWordsCount > 0 
+  const fillerConcentration = totalWordsCount > 0
     ? ((totalFillerCount / totalWordsCount) * 100).toFixed(1)
     : 0;
 
   let lexicalScore = 70;
   let uniqueWordsCount = 0;
   let advancedWordsCount = 0;
-  
+
   if (totalWordsCount > 0) {
     const allWords = answerTranscripts.join(" ").toLowerCase().replace(/[^\w\s']/g, " ").split(/\s+/).filter(w => w.length > 0);
     const uniqueWords = new Set(allWords);
     uniqueWordsCount = uniqueWords.size;
-    
+
     const commonWords = ["the", "and", "that", "this", "with", "have", "from", "they", "will", "would", "their"];
     advancedWordsCount = allWords.filter(w => w.length > 6 && !commonWords.includes(w)).length;
-    
+
     const diversityRatio = uniqueWordsCount / (allWords.length || 1);
     const advancedRatio = advancedWordsCount / (allWords.length || 1);
-    
+
     lexicalScore = Math.min(
       Math.max(
         Math.round((diversityRatio * 60) + (advancedRatio * 180) + (subjectUnderstanding * 0.4)),
@@ -163,7 +163,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
       99
     );
   }
-  
+
   let maturityLevel = "";
   let maturityDesc = "";
   if (isProfessional) {
@@ -198,17 +198,17 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
 
   const detectFallacies = () => {
     const detections = [];
-    
+
     answerTranscripts.forEach((ans, idx) => {
       const qObj = askedQuestionsObjects && askedQuestionsObjects[idx] ? askedQuestionsObjects[idx] : null;
       const topicText = qObj ? qObj.topic : "Syllabus Topic";
       const emo = detectedEmotions[idx] || {};
-      
+
       const cleanAns = (ans || "").toLowerCase();
-      
+
       const deflectionPhrases = ["basically", "essentially", "as we know", "it depends", "high level overview", "general explanation"];
       const containsDeflection = deflectionPhrases.some(phrase => cleanAns.includes(phrase));
-      
+
       if (containsDeflection && (emo.correctness || 80) < 68) {
         detections.push({
           round: idx + 1,
@@ -219,7 +219,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
         });
         return;
       }
-      
+
       if (topicText && topicText.length > 3) {
         const cleanTopic = topicText.toLowerCase().replace(/[^\w\s]/g, " ");
         const topicWords = cleanTopic.split(/\s+/).filter(w => w.length > 3);
@@ -230,7 +230,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
             const regex = new RegExp(`\\b${escapedWord}\\b`, "g");
             return acc + (cleanAns.match(regex) || []).length;
           }, 0);
-          
+
           if (occurrences >= 3 && (emo.correctness || 80) < 65) {
             detections.push({
               round: idx + 1,
@@ -243,7 +243,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
           }
         }
       }
-      
+
       const hasAbsolute = /\b(always|never|completely|impossible)\b/.test(cleanAns);
       if (hasAbsolute && (emo.correctness || 80) < 70) {
         detections.push({
@@ -255,7 +255,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
         });
       }
     });
-    
+
     return detections;
   };
 
@@ -293,12 +293,12 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
   }
 
   const needleAngle = Math.min(Math.max((avgWpm / 240) * 180 - 90, -90), 90);
-  
+
   let overallScore = Math.round(
-    (subjectUnderstanding * 0.35) + 
-    (vocalConfidence * 0.2) + 
-    (clarityOfComm * 0.15) + 
-    (conceptualDepth * 0.2) + 
+    (subjectUnderstanding * 0.35) +
+    (vocalConfidence * 0.2) +
+    (clarityOfComm * 0.15) +
+    (conceptualDepth * 0.2) +
     (handlingPressure * 0.1)
   );
   overallScore = totalRounds > 0 ? Math.min(Math.max(overallScore, 40), 99) : 0;
@@ -367,14 +367,14 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
   const generate5DayPlan = () => {
     // Collect all concepts that need revision
     const allTopicsToReview = [...new Set([...(weakConcepts || []), ...(revisions || [])])];
-    
+
     // Default fallback topics if nothing is diagnosed
     const fallbackTopics = isProfessional
       ? ["System design trade-offs", "Data consistency scaling", "API interface design patterns", "STAR response structure review"]
-      : (subjectName === "Data Structures" 
-          ? ["BST insert & delete operations", "Stack overflow checks", "Double hashing probing", "Graph traversal state space"] 
-          : ["Clapeyron phase transitions", "Exergy entropy degradation calculations", "Maxwell conversions", "Carnot thermal bounds"]);
-    
+      : (subjectName === "Data Structures"
+        ? ["BST insert & delete operations", "Stack overflow checks", "Double hashing probing", "Graph traversal state space"]
+        : ["Clapeyron phase transitions", "Exergy entropy degradation calculations", "Maxwell conversions", "Carnot thermal bounds"]);
+
     // Make sure we have enough topics to distribute
     while (allTopicsToReview.length < 5) {
       const unusedFallback = fallbackTopics.find(t => !allTopicsToReview.includes(t));
@@ -460,7 +460,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     md += isProfessional ? `**Prepared For**: Candidate\n` : `**Prepared For**: Student Scholar\n`;
     md += `**Date Generated**: ${new Date().toLocaleDateString()}\n`;
     md += isProfessional ? `**Target Role Improvement Focus**: Based on performance evaluation: **${overallScore}%**\n\n` : `**Target Score Improvement Focus**: Based on performance evaluation: **${overallScore}%**\n\n`;
-    
+
     md += `## Performance Summary & Diagnosed Gaps\n`;
     md += isProfessional
       ? `* **Diagnosed Weak Competencies**: ${weakConcepts.length > 0 ? weakConcepts.join(", ") : "None detected (Minor polish needed)"}\n`
@@ -468,16 +468,16 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     md += isProfessional
       ? `* **Recommended Development Areas**: ${revisions.join(", ")}\n\n`
       : `* **Recommended Revision Units**: ${revisions.join(", ")}\n\n`;
-    
+
     md += isProfessional ? `## 5-Day Targeted Preparation Roadmap\n\n` : `## 5-Day Targeted Study Roadmap\n\n`;
     md += `| Day | Focus Area | Action Items | Time Commitment |\n`;
     md += `| :--- | :--- | :--- | :--- |\n`;
-    
+
     const planDays = generate5DayPlan();
     planDays.forEach(day => {
       md += `| **Day ${day.day}** | ${day.focus} | ${day.actions.join("; ")} | ${day.time} |\n`;
     });
-    
+
     md += isProfessional ? `\n## Core Professional Interview Tips\n` : `\n## Core Pedagogical Study Tips\n`;
     md += isProfessional
       ? `1. **STAR Format**: Answer behavioral and technical scenarios by outlining Situation, Task, Action, and Result.\n`
@@ -510,9 +510,9 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     });
   }
   const bluffProb = Math.min(
-    (bluffCount * 25) + 
-    (clarityOfComm > 70 && subjectUnderstanding < 62 ? 30 : 0) + 
-    (handlingPressure > 78 && conceptualDepth < 64 ? 12 : 0) + 
+    (bluffCount * 25) +
+    (clarityOfComm > 70 && subjectUnderstanding < 62 ? 30 : 0) +
+    (handlingPressure > 78 && conceptualDepth < 64 ? 12 : 0) +
     (isMockExternal ? 8 : 0),
     95
   );
@@ -573,7 +573,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
       let suggestedTime = 30;
       if (subjectUnderstanding < 65) suggestedTime = 60;
       else if (subjectUnderstanding < 78) suggestedTime = 45;
-      
+
       return {
         topic: rev,
         time: `~${suggestedTime} mins suggested study time`
@@ -588,10 +588,10 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
       setPlayingReplayIndex(null);
       return;
     }
-    
+
     VoiceManager.stop();
     setPlayingReplayIndex(idx);
-    
+
     VoiceManager.speak(speechText, examinerPersonality || "strict",
       () => setPlayingReplayIndex(idx),
       () => setPlayingReplayIndex(null)
@@ -606,11 +606,11 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     const emotion = detectedEmotions[idx];
     const qObj = askedQuestionsObjects && askedQuestionsObjects[idx] ? askedQuestionsObjects[idx] : null;
     const topicText = qObj ? qObj.topic : "Syllabus Concept";
-    
+
     if (!emotion) return "Loading timeline logs...";
-    
+
     let commentary = `Round #${idx + 1} (${topicText}): Solid semantic response. Articulated the primary definitions with standard pacing.`;
-    
+
     if (emotion.tag === "Bluffing") {
       commentary = `Round #${idx + 1} (${topicText}): Significant bluff index flagged. Speak rate was confident, but you substituted precise formulas with general filler prose.`;
     } else if (emotion.nervousness > 45) {
@@ -626,7 +626,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
   // 6. Confidence Coaching Tips
   const getConfidenceCoachingTip = (emotion, answer, idx) => {
     const WPM = Math.round((answer || "").split(/\s+/).length / 0.5); // assume 30 secs WPM
-    
+
     if (emotion.tag === "Bluffing") {
       return "Coaching: You spoke with strong confidence but lacked technical formulas. Focus strictly on governing equations rather than descriptive, general paragraphs.";
     } else if (emotion.nervousness > 40 && WPM > 170) {
@@ -749,26 +749,26 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     const averageHesitation = detectedEmotions.length > 0
       ? Math.round(detectedEmotions.reduce((acc, emo) => acc + (emo.hesitation || 15), 0) / totalRounds)
       : 15;
-    
+
     let fluencyBase = 100;
     const fillerRatio = parseFloat(fillerConcentration);
     fluencyBase -= (fillerRatio * 4);
-    
+
     if (avgWpm < 90 || avgWpm > 170) {
       fluencyBase -= 25;
     } else if (avgWpm < 110 || avgWpm > 150) {
       fluencyBase -= 10;
     }
-    
+
     const fluencyScore = Math.min(Math.max(Math.round(fluencyBase), 45), 99);
-    
+
     let fluencyGrade = "C";
     if (fluencyScore >= 95) fluencyGrade = "A+";
     else if (fluencyScore >= 88) fluencyGrade = "A";
     else if (fluencyScore >= 80) fluencyGrade = "B+";
     else if (fluencyScore >= 70) fluencyGrade = "B";
     else if (fluencyScore >= 55) fluencyGrade = "C+";
-    
+
     let pauseDensityDesc = "Moderate (Measured Pacing)";
     if (averageHesitation < 15) {
       pauseDensityDesc = "Sparse (Highly Articulate)";
@@ -787,7 +787,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
 
     return (
       <div className="fluency-diagnostics-box" style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
-        
+
         {/* ROW 1: Letter Grade and Speedometer Gauge */}
         <div className="card" style={{ padding: "var(--space-lg)", textAlign: "left" }}>
           <div className="fluency-header-row">
@@ -819,7 +819,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                 </defs>
                 <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="var(--bg-primary)" strokeWidth="12" strokeLinecap="round" />
                 <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#speed-grad)" strokeWidth="12" strokeLinecap="round" opacity="0.85" />
-                
+
                 <line x1="20" y1="100" x2="30" y2="100" stroke="var(--border-color)" strokeWidth="2" />
                 <line x1="100" y1="20" x2="100" y2="30" stroke="var(--border-color)" strokeWidth="2" />
                 <line x1="180" y1="100" x2="170" y2="100" stroke="var(--border-color)" strokeWidth="2" />
@@ -881,11 +881,11 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                     </span>
                   </div>
                   <div className="filler-bar-track">
-                    <div 
-                      className="filler-bar-fill" 
-                      style={{ 
-                        width: `${fillPercent}%`, 
-                        backgroundColor: barColor 
+                    <div
+                      className="filler-bar-fill"
+                      style={{
+                        width: `${fillPercent}%`,
+                        backgroundColor: barColor
                       }}
                     />
                   </div>
@@ -908,13 +908,13 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
   const renderGraphTimeline = () => {
     if (totalRounds === 0) {
       return (
-        <div className="graph-canvas-box" style={{ 
-          width: "100%", 
-          height: "180px", 
-          display: "flex", 
-          alignItems: "center", 
-          justifyContent: "center", 
-          border: "1px dashed var(--border-color)", 
+        <div className="graph-canvas-box" style={{
+          width: "100%",
+          height: "180px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          border: "1px dashed var(--border-color)",
           borderRadius: "var(--radius-md)",
           color: "var(--text-secondary)",
           fontSize: "0.85rem",
@@ -946,7 +946,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     for (let i = 0; i < totalRounds; i++) {
       const emo = detectedEmotions[i] || { confidence: 80, nervousness: 20, hesitation: 15 };
       const cx = paddingX + i * stepX;
-      
+
       const cyConf = mapY(emo.confidence || 80);
       const cyNerv = mapY(100 - (emo.nervousness || 20)); // Inverse so high value is good/calm
       const cyHes = mapY(100 - (emo.hesitation || 15));
@@ -980,13 +980,13 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
           {/* Grid nodes */}
           {nodes.map((node) => (
             <g key={node.index}>
-              <circle 
-                cx={node.cx} 
-                cy={node.cyConf} 
-                r={activeTimelineIndex === node.index ? 7 : 4} 
-                fill={activeTimelineIndex === node.index ? "hsl(215, 35%, 26%)" : "var(--bg-card)"} 
-                stroke="hsl(215, 35%, 26%)" 
-                strokeWidth="2" 
+              <circle
+                cx={node.cx}
+                cy={node.cyConf}
+                r={activeTimelineIndex === node.index ? 7 : 4}
+                fill={activeTimelineIndex === node.index ? "hsl(215, 35%, 26%)" : "var(--bg-card)"}
+                stroke="hsl(215, 35%, 26%)"
+                strokeWidth="2"
                 style={{ cursor: "pointer", transition: "var(--transition-smooth)" }}
                 onClick={() => setActiveTimelineIndex(node.index)}
               />
@@ -1003,7 +1003,8 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
   return (
     <section id="results-screen" className="screen active" style={{ position: "relative" }}>
       {/* Inline styles for certificate-grade Print/PDF layout */}
-      <style dangerouslySetInnerHTML={{ __html: `
+      <style dangerouslySetInnerHTML={{
+        __html: `
         @media print {
           body {
             background-color: #ffffff !important;
@@ -1046,7 +1047,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
       `}} />
 
       <div className="results-container">
-        
+
         {/* Top Header Card */}
         <div className="results-header-section">
           <div className="results-title-group" style={{ textAlign: "left" }}>
@@ -1069,7 +1070,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
           <div className="no-print" style={{ display: "flex", gap: "var(--space-xs)" }}>
             <button className="btn btn-secondary" onClick={handlePrintReport} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
               </svg>
               Download Report
             </button>
@@ -1079,7 +1080,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
         </div>
         {/* Mobile Navigation Tabs Strip (Hidden on Desktop via CSS) */}
         <div className="mobile-results-nav no-print">
-          <button 
+          <button
             className={`mobile-results-tab-btn ${mobileTab === 'overview' ? 'active' : ''}`}
             onClick={() => setMobileTab('overview')}
             style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
@@ -1091,7 +1092,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
             </svg>
             Summary
           </button>
-          <button 
+          <button
             className={`mobile-results-tab-btn ${mobileTab === 'metrics' ? 'active' : ''}`}
             onClick={() => setMobileTab('metrics')}
             style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
@@ -1102,7 +1103,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
             </svg>
             Analytics
           </button>
-          <button 
+          <button
             className={`mobile-results-tab-btn ${mobileTab === 'qa' ? 'active' : ''}`}
             onClick={() => setMobileTab('qa')}
             style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
@@ -1112,7 +1113,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
             </svg>
             Q&A Replay
           </button>
-          <button 
+          <button
             className={`mobile-results-tab-btn ${mobileTab === 'plan' ? 'active' : ''}`}
             onClick={() => setMobileTab('plan')}
             style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
@@ -1128,26 +1129,26 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
         </div>
 
         <div className="results-grid">
-          
+
           {/* LEFT PANEL: Academic Scorecard, Emotion Sliders, Bluffing */}
           <div className="performance-left-panel" style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
-            
+
             <div className={`card scorecard-card ${mobileTab === 'overview' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-lg)", position: "relative" }}>
               <h3 style={{ fontSize: "1.05rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-md)", textAlign: "left" }}>
                 Scorecard Breakdown
               </h3>
-              
+
               <div className="scorecard-radial-row">
                 {/* Radial Score Circle */}
                 <div className="radial-svg-wrapper" style={{ width: "110px", height: "110px", flexShrink: 0 }}>
                   <svg viewBox="0 0 120 120" style={{ width: "100%", height: "100%" }}>
                     <circle className="radial-svg-circle-bg" cx="60" cy="60" r="50" />
-                    <circle 
-                      className="radial-svg-circle-fill" 
-                      cx="60" 
-                      cy="60" 
-                      r="50" 
-                      strokeDasharray="314.16" 
+                    <circle
+                      className="radial-svg-circle-fill"
+                      cx="60"
+                      cy="60"
+                      r="50"
+                      strokeDasharray="314.16"
                       strokeDashoffset={scoreOffset}
                       style={{
                         fill: "none",
@@ -1248,7 +1249,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
                 <span style={{ fontSize: "0.95rem", fontWeight: "700", color: "var(--accent-primary)", display: "flex", alignItems: "center", gap: "6px" }}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ width: "16px", height: "16px", color: bluffProb > 40 ? "var(--color-warning)" : "var(--color-success)" }}>
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                   </svg>
                   Bluff Index Analyzer
                 </span>
@@ -1266,7 +1267,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                 }}></div>
               </div>
               <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--text-secondary)", textAlign: "left", lineHeight: "1.4" }}>
-                {bluffProb > 40 
+                {bluffProb > 40
                   ? "Note: Lexical metrics indicate confident and structured speaking structure, but with low correlation to specific technical formulas. Recommend reducing generic filler explanations during technical concepts."
                   : "Note: Outstanding logical congruence. The technical accuracy matches speaking volume perfectly, indicating no memorize-bluff attempts."}
               </p>
@@ -1329,7 +1330,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
 
               {hindsightData && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
-                  
+
                   {/* Session Narrative */}
                   {hindsightData.sessionNarrative && (
                     <div style={{
@@ -1471,8 +1472,8 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                       color: "var(--color-success)"
                     }}>
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" style={{ width: "18px", height: "18px", marginTop: "1px", flexShrink: 0 }}>
-                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-                        <polyline points="22 4 12 14.01 9 11.01"/>
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                        <polyline points="22 4 12 14.01 9 11.01" />
                       </svg>
                       <span style={{ fontSize: "0.8rem", lineHeight: "1.4" }}>
                         <strong>No cross-question contradictions or bluffing patterns detected.</strong> Your answers were internally consistent across all rounds.
@@ -1491,7 +1492,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
               <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "var(--space-md)" }}>
                 Syntactic analysis of speech variety, word complexity, and terminology usage.
               </p>
-              
+
               <div style={{ display: "flex", alignItems: "center", gap: "var(--space-md)", marginBottom: "var(--space-md)" }}>
                 <div style={{
                   width: "56px",
@@ -1523,7 +1524,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                   transition: "width 0.8s ease"
                 }}></div>
               </div>
-              
+
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: "500", marginBottom: "var(--space-md)" }}>
                 <span>Standard Vocabulary</span>
                 <span>Principal Level</span>
@@ -1532,7 +1533,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
               <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--text-secondary)", lineHeight: "1.4" }}>
                 {maturityDesc}
               </p>
-              
+
               <div className="lexical-stats-grid">
                 <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
                   Unique Words: <strong style={{ color: "var(--text-primary)" }}>{uniqueWordsCount}</strong>
@@ -1563,8 +1564,8 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                   color: "var(--color-success)"
                 }}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" style={{ width: "20px", height: "20px", marginTop: "2px", flexShrink: 0 }}>
-                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-                    <polyline points="22 4 12 14.01 9 11.01"/>
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                    <polyline points="22 4 12 14.01 9 11.01" />
                   </svg>
                   <div style={{ fontSize: "0.8rem", lineHeight: "1.4" }}>
                     <strong>Zero Fallacies Flagged</strong>
@@ -1606,10 +1607,10 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
 
           {/* RIGHT PANEL: Emotion Timelines, Professor Mode Replay, Recommends */}
           <div className="feedback-right-panel" style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
-            
+
             <div className={`no-print toggle-tabs-card ${mobileTab === 'metrics' ? '' : 'mobile-hide'}`} style={{ display: "flex", gap: "8px", borderBottom: "1px solid var(--border-color)", paddingBottom: "12px", marginBottom: "4px" }}>
-              <button 
-                className={`btn ${activeRightTab === "timeline" ? "btn-primary" : "btn-secondary"}`} 
+              <button
+                className={`btn ${activeRightTab === "timeline" ? "btn-primary" : "btn-secondary"}`}
                 onClick={() => setActiveRightTab("timeline")}
                 style={{ padding: "8px 16px", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "6px", flex: 1, border: "1px solid var(--border-color)" }}
               >
@@ -1618,14 +1619,14 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                 </svg>
                 Emotion Timeline
               </button>
-              <button 
-                className={`btn ${activeRightTab === "fluency" ? "btn-primary" : "btn-secondary"}`} 
+              <button
+                className={`btn ${activeRightTab === "fluency" ? "btn-primary" : "btn-secondary"}`}
                 onClick={() => setActiveRightTab("fluency")}
                 style={{ padding: "8px 16px", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "6px", flex: 1, border: "1px solid var(--border-color)" }}
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ width: "15px", height: "15px" }}>
-                  <circle cx="12" cy="12" r="10"/>
-                  <path d="M12 6v6l4 2"/>
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 6v6l4 2" />
                 </svg>
                 Speech & Fluency
               </button>
@@ -1638,7 +1639,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
               <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "var(--space-md)" }}>
                 Tracking real-time structural levels of Confidence, Nervousness, and Hesitation across the exam duration.
               </p>
-              
+
               {renderGraphTimeline()}
 
               {/* Legends */}
@@ -1688,7 +1689,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                   </p>
                 </div>
               </div>
-              
+
               <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
                 {askedQuestions.length === 0 ? (
                   <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", textAlign: "center", padding: "16px 0", margin: 0 }}>
@@ -1696,244 +1697,244 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                   </p>
                 ) : (
                   askedQuestions.map((qText, idx) => {
-                  const isExpanded = expandedReplayIndex === idx;
-                  const emotion = detectedEmotions[idx] || { correctness: 80, accuracy: 80, completeness: 75, clarity: 85, confidence: 80 };
-                  const answer = answerTranscripts[idx] || "";
-                  const qObj = askedQuestionsObjects && askedQuestionsObjects[idx] ? askedQuestionsObjects[idx] : null;
-                  const topicText = qObj ? qObj.topic : (isProfessional ? "Competency Skill" : "Syllabus Concept");
-                  const correctnessVal = emotion.correctness !== undefined ? emotion.correctness : 80;
-                  const accuracyVal = emotion.accuracy !== undefined ? emotion.accuracy : correctnessVal;
-                  const completenessVal = emotion.completeness !== undefined ? emotion.completeness : Math.max(correctnessVal - 10, 40);
-                  const clarityVal = emotion.clarity !== undefined ? emotion.clarity : 85;
+                    const isExpanded = expandedReplayIndex === idx;
+                    const emotion = detectedEmotions[idx] || { correctness: 80, accuracy: 80, completeness: 75, clarity: 85, confidence: 80 };
+                    const answer = answerTranscripts[idx] || "";
+                    const qObj = askedQuestionsObjects && askedQuestionsObjects[idx] ? askedQuestionsObjects[idx] : null;
+                    const topicText = qObj ? qObj.topic : (isProfessional ? "Competency Skill" : "Syllabus Concept");
+                    const correctnessVal = emotion.correctness !== undefined ? emotion.correctness : 80;
+                    const accuracyVal = emotion.accuracy !== undefined ? emotion.accuracy : correctnessVal;
+                    const completenessVal = emotion.completeness !== undefined ? emotion.completeness : Math.max(correctnessVal - 10, 40);
+                    const clarityVal = emotion.clarity !== undefined ? emotion.clarity : 85;
 
-                  const getScoreColor = (score) => {
-                    if (score >= 75) return { bg: "var(--color-success-bg)", text: "var(--color-success)", border: "rgba(22, 163, 74, 0.2)" };
-                    if (score >= 50) return { bg: "hsla(38, 85%, 45%, 0.1)", text: "hsl(38, 85%, 35%)", border: "hsla(38, 85%, 45%, 0.25)" };
-                    return { bg: "var(--color-error-bg)", text: "var(--color-error)", border: "hsla(0, 60%, 42%, 0.2)" };
-                  };
+                    const getScoreColor = (score) => {
+                      if (score >= 75) return { bg: "var(--color-success-bg)", text: "var(--color-success)", border: "rgba(22, 163, 74, 0.2)" };
+                      if (score >= 50) return { bg: "hsla(38, 85%, 45%, 0.1)", text: "hsl(38, 85%, 35%)", border: "hsla(38, 85%, 45%, 0.25)" };
+                      return { bg: "var(--color-error-bg)", text: "var(--color-error)", border: "hsla(0, 60%, 42%, 0.2)" };
+                    };
 
-                  const scoreColors = getScoreColor(correctnessVal);
-                  
-                  return (
-                    <div key={idx} style={{ border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", overflow: "hidden", transition: "var(--transition-smooth)" }}>
-                      
-                      {/* Accordion trigger row with explicit Correctness Score Badge */}
-                      <div 
-                        onClick={() => setExpandedReplayIndex(isExpanded ? null : idx)}
-                        style={{
-                          padding: "12px var(--space-md)",
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          backgroundColor: isExpanded ? "var(--bg-primary)" : "var(--bg-card)",
-                          cursor: "pointer",
-                          transition: "var(--transition-smooth)"
-                        }}
-                      >
-                        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px" }}>
-                          <span style={{ fontSize: "0.85rem", fontWeight: "800", color: "var(--accent-primary)" }}>Q{idx + 1}</span>
-                          <span style={{ fontSize: "0.85rem", color: "var(--text-primary)" }}>Topic: <strong>{topicText}</strong></span>
-                        </div>
-                        
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                          {/* Correctness Percentage Badge */}
-                          <div style={{
-                            fontSize: "0.775rem",
-                            fontWeight: "800",
-                            padding: "3px 10px",
-                            borderRadius: "var(--radius-full)",
-                            backgroundColor: scoreColors.bg,
-                            color: scoreColors.text,
-                            border: `1px solid ${scoreColors.border}`,
+                    const scoreColors = getScoreColor(correctnessVal);
+
+                    return (
+                      <div key={idx} style={{ border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", overflow: "hidden", transition: "var(--transition-smooth)" }}>
+
+                        {/* Accordion trigger row with explicit Correctness Score Badge */}
+                        <div
+                          onClick={() => setExpandedReplayIndex(isExpanded ? null : idx)}
+                          style={{
+                            padding: "12px var(--space-md)",
                             display: "flex",
+                            justifyContent: "space-between",
                             alignItems: "center",
-                            gap: "4px"
-                          }}>
-                            <span>{correctnessVal}% Correct</span>
+                            backgroundColor: isExpanded ? "var(--bg-primary)" : "var(--bg-card)",
+                            cursor: "pointer",
+                            transition: "var(--transition-smooth)"
+                          }}
+                        >
+                          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px" }}>
+                            <span style={{ fontSize: "0.85rem", fontWeight: "800", color: "var(--accent-primary)" }}>Q{idx + 1}</span>
+                            <span style={{ fontSize: "0.85rem", color: "var(--text-primary)" }}>Topic: <strong>{topicText}</strong></span>
                           </div>
 
-                          {/* Tag Badge */}
-                          <span style={{
-                            fontSize: "0.7rem",
-                            padding: "2px 8px",
-                            borderRadius: "var(--radius-full)",
-                            fontWeight: "600",
-                            backgroundColor: "var(--bg-primary)",
-                            border: "1px solid var(--border-color)",
-                            color: "var(--text-secondary)"
-                          }}>
-                            {emotion.tag || (correctnessVal >= 75 ? "Strong" : correctnessVal >= 50 ? "Partially Correct" : "Weak")}
-                          </span>
-
-                          <svg 
-                            width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" 
-                            style={{ transform: isExpanded ? "rotate(180deg)" : "none", transition: "var(--transition-smooth)" }}
-                          >
-                            <polyline points="6 9 12 15 18 9"/>
-                          </svg>
-                        </div>
-                      </div>
-
-                      {/* Accordion expanded content */}
-                      {isExpanded && (
-                        <div style={{ padding: "var(--space-md)", borderTop: "1px solid var(--border-color)", backgroundColor: "var(--bg-card)", textAlign: "left" }}>
-                          
-                          {/* Question prompt row with Replay Voice button */}
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
-                            <div style={{ fontSize: "0.85rem", color: "var(--text-primary)" }}>
-                              <strong>{isProfessional ? "Interviewer Question:" : "Examiner Question:"}</strong> &quot;{qObj ? qObj.text : qText}&quot;
-                            </div>
-                            <button 
-                              className="btn btn-secondary"
-                              onClick={() => handleReplayVoice(qObj ? qObj.speech : qText, idx)}
-                              style={{ padding: "4px 8px", fontSize: "0.7rem", flexShrink: 0, cursor: "pointer" }}
-                            >
-                              {playingReplayIndex === idx ? "Stop Voice" : "Replay Voice"}
-                            </button>
-                          </div>
-
-                          {/* Student answer transcript */}
-                          <div style={{ fontSize: "0.85rem", color: "var(--text-primary)", backgroundColor: "var(--bg-primary)", padding: "10px", borderRadius: "var(--radius-xs)", border: "1px solid var(--border-color)", marginBottom: "var(--space-md)" }}>
-                            <strong style={{ color: "var(--accent-primary)" }}>Your Answer:</strong> &quot;{answer}&quot;
-                          </div>
-
-                          {/* PER-QUESTION EVALUATION BREAKDOWN CARD */}
-                          <div style={{
-                            padding: "var(--space-md)",
-                            backgroundColor: "var(--bg-primary)",
-                            borderRadius: "var(--radius-sm)",
-                            border: `1.5px solid ${scoreColors.border}`,
-                            marginBottom: "var(--space-md)"
-                          }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-sm)" }}>
-                              <span style={{ fontSize: "0.75rem", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)" }}>
-                                📊 Round {idx + 1} Evaluation Breakdown
-                              </span>
-                              <span style={{ fontSize: "0.85rem", fontWeight: "800", color: scoreColors.text }}>
-                                Score: {correctnessVal} / 100
-                              </span>
-                            </div>
-
-                            {/* Detailed 4-Metric Bar Grid */}
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "var(--space-sm)" }}>
-                              
-                              {/* Correctness Bar */}
-                              <div>
-                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", marginBottom: "3px" }}>
-                                  <span style={{ fontWeight: "600" }}>Correctness</span>
-                                  <strong style={{ color: scoreColors.text }}>{correctnessVal}%</strong>
-                                </div>
-                                <div style={{ height: "6px", backgroundColor: "var(--bg-card)", borderRadius: "var(--radius-full)", overflow: "hidden" }}>
-                                  <div style={{ height: "100%", width: `${correctnessVal}%`, backgroundColor: scoreColors.text, borderRadius: "var(--radius-full)" }}></div>
-                                </div>
-                              </div>
-
-                              {/* Accuracy Bar */}
-                              <div>
-                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", marginBottom: "3px" }}>
-                                  <span style={{ fontWeight: "600" }}>Technical Accuracy</span>
-                                  <strong>{accuracyVal}%</strong>
-                                </div>
-                                <div style={{ height: "6px", backgroundColor: "var(--bg-card)", borderRadius: "var(--radius-full)", overflow: "hidden" }}>
-                                  <div style={{ height: "100%", width: `${accuracyVal}%`, backgroundColor: "hsl(215, 35%, 26%)", borderRadius: "var(--radius-full)" }}></div>
-                                </div>
-                              </div>
-
-                              {/* Completeness Bar */}
-                              <div>
-                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", marginBottom: "3px" }}>
-                                  <span style={{ fontWeight: "600" }}>Completeness</span>
-                                  <strong>{completenessVal}%</strong>
-                                </div>
-                                <div style={{ height: "6px", backgroundColor: "var(--bg-card)", borderRadius: "var(--radius-full)", overflow: "hidden" }}>
-                                  <div style={{ height: "100%", width: `${completenessVal}%`, backgroundColor: "hsl(258, 60%, 55%)", borderRadius: "var(--radius-full)" }}></div>
-                                </div>
-                              </div>
-
-                              {/* Clarity Bar */}
-                              <div>
-                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", marginBottom: "3px" }}>
-                                  <span style={{ fontWeight: "600" }}>Articulation & Clarity</span>
-                                  <strong>{clarityVal}%</strong>
-                                </div>
-                                <div style={{ height: "6px", backgroundColor: "var(--bg-card)", borderRadius: "var(--radius-full)", overflow: "hidden" }}>
-                                  <div style={{ height: "100%", width: `${clarityVal}%`, backgroundColor: "hsl(180, 60%, 40%)", borderRadius: "var(--radius-full)" }}></div>
-                                </div>
-                              </div>
-
-                            </div>
-
-                            {/* Per-Question Evaluation Verdict */}
-                            <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--text-secondary)", lineHeight: "1.4" }}>
-                              <strong>Evaluation Verdict:</strong> {correctnessVal >= 75
-                                ? `Strong answer. The explanation correctly addresses the core principles of ${topicText} with high technical accuracy.`
-                                : correctnessVal >= 50
-                                ? `Partially correct answer. Good direction, but missing some key formulas, edge case trade-offs, or precise terminology.`
-                                : `Weak answer. The explanation was incomplete or lacked essential technical details for ${topicText}.`
-                              }
-                            </p>
-                          </div>
-
-                          {/* Local Audio Recording Replay */}
-                          {resultsData.recordedAudios && resultsData.recordedAudios[idx] && (
-                            <div className="audio-replay-container" style={{
+                          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                            {/* Correctness Percentage Badge */}
+                            <div style={{
+                              fontSize: "0.775rem",
+                              fontWeight: "800",
+                              padding: "3px 10px",
+                              borderRadius: "var(--radius-full)",
+                              backgroundColor: scoreColors.bg,
+                              color: scoreColors.text,
+                              border: `1px solid ${scoreColors.border}`,
                               display: "flex",
                               alignItems: "center",
-                              gap: "var(--space-sm)",
-                              backgroundColor: "var(--bg-primary)",
-                              padding: "8px 12px",
-                              borderRadius: "var(--radius-xs)",
-                              border: "1px solid var(--border-color)",
-                              marginBottom: "var(--space-sm)"
+                              gap: "4px"
                             }}>
-                              <span style={{ fontSize: "0.75rem", fontWeight: "600", color: "var(--text-secondary)", flexShrink: 0 }}>
-                                Listen back to your voice:
-                              </span>
-                              <audio 
-                                src={resultsData.recordedAudios[idx]} 
-                                controls 
-                                style={{
-                                  height: "32px",
-                                  flex: 1
-                                }}
-                              />
+                              <span>{correctnessVal}% Correct</span>
                             </div>
-                          )}
 
-                          {/* Expected Correct Answer */}
-                          <div style={{
-                            fontSize: "0.825rem",
-                            color: "hsl(145, 60%, 15%)",
-                            backgroundColor: "hsla(145, 60%, 45%, 0.07)",
-                            padding: "10px 12px",
-                            borderRadius: "var(--radius-xs)",
-                            border: "1px solid hsla(145, 60%, 45%, 0.15)",
-                            marginBottom: "var(--space-sm)",
-                            lineHeight: "1.45"
-                          }}>
-                            <strong style={{ display: "block", color: "hsl(145, 60%, 20%)", marginBottom: "4px", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>{isProfessional ? "Optimal Professional Response:" : "Expected Correct Answer:"}</strong>
-                            {emotion.correctAnswer || qObj?.correctAnswer || getExpectedCorrectAnswer(topicText, qObj ? qObj.text : qText, qObj)}
+                            {/* Tag Badge */}
+                            <span style={{
+                              fontSize: "0.7rem",
+                              padding: "2px 8px",
+                              borderRadius: "var(--radius-full)",
+                              fontWeight: "600",
+                              backgroundColor: "var(--bg-primary)",
+                              border: "1px solid var(--border-color)",
+                              color: "var(--text-secondary)"
+                            }}>
+                              {emotion.tag || (correctnessVal >= 75 ? "Strong" : correctnessVal >= 50 ? "Partially Correct" : "Weak")}
+                            </span>
+
+                            <svg
+                              width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                              style={{ transform: isExpanded ? "rotate(180deg)" : "none", transition: "var(--transition-smooth)" }}
+                            >
+                              <polyline points="6 9 12 15 18 9" />
+                            </svg>
                           </div>
-
-                          {/* Confidence coaching tip */}
-                          <div style={{
-                            padding: "8px 12px",
-                            backgroundColor: "var(--accent-light)",
-                            color: "var(--accent-primary)",
-                            fontSize: "0.775rem",
-                            fontWeight: "600",
-                            borderRadius: "var(--radius-xs)",
-                            border: "1px solid rgba(31, 42, 56, 0.15)"
-                          }}>
-                            {getConfidenceCoachingTip(emotion, answer, idx)}
-                          </div>
-
                         </div>
-                      )}
 
-                    </div>
-                  );
-                }))}
+                        {/* Accordion expanded content */}
+                        {isExpanded && (
+                          <div style={{ padding: "var(--space-md)", borderTop: "1px solid var(--border-color)", backgroundColor: "var(--bg-card)", textAlign: "left" }}>
+
+                            {/* Question prompt row with Replay Voice button */}
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
+                              <div style={{ fontSize: "0.85rem", color: "var(--text-primary)" }}>
+                                <strong>{isProfessional ? "Interviewer Question:" : "Examiner Question:"}</strong> &quot;{qObj ? qObj.text : qText}&quot;
+                              </div>
+                              <button
+                                className="btn btn-secondary"
+                                onClick={() => handleReplayVoice(qObj ? qObj.speech : qText, idx)}
+                                style={{ padding: "4px 8px", fontSize: "0.7rem", flexShrink: 0, cursor: "pointer" }}
+                              >
+                                {playingReplayIndex === idx ? "Stop Voice" : "Replay Voice"}
+                              </button>
+                            </div>
+
+                            {/* Student answer transcript */}
+                            <div style={{ fontSize: "0.85rem", color: "var(--text-primary)", backgroundColor: "var(--bg-primary)", padding: "10px", borderRadius: "var(--radius-xs)", border: "1px solid var(--border-color)", marginBottom: "var(--space-md)" }}>
+                              <strong style={{ color: "var(--accent-primary)" }}>Your Answer:</strong> &quot;{answer}&quot;
+                            </div>
+
+                            {/* PER-QUESTION EVALUATION BREAKDOWN CARD */}
+                            <div style={{
+                              padding: "var(--space-md)",
+                              backgroundColor: "var(--bg-primary)",
+                              borderRadius: "var(--radius-sm)",
+                              border: `1.5px solid ${scoreColors.border}`,
+                              marginBottom: "var(--space-md)"
+                            }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-sm)" }}>
+                                <span style={{ fontSize: "0.75rem", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)" }}>
+                                  Round {idx + 1} Evaluation Breakdown
+                                </span>
+                                <span style={{ fontSize: "0.85rem", fontWeight: "800", color: scoreColors.text }}>
+                                  Score: {correctnessVal} / 100
+                                </span>
+                              </div>
+
+                              {/* Detailed 4-Metric Bar Grid */}
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "var(--space-sm)" }}>
+
+                                {/* Correctness Bar */}
+                                <div>
+                                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", marginBottom: "3px" }}>
+                                    <span style={{ fontWeight: "600" }}>Correctness</span>
+                                    <strong style={{ color: scoreColors.text }}>{correctnessVal}%</strong>
+                                  </div>
+                                  <div style={{ height: "6px", backgroundColor: "var(--bg-card)", borderRadius: "var(--radius-full)", overflow: "hidden" }}>
+                                    <div style={{ height: "100%", width: `${correctnessVal}%`, backgroundColor: scoreColors.text, borderRadius: "var(--radius-full)" }}></div>
+                                  </div>
+                                </div>
+
+                                {/* Accuracy Bar */}
+                                <div>
+                                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", marginBottom: "3px" }}>
+                                    <span style={{ fontWeight: "600" }}>Technical Accuracy</span>
+                                    <strong>{accuracyVal}%</strong>
+                                  </div>
+                                  <div style={{ height: "6px", backgroundColor: "var(--bg-card)", borderRadius: "var(--radius-full)", overflow: "hidden" }}>
+                                    <div style={{ height: "100%", width: `${accuracyVal}%`, backgroundColor: "hsl(215, 35%, 26%)", borderRadius: "var(--radius-full)" }}></div>
+                                  </div>
+                                </div>
+
+                                {/* Completeness Bar */}
+                                <div>
+                                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", marginBottom: "3px" }}>
+                                    <span style={{ fontWeight: "600" }}>Completeness</span>
+                                    <strong>{completenessVal}%</strong>
+                                  </div>
+                                  <div style={{ height: "6px", backgroundColor: "var(--bg-card)", borderRadius: "var(--radius-full)", overflow: "hidden" }}>
+                                    <div style={{ height: "100%", width: `${completenessVal}%`, backgroundColor: "hsl(258, 60%, 55%)", borderRadius: "var(--radius-full)" }}></div>
+                                  </div>
+                                </div>
+
+                                {/* Clarity Bar */}
+                                <div>
+                                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", marginBottom: "3px" }}>
+                                    <span style={{ fontWeight: "600" }}>Articulation & Clarity</span>
+                                    <strong>{clarityVal}%</strong>
+                                  </div>
+                                  <div style={{ height: "6px", backgroundColor: "var(--bg-card)", borderRadius: "var(--radius-full)", overflow: "hidden" }}>
+                                    <div style={{ height: "100%", width: `${clarityVal}%`, backgroundColor: "hsl(180, 60%, 40%)", borderRadius: "var(--radius-full)" }}></div>
+                                  </div>
+                                </div>
+
+                              </div>
+
+                              {/* Per-Question Evaluation Verdict */}
+                              <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--text-secondary)", lineHeight: "1.4" }}>
+                                <strong>Evaluation Verdict:</strong> {correctnessVal >= 75
+                                  ? `Strong answer. The explanation correctly addresses the core principles of ${topicText} with high technical accuracy.`
+                                  : correctnessVal >= 50
+                                    ? `Partially correct answer. Good direction, but missing some key formulas, edge case trade-offs, or precise terminology.`
+                                    : `Weak answer. The explanation was incomplete or lacked essential technical details for ${topicText}.`
+                                }
+                              </p>
+                            </div>
+
+                            {/* Local Audio Recording Replay */}
+                            {resultsData.recordedAudios && resultsData.recordedAudios[idx] && (
+                              <div className="audio-replay-container" style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "var(--space-sm)",
+                                backgroundColor: "var(--bg-primary)",
+                                padding: "8px 12px",
+                                borderRadius: "var(--radius-xs)",
+                                border: "1px solid var(--border-color)",
+                                marginBottom: "var(--space-sm)"
+                              }}>
+                                <span style={{ fontSize: "0.75rem", fontWeight: "600", color: "var(--text-secondary)", flexShrink: 0 }}>
+                                  Listen back to your voice:
+                                </span>
+                                <audio
+                                  src={resultsData.recordedAudios[idx]}
+                                  controls
+                                  style={{
+                                    height: "32px",
+                                    flex: 1
+                                  }}
+                                />
+                              </div>
+                            )}
+
+                            {/* Expected Correct Answer */}
+                            <div style={{
+                              fontSize: "0.825rem",
+                              color: "hsl(145, 60%, 15%)",
+                              backgroundColor: "hsla(145, 60%, 45%, 0.07)",
+                              padding: "10px 12px",
+                              borderRadius: "var(--radius-xs)",
+                              border: "1px solid hsla(145, 60%, 45%, 0.15)",
+                              marginBottom: "var(--space-sm)",
+                              lineHeight: "1.45"
+                            }}>
+                              <strong style={{ display: "block", color: "hsl(145, 60%, 20%)", marginBottom: "4px", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>{isProfessional ? "Optimal Professional Response:" : "Expected Correct Answer:"}</strong>
+                              {emotion.correctAnswer || qObj?.correctAnswer || getExpectedCorrectAnswer(topicText, qObj ? qObj.text : qText, qObj)}
+                            </div>
+
+                            {/* Confidence coaching tip */}
+                            <div style={{
+                              padding: "8px 12px",
+                              backgroundColor: "var(--accent-light)",
+                              color: "var(--accent-primary)",
+                              fontSize: "0.775rem",
+                              fontWeight: "600",
+                              borderRadius: "var(--radius-xs)",
+                              border: "1px solid rgba(31, 42, 56, 0.15)"
+                            }}>
+                              {getConfidenceCoachingTip(emotion, answer, idx)}
+                            </div>
+
+                          </div>
+                        )}
+
+                      </div>
+                    );
+                  }))}
               </div>
             </div>
 

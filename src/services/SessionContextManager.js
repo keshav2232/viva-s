@@ -11,6 +11,7 @@ export const SessionContextManager = {
   detectedEmotions: [],
   weakConcepts: [],
   confidenceEvolution: [],
+  activeCacheId: null,
 
   /**
    * Resets the active session parameters context.
@@ -22,6 +23,40 @@ export const SessionContextManager = {
     this.detectedEmotions = [];
     this.weakConcepts = [];
     this.confidenceEvolution = [];
+    this.activeCacheId = null;
+  },
+
+  /**
+   * Registers/updates the active Gemini context session cache asynchronously (Strategy B).
+   * @param {object} config - Viva session configuration.
+   * @returns {Promise<string|null>} The created cacheId or null if failed/Free tier.
+   */
+  async refreshSessionCache(config) {
+    try {
+      if (!config) return null;
+      const res = await fetch("/api/viva", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create-session-cache",
+          syllabus: config.syllabusStructure,
+          personality: config.personality,
+          mode: config.mode,
+          asked: this.askedQuestions,
+          history: this.answerTranscripts
+        })
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data.success && data.cacheId) {
+        this.activeCacheId = data.cacheId;
+        console.log("[Strategy B SessionCache] Updated active cacheId:", data.cacheId);
+        return data.cacheId;
+      }
+    } catch (err) {
+      console.warn("[Strategy B SessionCache] Warning during context cache registration:", err.message);
+    }
+    return null;
   },
 
   /**

@@ -12,7 +12,7 @@ export const AnswerEvaluationService = {
    * @returns {Promise<object>} Combined metrics { confidence, clarity, nervousness, hesitation, correctness, accuracy, completeness, tag }
    */
   async evaluateResponse(params) {
-    const { question, answer, syllabus, speechDurationMs, pauseCount, liveMetrics, isHesitationPenalty, mode, audioBase64 } = params;
+    const { question, answer, syllabus, speechDurationMs, pauseCount, liveMetrics, isHesitationPenalty, mode, audioBase64, cacheId } = params;
 
     // 1. Calculate local acoustic/delivery metrics (prefer live-tracked metrics)
     const local = this.calculateLocalDeliveryMetrics(answer, speechDurationMs, pauseCount);
@@ -29,7 +29,8 @@ export const AnswerEvaluationService = {
           answer,
           syllabus,
           mode,
-          audioBase64
+          audioBase64,
+          cacheId: cacheId || null
         })
       });
 
