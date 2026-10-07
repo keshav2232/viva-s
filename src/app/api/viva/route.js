@@ -448,16 +448,35 @@ async function handleCreateSessionCache(payload, apiKey) {
 // 3. EVALUATE TRANSCRIPT ANSWER
 // ==========================================
 async function handleEvaluateAnswer(payload, apiKey) {
-  const { question, answer, syllabus, mode, audioBase64, cacheId } = payload;
+  const { question, answer, syllabus, mode, audioBase64, cacheId, speechDurationMs, pauseCount, delivery } = payload;
   const isProfessional = mode === "professional";
   const hasAudio = !!audioBase64;
+
+  let deliveryContext = "";
+  if (delivery) {
+    deliveryContext = `
+  Client Acoustic & Telemetry Context:
+  - Speech Duration: ${speechDurationMs ? Math.round(speechDurationMs / 1000) + "s" : "N/A"}
+  - Speaking Rate (WPM): ${delivery.wpm || "N/A"}
+  - Filler Words Count: ${delivery.fillerCount ?? 0}
+  - Hesitation Pauses: ${pauseCount ?? 0}
+  `;
+  }
 
   const prompt = isProfessional
     ? `Act as an expert industry interviewer grading a candidate's response in a mock interview.
   
+  STEP 1: PERFORM CHAIN-OF-THOUGHT RUBRIC EVALUATION
+  Analyze the candidate's response systematically BEFORE assigning numerical grades:
+  a. Rationale: Break down line-by-line what the candidate explained correctly, where technical inaccuracies or omissions occurred, and why.
+  b. Key Strengths: List specific technical concepts, architectural choices, or frameworks correctly identified.
+  c. Missing Concepts: List critical missing edge cases, trade-offs, erroneous statements, or missing STAR framework details.
+
+  STEP 2: ASSIGN SCORES AND VERDICT
   Question Asked: "${question}"
   Candidate Response: "${answer}"
   Job Competency Context: ${JSON.stringify(syllabus)}
+  ${deliveryContext}
   ${hasAudio ? "An audio recording of the candidate's actual speech is attached to this request. Listen to it carefully to evaluate both content and voice delivery." : "No audio recording is attached. Grade based on the text response."}
   
   Evaluate the response across the following metrics out of 100:
@@ -480,6 +499,9 @@ async function handleEvaluateAnswer(payload, apiKey) {
   Response Format:
   Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown:
   {
+    "rationale": "2-3 sentence chain-of-thought analysis explaining what was answered well, what was missing or incorrect, and why the final score was awarded.",
+    "keyStrengths": ["Concept or technical term correctly stated 1", "Good architecture choice 2"],
+    "missingConcepts": ["Missing trade-off or edge case 1", "Technical inaccuracy 2"],
     "correctness": 85,
     "completeness": 70,
     "accuracy": 80,
@@ -492,9 +514,17 @@ async function handleEvaluateAnswer(payload, apiKey) {
   }`
     : `Act as an academic examiner grading an oral response in a college viva.
   
+  STEP 1: PERFORM CHAIN-OF-THOUGHT RUBRIC EVALUATION
+  Analyze the student's response systematically BEFORE assigning numerical grades:
+  a. Rationale: Break down line-by-line what the student got right, where factual errors or conceptual omissions occurred, and why.
+  b. Key Strengths: List specific formulas, terms, or definitions correctly stated.
+  c. Missing Concepts: List critical missing equations, physical laws, boundary conditions, or incorrect statements.
+
+  STEP 2: ASSIGN SCORES AND VERDICT
   Question Asked: "${question}"
   Student Response: "${answer}"
   Syllabus Context: ${JSON.stringify(syllabus)}
+  ${deliveryContext}
   ${hasAudio ? "An audio recording of the student's actual speech is attached to this request. Listen to it carefully to evaluate both content and voice delivery." : "No audio recording is attached. Grade based on the text response."}
   
   Evaluate the response across the following metrics out of 100:
@@ -517,6 +547,9 @@ async function handleEvaluateAnswer(payload, apiKey) {
   Response Format:
   Respond ONLY with a valid, clean JSON object matching this schema. Do not enclose in markdown:
   {
+    "rationale": "2-3 sentence chain-of-thought analysis explaining what was answered well, what was missing or incorrect, and why the final score was awarded.",
+    "keyStrengths": ["Concept or formula correctly stated 1", "Accurate terminology 2"],
+    "missingConcepts": ["Missing equation or definition 1", "Conceptual error 2"],
     "correctness": 85,
     "completeness": 70,
     "accuracy": 80,

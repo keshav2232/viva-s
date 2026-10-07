@@ -1864,15 +1864,56 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
 
                               </div>
 
-                              {/* Per-Question Evaluation Verdict */}
-                              <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--text-secondary)", lineHeight: "1.4" }}>
-                                <strong>Evaluation Verdict:</strong> {correctnessVal >= 75
-                                  ? `Strong answer. The explanation correctly addresses the core principles of ${topicText} with high technical accuracy.`
-                                  : correctnessVal >= 50
-                                    ? `Partially correct answer. Good direction, but missing some key formulas, edge case trade-offs, or precise terminology.`
-                                    : `Weak answer. The explanation was incomplete or lacked essential technical details for ${topicText}.`
-                                }
-                              </p>
+                              {/* Per-Question Evaluation Verdict & Chain-of-Thought Rationale */}
+                              <div style={{ marginTop: "10px", pt: "8px", borderTop: "1px dashed var(--border-color)" }}>
+                                <p style={{ margin: "0 0 8px 0", fontSize: "0.78rem", color: "var(--text-secondary)", lineHeight: "1.45" }}>
+                                  <strong style={{ color: "var(--text-primary)" }}>Evaluator Rationale:</strong> {emotion.rationale || (
+                                    correctnessVal >= 75
+                                      ? `Strong answer. The explanation correctly addresses the core principles of ${topicText} with high technical accuracy.`
+                                      : correctnessVal >= 50
+                                        ? `Partially correct answer. Good direction, but missing some key formulas, edge case trade-offs, or precise terminology.`
+                                        : `Weak answer. The explanation was incomplete or lacked essential technical details for ${topicText}.`
+                                  )}
+                                </p>
+
+                                {/* Key Strengths Pills */}
+                                {Array.isArray(emotion.keyStrengths) && emotion.keyStrengths.length > 0 && (
+                                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center", marginBottom: "6px" }}>
+                                    <span style={{ fontSize: "0.7rem", fontWeight: "700", color: "#10b981" }}>Strengths:</span>
+                                    {emotion.keyStrengths.map((str, sIdx) => (
+                                      <span key={sIdx} style={{
+                                        fontSize: "0.68rem",
+                                        padding: "2px 8px",
+                                        borderRadius: "var(--radius-full)",
+                                        backgroundColor: "rgba(16, 185, 129, 0.12)",
+                                        color: "#10b981",
+                                        border: "1px solid rgba(16, 185, 129, 0.25)"
+                                      }}>
+                                        ✓ {str}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {/* Missing Concepts Pills */}
+                                {Array.isArray(emotion.missingConcepts) && emotion.missingConcepts.length > 0 && (
+                                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center" }}>
+                                    <span style={{ fontSize: "0.7rem", fontWeight: "700", color: "#f59e0b" }}>Gaps / Omissions:</span>
+                                    {emotion.missingConcepts.map((gap, gIdx) => (
+                                      <span key={gIdx} style={{
+                                        fontSize: "0.68rem",
+                                        padding: "2px 8px",
+                                        borderRadius: "var(--radius-full)",
+                                        backgroundColor: "rgba(245, 158, 11, 0.12)",
+                                        color: "#f59e0b",
+                                        border: "1px solid rgba(245, 158, 11, 0.25)"
+                                      }}>
+                                        ⚠ {gap}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
                             </div>
 
                             {/* Local Audio Recording Replay */}

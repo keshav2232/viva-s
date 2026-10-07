@@ -490,7 +490,7 @@ grade: A+ (≥90), A (≥82), B+ (≥74), B (≥64), C (≥50)
 - **Weaknesses**: From questions where `correctness < 65` or `tag === "Bluffing/Incomplete"`
 - **Recommended Revisions**: List of subtopic names that need review
 - **Weak Concepts** (keyword-matched from answers): entropy, carnot, clausius, AVL, hash, Sommerfeld, Goodman, etc.
-- **Question Cards**: Full Q&A replay with difficulty badges and evaluation tags
+- **Question Cards**: Full Q&A replay with difficulty badges, evaluation tags, step-by-step Evaluator Rationale (`rationale`), green Strengths badges (`✓ keyStrengths`), and amber Gaps/Omissions badges (`⚠ missingConcepts`).
 
 ### Download Report (Print)
 - The `no-print` CSS class hides interactive UI buttons during printing
@@ -636,9 +636,30 @@ Single `POST` endpoint handling 5 action types:
 
 ### Action 4: `evaluate-answer`
 
-**Purpose**: Grade a student's oral answer against the question and syllabus.
+**Purpose**: Grade a student's oral answer against the question, syllabus, and live acoustic delivery telemetry using Chain-of-Thought (CoT) rubric evaluation.
 
-**Output metrics**: `{ correctness, completeness, accuracy, clarity, tag }` (all 0–100)
+**Inputs**:
+- `question`, `answer`, `syllabus`, `mode`, `audioBase64` (optional), `cacheId` (optional)
+- `speechDurationMs`, `pauseCount`, `delivery` (telemetry: WPM, filler word count)
+
+**Chain-of-Thought Evaluation Prompt**:
+1. **Step 1: CoT Rubric Analysis**: Analyzes the answer line-by-line before assigning numbers. Generates `rationale` (2–3 sentence analysis), `keyStrengths` (array of verified terms/concepts), and `missingConcepts` (array of missing edge cases/inaccuracies).
+2. **Step 2: Metric Scoring**: Assigns numerical scores (0–100) for `correctness`, `completeness`, `accuracy`, and `clarity` (plus `nervousness`, `confidence`, `hesitation` if audio attached).
+
+**Output JSON Schema**:
+```json
+{
+  "rationale": "2-3 sentence chain-of-thought analysis...",
+  "keyStrengths": ["Concept correctly stated 1"],
+  "missingConcepts": ["Missing trade-off 1"],
+  "correctness": 85,
+  "completeness": 70,
+  "accuracy": 80,
+  "clarity": 90,
+  "tag": "Strong" | "Weak" | "Partially Correct" | "Bluffing" | "Incomplete" | "Confused",
+  "correctAnswer": "Exemplary reference answer..."
+}
+```
 
 **Tags**: `Strong | Weak | Partially Correct | Bluffing | Incomplete | Confused`
 
@@ -656,7 +677,7 @@ The current implementation instead runs a **local acoustic estimator**:
 
 Real prosody data is already well-covered by two other systems:
 - **`AnswerEvaluationService.calculateLocalDeliveryMetrics()`** — lexical analysis of filler words, WPM, pause counts from transcript text
-- **Background biometric tracker in `ActiveViva.jsx`** — 350ms polling of `SpeechManager.gapsHistory` and real-time filler detection (not shown on UI to avoid candidate anxiety, but calculated for results page)
+- **Background biometric tracker in `ActiveViva.jsx`** — 350ms polling of `SpeechManager.gapsHistory` and real-time filler detection (calculated for results page)
 
 ---
 
@@ -668,10 +689,10 @@ Real prosody data is already well-covered by two other systems:
 
 ### Gemini Model Waterfall
 
-The `callGeminiAPI()` function tries models in order until one succeeds (6s timeout per model):
+The `callGeminiAPI()` function tries models in order until one succeeds (7s failsafe timeout per model):
 
 ```
-gemini-2.5-flash-lite  →  gemini-2.5-flash  →  gemini-3.5-flash  →  gemini-3.1-flash-lite
+gemini-2.5-flash-lite  →  gemini-3.1-flash-lite  →  gemini-2.5-flash
 ```
 
 JSON output is cleaned of any stray markdown fences before parsing.
@@ -684,11 +705,12 @@ JSON output is cleaned of any stray markdown fences before parsing.
 
 | Method | Description |
 |---|---|
-| `evaluateResponse(params)` | Main entry point: calls Gemini + local delivery metrics, merges results |
+| `evaluateResponse(params)` | Main entry point: passes acoustic telemetry to Gemini CoT evaluator, parses `rationale`, `keyStrengths`, `missingConcepts`, and merges hybrid scores |
 | `calculateLocalDeliveryMetrics(text, durationMs, pauseCount)` | Computes filler count, WPM, nervousness, hesitation, confidence locally |
-| `getLocalFallbackMetrics(delivery, answerText)` | Returns plausible metrics when API is unavailable |
+| `getLocalFallbackMetrics(delivery, answerText)` | Returns plausible metrics, fallback rationale, key strengths, and missing concepts when API is offline |
 
-**Hybrid metric merge**:
+**Hybrid metric merge & CoT extraction**:
+- Extracts `rationale`, `keyStrengths` (array), and `missingConcepts` (array) for UI breakdown cards
 - `finalConfidence = localConfidence ± confAdjustment` (Strong=+10, Weak=-15, Bluffing=-20)
 - `finalClarity = (localClarity × 0.4) + (geminiClarity × 0.6)`
 

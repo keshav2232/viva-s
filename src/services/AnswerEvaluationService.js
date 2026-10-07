@@ -30,7 +30,10 @@ export const AnswerEvaluationService = {
           syllabus,
           mode,
           audioBase64,
-          cacheId: cacheId || null
+          cacheId: cacheId || null,
+          speechDurationMs,
+          pauseCount,
+          delivery
         })
       });
 
@@ -74,7 +77,10 @@ export const AnswerEvaluationService = {
         wpm: delivery.wpm || 120,
         fillerCount: delivery.fillerCount || 0,
         
-        // Gemini grading outputs
+        // Gemini Chain-of-Thought & rubric grading outputs
+        rationale: semanticGrading.rationale || "Evaluated response based on factual accuracy, technical completeness, and structural fluency.",
+        keyStrengths: Array.isArray(semanticGrading.keyStrengths) ? semanticGrading.keyStrengths : [],
+        missingConcepts: Array.isArray(semanticGrading.missingConcepts) ? semanticGrading.missingConcepts : [],
         correctness: semanticGrading.correctness,
         accuracy: semanticGrading.accuracy,
         completeness: semanticGrading.completeness,
@@ -166,6 +172,11 @@ export const AnswerEvaluationService = {
       hesitation: delivery.hesitation,
       wpm: delivery.wpm || 120,
       fillerCount: delivery.fillerCount || 0,
+      rationale: isShort 
+        ? "Response was very brief. Key details and foundational concepts were not fully addressed." 
+        : "Local rule-based fallback evaluation based on delivery metrics and word volume.",
+      keyStrengths: isShort ? [] : ["Addressed core topic topic"],
+      missingConcepts: isShort ? ["Comprehensive explanation", "Precise technical keywords"] : [],
       correctness: correctness,
       accuracy: accuracy,
       completeness: isShort ? 45 : 78,
