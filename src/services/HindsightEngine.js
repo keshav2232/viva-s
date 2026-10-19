@@ -1,3 +1,4 @@
+import { vivaFetch } from "@/utils/apiClient";
 /**
  * VivaSim - Hindsight Engine Service
  * Post-session retrospective analysis that re-evaluates the entire exam
@@ -41,7 +42,7 @@ export const HindsightEngine = {
     }
 
     try {
-      const response = await fetch("/api/viva", {
+      const response = await vivaFetch({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -58,7 +59,7 @@ export const HindsightEngine = {
 
       if (!response.ok) {
         console.warn("HindsightEngine: API returned non-OK status, falling back to local analysis.");
-        return this.getLocalFallback(askedQuestions, answerTranscripts, detectedEmotions, mode);
+        return this.getLocalFallback(askedQuestions, answerTranscripts, detectedEmotions, mode, askedQuestionsObjects);
       }
 
       const hindsightData = await response.json();
@@ -66,14 +67,14 @@ export const HindsightEngine = {
       // Validate essential fields exist
       if (!hindsightData || !hindsightData.sessionNarrative) {
         console.warn("HindsightEngine: API returned incomplete data, using local fallback.");
-        return this.getLocalFallback(askedQuestions, answerTranscripts, detectedEmotions, mode);
+        return this.getLocalFallback(askedQuestions, answerTranscripts, detectedEmotions, mode, askedQuestionsObjects);
       }
 
       return hindsightData;
 
     } catch (err) {
       console.warn("HindsightEngine: Network/parse error, using local fallback:", err);
-      return this.getLocalFallback(askedQuestions, answerTranscripts, detectedEmotions, mode);
+      return this.getLocalFallback(askedQuestions, answerTranscripts, detectedEmotions, mode, askedQuestionsObjects);
     }
   },
 
@@ -81,13 +82,13 @@ export const HindsightEngine = {
    * Local rule-based fallback for hindsight analysis when API is unavailable.
    * Uses heuristic cross-question pattern detection from the per-round metrics.
    */
-  getLocalFallback(askedQuestions, answerTranscripts, detectedEmotions, mode) {
+  getLocalFallback(askedQuestions, answerTranscripts, detectedEmotions, mode, askedQuestionsObjects = []) {
     const isProfessional = mode === "professional";
     const totalRounds = detectedEmotions.length;
     if (totalRounds === 0) return null;
 
     // 1. Detect confidence trajectory pattern
-    const confidenceValues = detectedEmotions.map(e => e.confidence || 75);
+    const confidenceValues = detectedEmotions.map(e => e.confidence ?? 75);
     const firstHalf = confidenceValues.slice(0, Math.ceil(totalRounds / 2));
     const secondHalf = confidenceValues.slice(Math.ceil(totalRounds / 2));
     const firstAvg = firstHalf.reduce((a, b) => a + b, 0) / firstHalf.length;
@@ -113,7 +114,7 @@ export const HindsightEngine = {
 
     // 2. Detect contradiction/inconsistency patterns
     const contradictions = [];
-    const correctnessValues = detectedEmotions.map(e => e.correctness || 70);
+    const correctnessValues = detectedEmotions.map(e => e.correctness ?? 70);
     
     for (let i = 0; i < totalRounds; i++) {
       for (let j = i + 1; j < totalRounds; j++) {
@@ -135,7 +136,7 @@ export const HindsightEngine = {
     // 3. Detect bluffing patterns (high confidence + low accuracy across multiple rounds)
     const bluffingRounds = [];
     detectedEmotions.forEach((e, idx) => {
-      if ((e.confidence || 75) > 70 && (e.correctness || 70) < 55) {
+      if ((e.confidence ?? 75) > 70 && (e.correctness ?? 70) < 55) {
         bluffingRounds.push(idx + 1);
       }
     });
@@ -172,7 +173,7 @@ export const HindsightEngine = {
     let minCorrectness = 101;
 
     detectedEmotions.forEach((e, idx) => {
-      const c = e.correctness || 70;
+      const c = e.correctness ?? 70;
       if (c > maxCorrectness) {
         maxCorrectness = c;
         strongestRound = {

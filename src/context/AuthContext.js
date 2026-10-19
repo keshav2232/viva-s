@@ -17,11 +17,12 @@ import {
   getDocs, 
   query, 
   orderBy,
-  addDoc,
+  updateDoc,
   writeBatch
 } from "firebase/firestore";
 import { auth, db, googleProvider, isFirebaseConfigured } from "@/services/firebase";
 import { INITIAL_STATS, EMPTY_STATS } from "@/utils/mockData";
+import { computeSessionStats } from "@/utils/scoring";
 
 const AuthContext = createContext({
   user: null,
@@ -36,10 +37,27 @@ const AuthContext = createContext({
   loginWithGoogle: async () => {},
   logout: async () => {},
   syncGuestData: async () => {},
-  addSessionToCloud: async () => {}
+  addSessionToCloud: async () => {},
+  updateSessionInCloud: async () => {}
 });
 
 export const useAuth = () => useContext(AuthContext);
+
+// Firestore rejects `undefined` values and has a 1 MB document limit; blob: audio URLs are
+// meaningless after a reload. Strip both before persisting a session.
+function toFirestoreSession(session) {
+  const clean = JSON.parse(JSON.stringify(session));
+  if (clean.reportData) {
+    clean.reportData.recordedAudios = {};
+    clean.reportData.hindsightLoading = false;
+  }
+  return clean;
+}
+
+function safeIsoDate(value) {
+  const t = new Date(value).getTime();
+  return Number.isFinite(t) ? new Date(t).toISOString() : new Date().toISOString();
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -104,38 +122,8 @@ export function AuthProvider({ children }) {
       setSessions(loadedSessions);
 
       // 3. Fetch or initialize User Stats with session-based reconciliation to prevent any mock stats leakage!
-      let reconciledStats = EMPTY_STATS;
-      
-      if (loadedSessions.length > 0) {
-        const totalVivas = loadedSessions.length;
-        const avgConfidence = Math.round(
-          loadedSessions.reduce((acc, s) => acc + (s.score || 0), 0) / totalVivas
-        );
-        
-        let strongest = loadedSessions[0]?.subject || "None yet";
-        let weakest = loadedSessions[0]?.subject || "None yet";
-        let highestScore = loadedSessions[0]?.score || 0;
-        let lowestScore = loadedSessions[0]?.score || 0;
-        
-        loadedSessions.forEach(s => {
-          const score = s.score || 0;
-          if (score > highestScore) {
-            highestScore = score;
-            strongest = s.subject;
-          }
-          if (score < lowestScore) {
-            lowestScore = score;
-            weakest = s.subject;
-          }
-        });
-
-        reconciledStats = {
-          totalVivas,
-          avgConfidence,
-          strongestSubject: strongest,
-          weakestSubject: weakest
-        };
-      }
+      // Same derivation the guest path uses, so identical history gives identical numbers.
+      const reconciledStats = computeSessionStats(loadedSessions);
 
       // Sync computed stats back to Firestore if they differ, securing permanent cloud database consistency
       const statsRef = doc(db, "users", uid, "stats", "dashboard");
@@ -221,20 +209,21 @@ export function AuthProvider({ children }) {
       const uid = user.uid;
 
       // Update local state first for instant UX responsiveness
-      const sessionObj = {
+      const sessionObj = toFirestoreSession({
         ...newSessionData,
         createdAt: new Date().toISOString()
-      };
+      });
       
       setSessions((prev) => [sessionObj, ...prev]);
       setStats(updatedStatsData);
 
       // Write to Firestore in parallel
-      const sessionRef = collection(db, "users", uid, "vivas");
+      const sessionRef = doc(db, "users", uid, "vivas", String(sessionObj.id || `session_${Date.now()}`));
       const statsRef = doc(db, "users", uid, "stats", "dashboard");
       const masteryRef = doc(db, "users", uid, "mastery", "syllabus");
 
-      await addDoc(sessionRef, sessionObj);
+      // Deterministic document id: retries and double-submits overwrite instead of duplicating.
+      await setDoc(sessionRef, sessionObj);
       await setDoc(statsRef, updatedStatsData);
 
       // Upload mastery mapping if available locally
@@ -244,6 +233,26 @@ export function AuthProvider({ children }) {
       }
     } catch (err) {
       console.error("Failed syncing finished viva session to Cloud Firestore:", err);
+      // Roll back the optimistic update so the dashboard doesn't show a session that was never saved.
+      setSessions((prev) => prev.filter((s) => s.id !== newSessionData.id));
+      throw err;
+    }
+  };
+
+  // 5b. Attach the (late-arriving) AI retrospective to an already saved session
+  const updateSessionInCloud = async (sessionId, hindsightData) => {
+    if (!user || !isConfigured || !sessionId || !hindsightData) return;
+    try {
+      const clean = JSON.parse(JSON.stringify(hindsightData));
+      await updateDoc(doc(db, "users", user.uid, "vivas", String(sessionId)), {
+        "reportData.hindsightData": clean,
+        "reportData.hindsightLoading": false
+      });
+      setSessions((prev) => prev.map((s) => (s.id === sessionId
+        ? { ...s, reportData: { ...(s.reportData || {}), hindsightData: clean, hindsightLoading: false } }
+        : s)));
+    } catch (err) {
+      console.warn("Could not save the session retrospective to the cloud:", err);
     }
   };
 
@@ -266,11 +275,11 @@ export function AuthProvider({ children }) {
       // Upload each cached session
       for (const session of cachedSessions) {
         // Skip session placeholders if they already exist in cloud (optional protection)
-        const sessionRef = doc(collection(db, "users", uid, "vivas"));
-        batch.set(sessionRef, {
+        const sessionRef = session.id ? doc(db, "users", uid, "vivas", String(session.id)) : doc(collection(db, "users", uid, "vivas"));
+        batch.set(sessionRef, toFirestoreSession({
           ...session,
-          createdAt: session.createdAt || new Date(session.date).toISOString() || new Date().toISOString()
-        });
+          createdAt: session.createdAt || safeIsoDate(session.date)
+        }));
       }
 
       // Upload merged stats
@@ -314,7 +323,8 @@ export function AuthProvider({ children }) {
     loginWithGoogle,
     logout,
     syncGuestData,
-    addSessionToCloud
+    addSessionToCloud,
+    updateSessionInCloud
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

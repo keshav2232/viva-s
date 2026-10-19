@@ -4,12 +4,15 @@ import React, { useState, useEffect, useCallback } from "react";
 import Header from "@/components/Header";
 import AuthScreen from "@/components/AuthScreen";
 import Dashboard from "@/components/Dashboard";
+import dashboardStyles from "@/components/Dashboard.module.css";
+import resultsStyles from "@/components/Results.module.css";
 import SetupFlow from "@/components/SetupFlow";
 import ActiveViva from "@/components/ActiveViva";
 import Results from "@/components/Results";
 
 import { useAuth } from "@/context/AuthContext";
 import { INITIAL_STATS, DEFAULT_SESSIONS, EMPTY_STATS } from "@/utils/mockData";
+import { computeOverallScore, computeSessionStats } from "@/utils/scoring";
 import { SyllabusMasteryService } from "@/services/SyllabusMasteryService";
 
 // Helper function declared outside of component to ensure render purity
@@ -25,10 +28,12 @@ export default function Home() {
     sessions: cloudSessions, 
     logout, 
     syncGuestData, 
-    addSessionToCloud 
+    addSessionToCloud,
+    updateSessionInCloud
   } = useAuth();
 
   // App routing states
+  const [setupPreset, setSetupPreset] = useState(null);
   const [activeScreen, setActiveScreen] = useState("dashboard"); // "auth-screen" | "dashboard" | "setup" | "active-viva" | "results"
   const [isGuest, setIsGuest] = useState(false);
   const [syncingGuest, setSyncingGuest] = useState(false);
@@ -281,7 +286,7 @@ export default function Home() {
     setActiveScreen("results");
   };
 
-  const handleFinishViva = (summary) => {
+  const handleFinishViva = (summary, hindsightPromise) => {
     if (!summary) {
       if (typeof window !== "undefined") {
         const paused = localStorage.getItem("vivasim_paused_session");
@@ -328,46 +333,20 @@ export default function Home() {
       personality: getPersonalityName(vivaConfig.personality, summary.mode),
       score: finalScore,
       date: sessionDateStr,
+      createdAt: new Date().toISOString(),
       gradeClass: finalScore >= 80 ? "high" : (finalScore >= 65 ? "med" : "low"),
-      reportData: summary,
+      reportData: { ...summary, recordedAudios: {}, hindsightLoading: false },
       mode: summary.mode
     };
 
-    // Calculate updated aggregate statistics
-    const totalAttempted = activeStats.totalVivas + 1;
-    let lastConfidence = 84;
-    if (summary.sessionConfidenceScores.length > 0) {
-      const sum = summary.sessionConfidenceScores.reduce((a, b) => a + b, 0);
-      lastConfidence = Math.round(sum / summary.sessionConfidenceScores.length);
-    }
-
-    const allConf = activeStats.avgConfidence * activeStats.totalVivas + lastConfidence;
-    const avgConf = Math.round(allConf / totalAttempted);
-    
-    let strongest = activeStats.strongestSubject;
-    let weakest = activeStats.weakestSubject;
-
-    // Safe fallbacks to initialize from the first session taken
-    if (!strongest || strongest === "None yet" || strongest === "None") {
-      strongest = summary.subjectName;
-    }
-    if (!weakest || weakest === "None yet" || weakest === "None") {
-      weakest = summary.subjectName;
-    }
-
-    if (finalScore > 86) strongest = summary.subjectName;
-    if (finalScore < 72) weakest = summary.subjectName;
-
-    const updatedStats = {
-      totalVivas: totalAttempted,
-      avgConfidence: avgConf,
-      strongestSubject: strongest,
-      weakestSubject: weakest
-    };
+    // Derive stats from the full history (same function as the cloud path)
+    const updatedStats = computeSessionStats([newSession, ...activeSessions]);
 
     if (user) {
       // Persist directly to Firebase Firestore Cloud
-      addSessionToCloud(newSession, updatedStats);
+      addSessionToCloud(newSession, updatedStats).catch(() => {
+        console.warn("Session could not be saved to the cloud; it is only visible in this report.");
+      });
     } else {
       // Sync and save to local storage for guests
       const updatedSessions = [newSession, ...sessions];
@@ -376,38 +355,32 @@ export default function Home() {
       saveToStorage(updatedSessions, updatedStats);
     }
 
+    // The AI retrospective resolves after the report is shown; save it into the stored session too.
+    if (hindsightPromise && typeof hindsightPromise.then === "function") {
+      hindsightPromise.then((hindsight) => {
+        if (!hindsight) return;
+        if (user) {
+          updateSessionInCloud(newSession.id, hindsight);
+        } else {
+          const apply = (list) => list.map((s) => (s.id === newSession.id
+            ? { ...s, reportData: { ...s.reportData, hindsightData: hindsight, hindsightLoading: false } }
+            : s));
+          setSessions((prev) => apply(prev));
+          try {
+            const stored = JSON.parse(localStorage.getItem("vivasim_sessions") || "[]");
+            localStorage.setItem("vivasim_sessions", JSON.stringify(apply(stored)));
+          } catch (e) {
+            console.warn("Could not persist retrospective locally:", e);
+          }
+        }
+      });
+    }
+
     setResultsData(summary);
     setActiveScreen("results");
   };
 
-  const calculateFinalScore = (summary) => {
-    let confidenceAvg = 84;
-    let clarityAvg = 82;
-    let hesitationAvg = 15;
-    let nervousnessAvg = 20;
-
-    if (summary.detectedEmotions.length > 0) {
-      let confSum = 0, clarSum = 0, hesSum = 0, nervSum = 0;
-      summary.detectedEmotions.forEach(emo => {
-        confSum += emo.confidence;
-        clarSum += emo.clarity;
-        hesSum += emo.hesitation;
-        nervSum += emo.nervousness;
-      });
-      confidenceAvg = Math.round(confSum / summary.detectedEmotions.length);
-      clarityAvg = Math.round(clarSum / summary.detectedEmotions.length);
-      hesitationAvg = Math.round(hesSum / summary.detectedEmotions.length);
-      nervousnessAvg = Math.round(nervSum / summary.detectedEmotions.length);
-    }
-
-    let score = Math.round((confidenceAvg * 0.4) + (clarityAvg * 0.6) - (hesitationAvg * 0.1) - (nervousnessAvg * 0.1) + 12);
-    score = Math.min(Math.max(score, 40), 99);
-
-    if (summary.endedEarly) {
-      score = Math.round(score * 0.6);
-    }
-    return score;
-  };
+  const calculateFinalScore = (summary) => computeOverallScore(summary.detectedEmotions, summary.endedEarly);
 
   const getPersonalityName = (pType, mode) => {
     const isProfessional = mode === "professional";
@@ -462,10 +435,10 @@ export default function Home() {
     return <AuthScreen onLoginSuccess={handleLoginSuccess} />;
   }
 
-  const showHeader = activeScreen !== "active-viva";
+  const showHeader = activeScreen !== "active-viva" && activeScreen !== "dashboard" && activeScreen !== "setup" && activeScreen !== "results";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+    <div className={(activeScreen === "dashboard" || activeScreen === "setup") ? dashboardStyles.shell : (activeScreen === "results" ? resultsStyles.shell : undefined)} style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
       {/* Aesthetic Academic Background Canvas */}
       <div className="bg-decor-canvas">
         <div className="bg-decor-orb decor-orb-1"></div>
@@ -654,7 +627,9 @@ export default function Home() {
               userName={activeUserName} 
               stats={activeStats} 
               sessions={activeSessions} 
-              onStartNewViva={() => setActiveScreen("setup")} 
+              onStartNewViva={(preset) => { setSetupPreset(preset); setActiveScreen("setup"); }}
+              onLogout={handleLogout}
+              isGuest={isGuest}
               pausedSession={pausedSession}
               onClearPausedSession={handleClearPausedSession}
               onResumePausedSession={handleResumePausedSession}
@@ -665,6 +640,7 @@ export default function Home() {
           {/* Syllabus Setup View */}
           {activeScreen === "setup" && (
             <SetupFlow 
+              initialConfig={setupPreset}
               onCancel={() => setActiveScreen("dashboard")} 
               onBeginViva={handleBeginViva} 
             />
@@ -675,6 +651,7 @@ export default function Home() {
             <ActiveViva 
               config={vivaConfig} 
               activeUser={activeUserName} 
+              onBack={() => { setSetupPreset(vivaConfig); setActiveScreen("setup"); }}
               onFinishViva={handleFinishViva} 
             />
           )}
@@ -683,7 +660,7 @@ export default function Home() {
           {activeScreen === "results" && resultsData && (
             <Results 
               resultsData={resultsData} 
-              onRestart={() => setActiveScreen("setup")} 
+              onRestart={() => { setSetupPreset(null); setActiveScreen("setup"); }}
               onGoDashboard={() => setActiveScreen("dashboard")} 
             />
           )}

@@ -1,3 +1,4 @@
+import { vivaFetch } from "@/utils/apiClient";
 /**
  * VivaSim - Question Graph Engine
  * Manages dynamic branching, contextual memories, and pacing selections.
@@ -15,7 +16,7 @@ export const QuestionGraphEngine = {
     const { syllabus, personality, duration, askedList, answersList, lastEvaluationTag, currentTopic, nervousness, isTargetDrill, targetSubtopic, mode, cacheId } = params;
 
     try {
-      const response = await fetch("/api/viva", {
+      const response = await vivaFetch({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -57,9 +58,10 @@ export const QuestionGraphEngine = {
 
     const remark = remarks[personality] || "Good. Now let us progress. ";
     const subject = (syllabus?.topic || "").toLowerCase();
+    const has = (...words) => words.some((w) => new RegExp("\\b(?:" + w + ")\\b").test(subject));
 
     let questions = [];
-    if (subject.includes("software") || subject.includes("backend") || subject.includes("developer") || subject.includes("engineer")) {
+    if (has("software", "backend", "developer")) {
       questions = [
         {
           text: "What are the core trade-offs between monolithic and microservices architectures, and when would you divide system domains?",
@@ -82,7 +84,7 @@ export const QuestionGraphEngine = {
           correctAnswer: "The Saga pattern manages distributed transactions using a sequence of local transactions. Each transaction updates database state in a single service and triggers the next step. If a step fails, compensation transactions are executed in reverse order to roll back changes."
         }
       ];
-    } else if (subject.includes("product") || subject.includes("pm")) {
+    } else if (has("product", "pm")) {
       questions = [
         {
           text: "What frameworks do you use for prioritizing product features when resources are limited?",
@@ -105,7 +107,7 @@ export const QuestionGraphEngine = {
           correctAnswer: "A retention loop consists of a trigger (internal/external), an action, a variable reward, and investment, which prompts the user to return to the app naturally."
         }
       ];
-    } else if (subject.includes("data scientist") || subject.includes("machine learning") || subject.includes("ml")) {
+    } else if (has("data scientist", "machine learning", "ml")) {
       questions = [
         {
           text: "What is the difference between supervised and unsupervised learning, and how do you choose between them?",
@@ -128,7 +130,7 @@ export const QuestionGraphEngine = {
           correctAnswer: "Self-attention dynamically calculates a weight distribution for each word in a sequence relative to all other words, allowing the model to capture long-range dependencies and context regardless of distance."
         }
       ];
-    } else if (subject.includes("data") || subject.includes("structure")) {
+    } else if (has("data structures?", "dsa")) {
       questions = [
         {
           text: "Can you explain the difference between a stack and a queue, and their respective operational time complexities?",
@@ -151,7 +153,7 @@ export const QuestionGraphEngine = {
           correctAnswer: "A Trie (prefix tree) is a tree-like structure where nodes represent characters of keys. Its primary advantage is O(L) lookup time where L is the key length, making it extremely fast for prefix searches and autocompletion."
         }
       ];
-    } else if (subject.includes("machine") || subject.includes("design")) {
+    } else if (has("machine design", "machine elements")) {
       questions = [
         {
           text: "What is the difference between the Soderberg and Goodman fatigue failure theories?",
@@ -174,8 +176,8 @@ export const QuestionGraphEngine = {
           correctAnswer: "Uniform pressure assumes contact pressure is constant (used for new clutches). Uniform wear assumes wear rate is constant (P * r = constant), which is more realistic for worn clutches and yields a lower, conservative torque capacity."
         }
       ];
-    } else {
-      // Default to thermodynamics questions
+    } else if (!(syllabus && syllabus.units && syllabus.units.length > 0) || has("thermodynamics", "thermo")) {
+      // Thermodynamics bank: used only for thermo subjects or when no syllabus is available at all.
       questions = [
         {
           text: "Can you explain the basic physical differences between open, closed, and isolated systems, and provide a real-world example of each?",

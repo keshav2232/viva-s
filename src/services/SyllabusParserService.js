@@ -1,3 +1,6 @@
+import { getFallbackSyllabus } from "../utils/mockData";
+import { vivaFetch } from "@/utils/apiClient";
+
 /**
  * VivaSim - Syllabus Ingestion & Hierarchy Parser Service
  * Cleans course text documents and calls Gemini endpoints to expand input keywords.
@@ -89,7 +92,7 @@ export const SyllabusParserService = {
    */
   async expandTopicTree(topicString, mode = "academic", duration = 5) {
     try {
-      const response = await fetch("/api/viva", {
+      const response = await vivaFetch({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -116,7 +119,7 @@ export const SyllabusParserService = {
    * @returns {Promise<object>} Structured units tree.
    */
   async parseSyllabusRemote(rawText, mode = "academic", duration = 5) {
-    const response = await fetch("/api/viva", {
+    const response = await vivaFetch({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -134,8 +137,9 @@ export const SyllabusParserService = {
 
   getTargetUnitsForDuration(duration = 5) {
     const mins = parseInt(duration, 10) || 5;
-    if (mins <= 5) return 3;
-    if (mins <= 10) return 4;
+    if (mins <= 5) return 2;
+    if (mins <= 10) return 3;
+    if (mins <= 15) return 4;
     return 5;
   },
 

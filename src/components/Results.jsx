@@ -1,16 +1,23 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { VoiceManager } from "@/services/voiceManager";
+import styles from "./Results.module.css";
+import { computeOverallScore } from "@/utils/scoring";
 
 export default function Results({ resultsData, onRestart, onGoDashboard }) {
-  const [activeTimelineIndex, setActiveTimelineIndex] = useState(0);
-  const [expandedReplayIndex, setExpandedReplayIndex] = useState(null);
+  const [activeTab, setActiveTab] = useState("overview"); // "overview" | "questions" | "delivery" | "plan"
+  const [selected, setSelected] = useState(0);
+  const [qFilter, setQFilter] = useState("all"); // "all" | "strong" | "work"
+  const [visibleSeries, setVisibleSeries] = useState({ confidence: true, calm: true, fluency: true });
+  const [sortLowFirst, setSortLowFirst] = useState(false);
+  const [expandedMetric, setExpandedMetric] = useState(null);
+  const [showExpected, setShowExpected] = useState(false);
+  const [doneDays, setDoneDays] = useState({});
+  const [liveMsg, setLiveMsg] = useState("");
+  const tabsRef = useRef(null);
   const [playingReplayIndex, setPlayingReplayIndex] = useState(null);
   const [pastSessionsAvg, setPastSessionsAvg] = useState(null);
-  const [scoreOffset, setScoreOffset] = useState(314.16);
-  const [activeRightTab, setActiveRightTab] = useState("timeline"); // "timeline" | "fluency"
-  const [mobileTab, setMobileTab] = useState("overview"); // "overview" | "metrics" | "qa" | "plan"
   const [displayedScore, setDisplayedScore] = useState(0);
   const [hindsightData, setHindsightData] = useState(resultsData.hindsightData || null);
   const [hindsightLoading, setHindsightLoading] = useState(resultsData.hindsightLoading || false);
@@ -33,8 +40,9 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
 
   const isProfessional = mode === "professional";
 
-  // Cleanup active audio playbacks on unmount
+  // Cleanup active audio playbacks on unmount; open the report from the top
   useEffect(() => {
+    window.scrollTo(0, 0);
     return () => {
       VoiceManager.stop();
     };
@@ -76,11 +84,11 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
   if (detectedEmotions.length > 0) {
     let correctnessSum = 0, confSum = 0, clarSum = 0, depthSum = 0, pressureSum = 0;
     detectedEmotions.forEach(emo => {
-      correctnessSum += emo.correctness || 80;
-      confSum += emo.confidence || 80;
-      clarSum += emo.clarity || 80;
-      depthSum += emo.completeness || 75;
-      pressureSum += (100 - (emo.nervousness || 20));
+      correctnessSum += emo.correctness ?? 80;
+      confSum += emo.confidence ?? 80;
+      clarSum += emo.clarity ?? 80;
+      depthSum += emo.completeness ?? 75;
+      pressureSum += (100 - (emo.nervousness ?? 20));
     });
 
     subjectUnderstanding = Math.round(correctnessSum / totalRounds);
@@ -93,7 +101,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     let differences = 0;
     const avgCorrectness = correctnessSum / totalRounds;
     detectedEmotions.forEach(emo => {
-      differences += Math.pow((emo.correctness || 80) - avgCorrectness, 2);
+      differences += Math.pow((emo.correctness ?? 80) - avgCorrectness, 2);
     });
     const standardDev = Math.sqrt(differences / totalRounds);
     consistency = Math.round(Math.max(100 - (standardDev * 2.2), 58));
@@ -209,7 +217,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
       const deflectionPhrases = ["basically", "essentially", "as we know", "it depends", "high level overview", "general explanation"];
       const containsDeflection = deflectionPhrases.some(phrase => cleanAns.includes(phrase));
 
-      if (containsDeflection && (emo.correctness || 80) < 68) {
+      if (containsDeflection && (emo.correctness ?? 80) < 68) {
         detections.push({
           round: idx + 1,
           topic: topicText,
@@ -231,7 +239,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
             return acc + (cleanAns.match(regex) || []).length;
           }, 0);
 
-          if (occurrences >= 3 && (emo.correctness || 80) < 65) {
+          if (occurrences >= 3 && (emo.correctness ?? 80) < 65) {
             detections.push({
               round: idx + 1,
               topic: topicText,
@@ -245,7 +253,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
       }
 
       const hasAbsolute = /\b(always|never|completely|impossible)\b/.test(cleanAns);
-      if (hasAbsolute && (emo.correctness || 80) < 70) {
+      if (hasAbsolute && (emo.correctness ?? 80) < 70) {
         detections.push({
           round: idx + 1,
           topic: topicText,
@@ -294,53 +302,44 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
 
   const needleAngle = Math.min(Math.max((avgWpm / 240) * 180 - 90, -90), 90);
 
-  let overallScore = Math.round(
-    (subjectUnderstanding * 0.35) +
-    (vocalConfidence * 0.2) +
-    (clarityOfComm * 0.15) +
-    (conceptualDepth * 0.2) +
-    (handlingPressure * 0.1)
-  );
-  overallScore = totalRounds > 0 ? Math.min(Math.max(overallScore, 40), 99) : 0;
-  if (endedEarly && totalRounds > 0) {
-    overallScore = Math.round(overallScore * 0.6);
-  }
+  const overallScore = computeOverallScore(detectedEmotions, endedEarly);
 
-  // Radial score stroke offset animation
+  // Smooth count-up for the headline score (instant when the user prefers reduced motion)
   useEffect(() => {
-    const offset = 314.16 - (314.16 * overallScore) / 100;
-    const timer = setTimeout(() => {
-      setScoreOffset(offset);
-    }, 150);
-    return () => clearTimeout(timer);
+    if (overallScore <= 0) return;
+    const reduce = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const duration = reduce ? 0 : 1100;
+    const start = performance.now();
+    let raf;
+    const tick = (now) => {
+      const t = duration === 0 ? 1 : Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setDisplayedScore(Math.round(overallScore * eased));
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
   }, [overallScore]);
+  const shownScore = overallScore > 0 ? displayedScore : 0;
 
-  // Decryption / Rolling animation for overall score number
+  // Restore / persist the 5-day plan checklist per subject
+  const planKey = `vivasim_plan_${subjectName}`;
   useEffect(() => {
-    if (overallScore <= 0) {
-      setDisplayedScore(0);
-      return;
-    }
-
-    const duration = 1200; // Animation duration in ms
-    const intervalTime = 30; // Update rate in ms
-    const totalSteps = duration / intervalTime;
-    let step = 0;
-
-    const timer = setInterval(() => {
-      step++;
-      if (step >= totalSteps) {
-        clearInterval(timer);
-        setDisplayedScore(overallScore);
-      } else {
-        // Fast random rolling sequence to simulate decryption scan
-        const randomVal = Math.floor(Math.random() * 90) + 10;
-        setDisplayedScore(randomVal);
+    try {
+      const saved = localStorage.getItem(planKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setTimeout(() => setDoneDays(parsed), 0);
       }
-    }, intervalTime);
-
-    return () => clearInterval(timer);
-  }, [overallScore]);
+    } catch { /* storage unavailable */ }
+  }, [planKey]);
+  const toggleDay = (day) => {
+    setDoneDays((prev) => {
+      const next = { ...prev, [day]: !prev[day] };
+      try { localStorage.setItem(planKey, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  };
 
   // Load prior average score for historical growth computation
   useEffect(() => {
@@ -735,1255 +734,763 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
     window.print();
   };
 
-  // Fluency & Speech diagnostics dashboard view renderer
-  const renderFluencyDiagnostics = () => {
-    if (detectedEmotions.length === 0) {
-      return (
-        <div className="card" style={{ padding: "var(--space-lg)", textAlign: "center", minHeight: "150px", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)" }}>
-          <p style={{ margin: 0, fontSize: "0.875rem" }}>
-            No speech data available. Answer at least one question during the session to see fluency diagnostics.
-          </p>
-        </div>
-      );
-    }
-    const averageHesitation = detectedEmotions.length > 0
-      ? Math.round(detectedEmotions.reduce((acc, emo) => acc + (emo.hesitation || 15), 0) / totalRounds)
-      : 15;
+  // ===========================================================
+  //  PRESENTATION LAYER (derived data for the redesigned page)
+  // ===========================================================
+  const tone = (s) => (s >= 75
+    ? { cls: styles.toneGood, label: "Strong", icon: "✓" }
+    : s >= 50
+      ? { cls: styles.toneMid, label: "Developing", icon: "~" }
+      : { cls: styles.toneLow, label: "Needs work", icon: "!" });
 
-    let fluencyBase = 100;
-    const fillerRatio = parseFloat(fillerConcentration);
-    fluencyBase -= (fillerRatio * 4);
+  const metrics = [
+    { key: "subject", label: isProfessional ? "Technical / domain competence" : "Subject understanding", value: subjectUnderstanding, desc: "How correct and technically accurate your answers were, averaged across every round." },
+    { key: "confidence", label: isProfessional ? "Communication confidence" : "Speaking confidence", value: vocalConfidence, desc: "Vocal steadiness and assurance detected while you spoke." },
+    { key: "clarity", label: isProfessional ? "Clarity & delivery" : "Speaking clarity", value: clarityOfComm, desc: "How clearly your ideas were structured and articulated." },
+    { key: "depth", label: isProfessional ? "Problem-solving depth" : "Conceptual depth", value: conceptualDepth, desc: "How completely each answer covered the concepts an ideal response would include." },
+    { key: "pressure", label: isProfessional ? "Stress tolerance" : "Handling pressure", value: handlingPressure, desc: "Calm under follow-up questions. Higher means less nervousness was detected." },
+    { key: "consistency", label: isProfessional ? "Role consistency" : "Consistency", value: consistency, desc: "How even your correctness stayed from one question to the next." }
+  ];
+  const sortedMetrics = sortLowFirst ? [...metrics].sort((a, b) => a.value - b.value) : metrics;
+  const hasData = totalRounds > 0;
+  const weakestMetric = hasData ? [...metrics].sort((a, b) => a.value - b.value)[0] : null;
+  const strongestMetric = hasData ? [...metrics].sort((a, b) => b.value - a.value)[0] : null;
+  const overallTone = tone(overallScore);
 
-    if (avgWpm < 90 || avgWpm > 170) {
-      fluencyBase -= 25;
-    } else if (avgWpm < 110 || avgWpm > 150) {
-      fluencyBase -= 10;
-    }
-
-    const fluencyScore = Math.min(Math.max(Math.round(fluencyBase), 45), 99);
-
-    let fluencyGrade = "C";
-    if (fluencyScore >= 95) fluencyGrade = "A+";
-    else if (fluencyScore >= 88) fluencyGrade = "A";
-    else if (fluencyScore >= 80) fluencyGrade = "B+";
-    else if (fluencyScore >= 70) fluencyGrade = "B";
-    else if (fluencyScore >= 55) fluencyGrade = "C+";
-
-    let pauseDensityDesc = "Moderate (Measured Pacing)";
-    if (averageHesitation < 15) {
-      pauseDensityDesc = "Sparse (Highly Articulate)";
-    } else if (averageHesitation > 30) {
-      pauseDensityDesc = "Dense (Frequent Vocal Pauses)";
-    }
-
-    const getFillerColor = (count) => {
-      if (count === 0) return "hsl(145, 70%, 45%)";
-      if (count <= 2) return "hsl(145, 70%, 45%)";
-      if (count <= 5) return "hsl(38, 85%, 48%)";
-      return "hsl(0, 75%, 50%)";
+  const questions = askedQuestions.map((qText, idx) => {
+    const emo = detectedEmotions[idx] || {};
+    const qObj = askedQuestionsObjects && askedQuestionsObjects[idx] ? askedQuestionsObjects[idx] : null;
+    const correctness = emo.correctness !== undefined ? emo.correctness : 80;
+    const accuracy = emo.accuracy !== undefined ? emo.accuracy : correctness;
+    const completeness = emo.completeness !== undefined ? emo.completeness : Math.max(correctness - 10, 40);
+    const clarity = emo.clarity !== undefined ? emo.clarity : 85;
+    const topic = qObj ? qObj.topic : (isProfessional ? "Competency skill" : "Syllabus concept");
+    return {
+      idx, emo, qObj, topic, correctness, accuracy, completeness, clarity,
+      text: qObj ? qObj.text : qText,
+      speech: qObj ? qObj.speech : qText,
+      answer: answerTranscripts[idx] || "",
+      tag: emo.tag || (correctness >= 75 ? "Strong" : correctness >= 50 ? "Partially correct" : "Weak"),
+      tone: tone(correctness)
     };
+  });
+  const strongCount = questions.filter((q) => q.correctness >= 75).length;
+  const workCount = questions.length - strongCount;
+  const visibleQuestions = questions.filter((q) => qFilter === "all" || (qFilter === "strong" ? q.correctness >= 75 : q.correctness < 75));
+  const sel = questions[Math.min(selected, Math.max(questions.length - 1, 0))] || null;
 
-    const maxFillerVal = Math.max(...Object.values(fillerCounts), 4);
+  const fallacies = detectFallacies();
+  const plan = generate5DayPlan();
+  const revisionPills = getSuggestedRevisionPills();
+  const doneCount = plan.filter((d) => doneDays[d.day]).length;
+  const planPct = Math.round((doneCount / plan.length) * 100);
 
-    return (
-      <div className="fluency-diagnostics-box" style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
+  // Speech & fluency
+  const averageHesitation = hasData
+    ? Math.round(detectedEmotions.reduce((acc, emo) => acc + (emo.hesitation ?? 15), 0) / totalRounds)
+    : 0;
+  let fluencyBase = 100 - parseFloat(fillerConcentration) * 4;
+  if (avgWpm < 90 || avgWpm > 170) fluencyBase -= 25;
+  else if (avgWpm < 110 || avgWpm > 150) fluencyBase -= 10;
+  const fluencyScore = Math.min(Math.max(Math.round(fluencyBase), 45), 99);
+  const fluencyGrade = fluencyScore >= 95 ? "A+" : fluencyScore >= 88 ? "A" : fluencyScore >= 80 ? "B+" : fluencyScore >= 70 ? "B" : fluencyScore >= 55 ? "C+" : "C";
+  const pauseDensityDesc = averageHesitation < 15 ? "Sparse — highly articulate" : averageHesitation > 30 ? "Dense — frequent vocal pauses" : "Moderate — measured pacing";
+  const paceTone = avgWpm < 90 || avgWpm > 170 ? styles.toneLow : (avgWpm < 110 || avgWpm > 150 ? styles.toneMid : styles.toneGood);
+  const maxFiller = Math.max(...Object.values(fillerCounts), 4);
+  const fillerTone = (c) => (c <= 2 ? styles.toneGood : c <= 5 ? styles.toneMid : styles.toneLow);
 
-        {/* ROW 1: Letter Grade and Speedometer Gauge */}
-        <div className="card" style={{ padding: "var(--space-lg)", textAlign: "left" }}>
-          <div className="fluency-header-row">
-            <div>
-              <h3 style={{ fontSize: "1.05rem", fontWeight: "700", margin: 0 }}>Vocal Speedometer & Grade</h3>
-              <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", margin: "2px 0 0 0" }}>Analysis of verbal velocity and structural clarity.</p>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <div style={{ textAlign: "right" }}>
-                <span style={{ fontSize: "0.7rem", fontWeight: "600", textTransform: "uppercase", color: "var(--text-secondary)" }}>Fluency Grade</span>
-                <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontWeight: "500" }}>Score: {fluencyScore}/100</div>
-              </div>
-              <div className="letter-grade-circle">{fluencyGrade}</div>
-            </div>
-          </div>
+  // Timeline chart
+  const seriesDefs = [
+    { key: "confidence", label: "Confidence", color: "#3e5233", dash: "", get: (e) => e.confidence ?? 80 },
+    { key: "calm", label: "Calmness (low nervousness)", color: "#a85d3f", dash: "9 6", get: (e) => 100 - (e.nervousness ?? 20) },
+    { key: "fluency", label: "Fluency (few pauses)", color: "#2b6b84", dash: "2 6", get: (e) => 100 - (e.hesitation ?? 15) }
+  ];
+  const CW = 600, CH = 270, padL = 42, padR = 26, padT = 16, padB = 36;
+  const cx = (i) => (totalRounds <= 1 ? (CW + padL - padR) / 2 : padL + (i * (CW - padL - padR)) / (totalRounds - 1));
+  const cy = (v) => padT + (1 - Math.min(Math.max(v, 0), 100) / 100) * (CH - padT - padB);
+  const colW = totalRounds > 1 ? (CW - padL - padR) / (totalRounds - 1) : 120;
 
-          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: "var(--space-lg)" }}>
-            {/* Speedometer SVG */}
-            <div style={{ width: "200px", display: "flex", flexDirection: "column", alignItems: "center" }}>
-              <svg width="200" height="110" viewBox="0 0 200 110" className="speedometer-svg">
-                <defs>
-                  <linearGradient id="speed-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="hsl(0, 60%, 42%)" />
-                    <stop offset="25%" stopColor="hsl(38, 85%, 45%)" />
-                    <stop offset="50%" stopColor="var(--color-success)" />
-                    <stop offset="75%" stopColor="hsl(38, 85%, 45%)" />
-                    <stop offset="100%" stopColor="hsl(0, 60%, 42%)" />
-                  </linearGradient>
-                </defs>
-                <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="var(--bg-primary)" strokeWidth="12" strokeLinecap="round" />
-                <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#speed-grad)" strokeWidth="12" strokeLinecap="round" opacity="0.85" />
+  const toggleSeries = (key) => setVisibleSeries((prev) => {
+    const next = { ...prev, [key]: !prev[key] };
+    return Object.values(next).some(Boolean) ? next : prev; // always keep at least one line visible
+  });
 
-                <line x1="20" y1="100" x2="30" y2="100" stroke="var(--border-color)" strokeWidth="2" />
-                <line x1="100" y1="20" x2="100" y2="30" stroke="var(--border-color)" strokeWidth="2" />
-                <line x1="180" y1="100" x2="170" y2="100" stroke="var(--border-color)" strokeWidth="2" />
+  const goTab = (id) => {
+    setActiveTab(id);
+    requestAnimationFrame(() => {
+      const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      tabsRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    });
+  };
+  const openQuestion = (idx) => { setSelected(idx); setShowExpected(false); };
 
-                <g transform="translate(100, 100)">
-                  <line x1="0" y1="0" x2="0" y2="-72" stroke="var(--accent-primary)" strokeWidth="3.5" strokeLinecap="round" style={{ transform: `rotate(${needleAngle}deg)`, transformOrigin: "0% 0%", transition: "transform 1.5s cubic-bezier(0.25, 0.8, 0.25, 1)" }} />
-                  <circle cx="0" cy="0" r="7" fill="var(--accent-primary)" />
-                  <circle cx="0" cy="0" r="3.5" fill="var(--bg-card)" />
-                </g>
-                <text x="25" y="108" textAnchor="middle" fontSize="8px" fontWeight="600" fill="var(--text-muted)">0 WPM</text>
-                <text x="100" y="15" textAnchor="middle" fontSize="8px" fontWeight="600" fill="var(--text-muted)">120</text>
-                <text x="175" y="108" textAnchor="middle" fontSize="8px" fontWeight="600" fill="var(--text-muted)">240+</text>
-              </svg>
-              <div style={{ marginTop: "4px", textAlign: "center" }}>
-                <span style={{ fontSize: "0.85rem", fontWeight: "700", color: pacingColor, backgroundColor: pacingBg, padding: "2px 8px", borderRadius: "var(--radius-full)" }}>
-                  {avgWpm} WPM ({pacingCategory})
-                </span>
-              </div>
-            </div>
-
-            {/* Scorecard Detailed Grid */}
-            <div style={{ flex: 1, minWidth: "180px", display: "flex", flexDirection: "column", gap: "8px" }}>
-              <div className="fluency-metric-card" style={{ padding: "8px 12px" }}>
-                <span className="fluency-metric-title">Articulation Clarity</span>
-                <span className="fluency-metric-value">{clarityOfComm}%</span>
-                <span className="fluency-metric-desc">High phonetic structure stability.</span>
-              </div>
-              <div className="fluency-metric-card" style={{ padding: "8px 12px" }}>
-                <span className="fluency-metric-title">Pause Density</span>
-                <span className="fluency-metric-value">{averageHesitation}%</span>
-                <span className="fluency-metric-desc">{pauseDensityDesc}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ROW 2: Horizontal Filler Words Bar Chart */}
-        <div className="card" style={{ padding: "var(--space-lg)", textAlign: "left" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-md)" }}>
-            <div>
-              <h3 style={{ fontSize: "1.05rem", fontWeight: "700", margin: 0 }}>Lexical Filler Distribution</h3>
-              <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", margin: "2px 0 0 0" }}>Real-time occurrence of lexical crutch phrases.</p>
-            </div>
-            <div style={{ fontSize: "0.85rem", fontWeight: "700", color: parseFloat(fillerConcentration) > 5 ? "var(--color-warning)" : "var(--color-success)" }}>
-              Concentration Ratio: {fillerConcentration}%
-            </div>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-            {Object.entries(fillerCounts).map(([word, count]) => {
-              const fillPercent = Math.min((count / maxFillerVal) * 100, 100);
-              const barColor = getFillerColor(count);
-              return (
-                <div key={word} className="filler-bar-container" style={{ margin: 0 }}>
-                  <div className="filler-bar-header">
-                    <span className="filler-bar-label">&quot;{word}&quot;</span>
-                    <span className="filler-bar-count">
-                      {count} {count === 1 ? "occurrence" : "occurrences"}
-                    </span>
-                  </div>
-                  <div className="filler-bar-track">
-                    <div
-                      className="filler-bar-fill"
-                      style={{
-                        width: `${fillPercent}%`,
-                        backgroundColor: barColor
-                      }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <p style={{ margin: "10px 0 0 0", fontSize: "0.75rem", color: "var(--text-secondary)", lineHeight: "1.4" }}>
-            {parseFloat(fillerConcentration) > 5
-              ? "Tip: Try taking a deliberate 1-second pause when you feel the urge to say a filler word. Silence is more professional."
-              : "Excellent work! Your speech contains very few filler words, creating a highly polished academic impression."}
-          </p>
-        </div>
-
-      </div>
-    );
+  const tabs = [
+    { id: "overview", label: "Overview" },
+    { id: "questions", label: "Questions", count: questions.length },
+    { id: "delivery", label: "Delivery" },
+    { id: "plan", label: "Study plan", count: `${doneCount}/${plan.length}` }
+  ];
+  const onTabKey = (e, i) => {
+    const keys = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 };
+    if (!(e.key in keys)) return;
+    e.preventDefault();
+    const next = (keys[e.key] + tabs.length) % tabs.length;
+    setActiveTab(tabs[next].id);
+    document.getElementById(`results-tab-${tabs[next].id}`)?.focus();
   };
 
-  // Graph math
-  const renderGraphTimeline = () => {
-    if (totalRounds === 0) {
-      return (
-        <div className="graph-canvas-box" style={{
-          width: "100%",
-          height: "180px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          border: "1px dashed var(--border-color)",
-          borderRadius: "var(--radius-md)",
-          color: "var(--text-secondary)",
-          fontSize: "0.85rem",
-          padding: "16px",
-          textAlign: "center",
-          backgroundColor: "var(--bg-primary)"
-        }}>
-          No timeline data available. Answer at least one question during the session to display an emotion timeline.
-        </div>
-      );
+  const handleCopySummary = async () => {
+    const lines = [
+      `${isProfessional ? "PrepSim mock interview" : "PrepSim viva"} — ${subjectName}`,
+      `Overall: ${overallScore}% (${gradeLabel})`,
+      ...metrics.map((m) => `${m.label}: ${m.value}%`),
+      `Average pace: ${avgWpm} WPM · Filler rate: ${fillerConcentration}%`,
+      revisions.length ? `Revise next: ${revisions.join(", ")}` : ""
+    ].filter(Boolean).join("\n");
+    try {
+      await navigator.clipboard.writeText(lines);
+      setLiveMsg("Summary copied to clipboard.");
+    } catch {
+      setLiveMsg("Could not copy automatically. Use Download report instead.");
     }
-    const width = 500;
-    const height = 160;
-    const paddingX = 40;
-    const paddingY = 25;
-    const stepX = (width - paddingX * 2) / (totalRounds - 1 || 1);
-
-    const mapY = (val) => {
-      // Map score 30-100 to graph limits
-      const pct = (val - 30) / 70;
-      return height - paddingY - pct * (height - paddingY * 2);
-    };
-
-    let confidencePath = "";
-    let nervousnessPath = "";
-    let hesitationPath = "";
-    const nodes = [];
-
-    for (let i = 0; i < totalRounds; i++) {
-      const emo = detectedEmotions[i] || { confidence: 80, nervousness: 20, hesitation: 15 };
-      const cx = paddingX + i * stepX;
-
-      const cyConf = mapY(emo.confidence || 80);
-      const cyNerv = mapY(100 - (emo.nervousness || 20)); // Inverse so high value is good/calm
-      const cyHes = mapY(100 - (emo.hesitation || 15));
-
-      if (i === 0) {
-        confidencePath = `M ${cx} ${cyConf}`;
-        nervousnessPath = `M ${cx} ${cyNerv}`;
-        hesitationPath = `M ${cx} ${cyHes}`;
-      } else {
-        confidencePath += ` L ${cx} ${cyConf}`;
-        nervousnessPath += ` L ${cx} ${cyNerv}`;
-        hesitationPath += ` L ${cx} ${cyHes}`;
-      }
-
-      nodes.push({ index: i, cx, cyConf, cyNerv, cyHes, ...emo });
-    }
-
-    return (
-      <div className="graph-canvas-box" style={{ width: "100%", height: "180px", position: "relative" }}>
-        <svg className="graph-svg" viewBox="0 0 500 160" preserveAspectRatio="none" style={{ width: "100%", height: "100%" }}>
-          {/* Horizontal Gridlines */}
-          <line x1="0" y1={mapY(90)} x2="500" y2={mapY(90)} stroke="var(--border-color)" strokeWidth="1" strokeDasharray="3" />
-          <line x1="0" y1={mapY(70)} x2="500" y2={mapY(70)} stroke="var(--border-color)" strokeWidth="1" strokeDasharray="3" />
-          <line x1="0" y1={mapY(50)} x2="500" y2={mapY(50)} stroke="var(--border-color)" strokeWidth="1" strokeDasharray="3" />
-
-          {/* Paths */}
-          {confidencePath && <path d={confidencePath} fill="none" stroke="hsl(215, 35%, 26%)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />}
-          {nervousnessPath && <path d={nervousnessPath} fill="none" stroke="hsl(38, 85%, 45%)" strokeWidth="1.5" strokeDasharray="4" strokeLinecap="round" strokeLinejoin="round" />}
-          {hesitationPath && <path d={hesitationPath} fill="none" stroke="hsl(0, 60%, 42%)" strokeWidth="1.5" strokeDasharray="1 3" strokeLinecap="round" strokeLinejoin="round" />}
-
-          {/* Grid nodes */}
-          {nodes.map((node) => (
-            <g key={node.index}>
-              <circle
-                cx={node.cx}
-                cy={node.cyConf}
-                r={activeTimelineIndex === node.index ? 7 : 4}
-                fill={activeTimelineIndex === node.index ? "hsl(215, 35%, 26%)" : "var(--bg-card)"}
-                stroke="hsl(215, 35%, 26%)"
-                strokeWidth="2"
-                style={{ cursor: "pointer", transition: "var(--transition-smooth)" }}
-                onClick={() => setActiveTimelineIndex(node.index)}
-              />
-              <text x={node.cx} y={height - 5} textAnchor="middle" fontSize="9px" fontWeight="600" fill="var(--text-muted)">
-                Q{node.index + 1}
-              </text>
-            </g>
-          ))}
-        </svg>
-      </div>
-    );
+    setTimeout(() => setLiveMsg(""), 4000);
   };
+
+  const trajLabel = hindsightData?.trajectoryPattern === "ascending" ? "Rising" : hindsightData?.trajectoryPattern === "declining" ? "Declining" : "Steady";
 
   return (
-    <section id="results-screen" className="screen active" style={{ position: "relative" }}>
-      {/* Inline styles for certificate-grade Print/PDF layout */}
-      <style dangerouslySetInnerHTML={{
-        __html: `
-        @media print {
-          body {
-            background-color: #ffffff !important;
-            color: #111111 !important;
-            font-size: 11px !important;
-          }
-          header, footer, button, .results-header-section div, .btn, .no-print {
-            display: none !important;
-          }
-          main {
-            padding: 0 !important;
-          }
-          .results-container {
-            box-shadow: none !important;
-            border: none !important;
-            padding: 0 !important;
-          }
-          .results-grid {
-            display: block !important;
-          }
-          .card {
-            border: 1px solid #d3d3d3 !important;
-            box-shadow: none !important;
-            margin-bottom: var(--space-md) !important;
-            page-break-inside: avoid !important;
-            background-color: #ffffff !important;
-          }
-          .graph-canvas-box {
-            height: 140px !important;
-          }
-          .accordion-content {
-            display: block !important;
-            max-height: none !important;
-            padding: var(--space-sm) !important;
-          }
-          .badge-row {
-            margin-top: 4px !important;
-          }
-        }
-      `}} />
+    <section id="results-screen" className={styles.results} aria-labelledby="results-title">
+      <a className={styles.skip} href="#results-tabs">Skip to results</a>
+      <div className={styles.srOnly} role="status" aria-live="polite">{liveMsg}</div>
 
-      <div className="results-container">
+      <nav className={styles.nav} aria-label="Report navigation">
+        <button className={styles.brand} onClick={onGoDashboard} aria-label="PrepSim — back to dashboard">
+          <svg width="28" height="30" viewBox="0 0 30 32" fill="none" aria-hidden="true"><path d="M3 6 15 0l12 6v14l-12 7V14l12-8M3 6v20l12 6v-5M3 6l12 8" stroke="currentColor" strokeWidth="2" /></svg>
+          PrepSim<sup>AI</sup>
+        </button>
+        <span className={styles.navCrumb}>Session report</span>
+      </nav>
 
-        {/* Top Header Card */}
-        <div className="results-header-section">
-          <div className="results-title-group" style={{ textAlign: "left" }}>
-            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
-              <span className="results-subject-tag" id="results-topic-badge">{subjectName}</span>
-              {isLastMinute && (
-                <span className="results-subject-tag" style={{ backgroundColor: "var(--accent-light)", color: "var(--accent-primary)" }}>
-                  Last-Minute Prep
-                </span>
-              )}
-              {isMockExternal && (
-                <span className="results-subject-tag" style={{ backgroundColor: "var(--color-error-bg)", color: "var(--color-error)" }}>
-                  Mock External Board
-                </span>
-              )}
+      <div className={styles.content}>
+        {/* ---------- Heading ---------- */}
+        <div className={styles.heading}>
+          <div>
+            <span className={styles.eyebrow}>{isProfessional ? "MOCK INTERVIEW REPORT" : "ORAL EXAMINATION REPORT"} / {subjectName}</span>
+            <h1 id="results-title">Here is how you <em>showed up.</em></h1>
+            <div className={styles.tags}>
+              {endedEarly && <span className={`${styles.tag} ${styles.tagRust}`}>Ended early</span>}
+              {isLastMinute && <span className={styles.tag}>Last-minute prep</span>}
+              {isMockExternal && <span className={`${styles.tag} ${styles.tagRust}`}>Mock external board</span>}
+              <span className={styles.tag}>{totalRounds} {totalRounds === 1 ? "round" : "rounds"} answered</span>
             </div>
-            <h1 style={{ marginTop: "6px", marginBottom: "0", fontSize: "1.75rem", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{isProfessional ? "Mock Interview Performance Transcript" : "Oral Examination Transcript"}</h1>
-            <p style={{ margin: "2px 0 0 0" }}>{isProfessional ? "High-fidelity post-interview evaluation and delivery metrics." : "High-fidelity post-viva cognitive and delivery metrics."}</p>
+            <p style={{ marginTop: 12 }}>{isProfessional ? "A calm, honest read on your delivery and depth. Use it as a guide, not a verdict." : "A calm, honest read on your understanding and delivery. Use it as a guide, not a verdict."}</p>
           </div>
-          <div className="no-print" style={{ display: "flex", gap: "var(--space-xs)" }}>
-            <button className="btn btn-secondary" onClick={handlePrintReport} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+          <div className={styles.actions}>
+            <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={onRestart}>Practice again <span aria-hidden="true">→</span></button>
+            <button className={styles.btn} onClick={handleCopySummary}>Copy summary</button>
+            <button className={styles.btn} onClick={handlePrintReport}>Print / save PDF</button>
+            <button className={styles.btn} onClick={onGoDashboard}>Dashboard</button>
+          </div>
+        </div>
+
+        {/* ---------- Hero ---------- */}
+        <div className={styles.hero}>
+          <section className={styles.scoreCard} aria-label="Overall result">
+            <div className={styles.ringWrap} role="img" aria-label={`Overall score ${overallScore} out of 100`}>
+              <svg viewBox="0 0 120 120" aria-hidden="true">
+                <circle className={styles.ringBg} cx="60" cy="60" r="50" />
+                <circle className={styles.ringFill} cx="60" cy="60" r="50" strokeDasharray="314.16" strokeDashoffset={314.16 * (1 - shownScore / 100)} style={{ transition: "none" }} />
               </svg>
-              Download Report
+              <div className={styles.ringText} aria-hidden="true">
+                <strong>{shownScore}<small>%</small></strong>
+                <span>Overall</span>
+              </div>
+            </div>
+            <div className={styles.verdict}>
+              <span className={styles.eyebrow}>OVERALL STANDING</span>
+              <h2>{gradeLabel}</h2>
+              <p>{evaluationVerdict}</p>
+              <div className={styles.verdictMeta}>
+                {hasData && <span className={`${styles.pill} ${overallTone.cls}`}><span aria-hidden="true">{overallTone.icon}</span>{overallTone.label} overall</span>}
+                {pastSessionsAvg !== null && <span className={styles.pill}>Your {subjectName} average: {pastSessionsAvg}%</span>}
+              </div>
+            </div>
+          </section>
+
+          <aside className={styles.focusCard} aria-label="Suggested next step">
+            <span className={styles.eyebrow}>YOUR NEXT STEP</span>
+            {hasData ? (
+              <>
+                <h2>Start with <em>{weakestMetric.label.toLowerCase()}.</em></h2>
+                <p>It scored {weakestMetric.value}%, your lowest area. {strongestMetric.label} ({strongestMetric.value}%) is your strongest, so you have something solid to build from.</p>
+              </>
+            ) : (
+              <>
+                <h2>Try one <em>full round.</em></h2>
+                <p>This session ended before an answer was recorded. Start again and answer even one question to unlock your report.</p>
+              </>
+            )}
+            <button onClick={() => (hasData ? goTab("plan") : onRestart())}>
+              {hasData ? "See your 5-day plan" : "Start a new session"} <span aria-hidden="true">→</span>
             </button>
-            <button className="btn btn-primary" onClick={onRestart}>Practice Again</button>
-            <button className="btn btn-secondary" onClick={onGoDashboard}>Dashboard</button>
+          </aside>
+        </div>
+
+        {/* ---------- Key numbers ---------- */}
+        <dl className={styles.strip}>
+          <div>
+            <dt>Questions</dt>
+            <dd>{totalRounds}<small>answered</small></dd>
+            <span className={styles.stripNote}>{strongCount} strong · {workCount} to revisit</span>
           </div>
-        </div>
-        {/* Mobile Navigation Tabs Strip (Hidden on Desktop via CSS) */}
-        <div className="mobile-results-nav no-print">
-          <button
-            className={`mobile-results-tab-btn ${mobileTab === 'overview' ? 'active' : ''}`}
-            onClick={() => setMobileTab('overview')}
-            style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <line x1="18" y1="20" x2="18" y2="10" />
-              <line x1="12" y1="20" x2="12" y2="4" />
-              <line x1="6" y1="20" x2="6" y2="14" />
-            </svg>
-            Summary
-          </button>
-          <button
-            className={`mobile-results-tab-btn ${mobileTab === 'metrics' ? 'active' : ''}`}
-            onClick={() => setMobileTab('metrics')}
-            style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M3 3v18h18" />
-              <path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3" />
-            </svg>
-            Analytics
-          </button>
-          <button
-            className={`mobile-results-tab-btn ${mobileTab === 'qa' ? 'active' : ''}`}
-            onClick={() => setMobileTab('qa')}
-            style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-            Q&A Replay
-          </button>
-          <button
-            className={`mobile-results-tab-btn ${mobileTab === 'plan' ? 'active' : ''}`}
-            onClick={() => setMobileTab('plan')}
-            style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-              <line x1="16" y1="2" x2="16" y2="6" />
-              <line x1="8" y1="2" x2="8" y2="6" />
-              <line x1="3" y1="10" x2="21" y2="10" />
-            </svg>
-            Retrospective
-          </button>
+          <div>
+            <dt>Speaking pace</dt>
+            <dd>{avgWpm}<small>WPM</small></dd>
+            <span className={styles.stripNote}>{pacingCategory}</span>
+          </div>
+          <div>
+            <dt>Filler words</dt>
+            <dd>{fillerConcentration}<small>%</small></dd>
+            <span className={styles.stripNote}>{totalFillerCount} in {totalWordsCount} words</span>
+          </div>
+          <div>
+            <dt>Bluff risk</dt>
+            <dd>{bluffProb}<small>%</small></dd>
+            <span className={styles.stripNote}>{bluffProb > 40 ? "Worth a closer look" : "Answers match confidence"}</span>
+          </div>
+        </dl>
+
+        {/* ---------- Tabs ---------- */}
+        <div id="results-tabs" ref={tabsRef} className={styles.tabs} role="tablist" aria-label="Report sections" style={{ scrollMarginTop: 16 }}>
+          {tabs.map((t, i) => (
+            <button
+              key={t.id}
+              id={`results-tab-${t.id}`}
+              role="tab"
+              aria-selected={activeTab === t.id}
+              aria-controls={`results-panel-${t.id}`}
+              tabIndex={activeTab === t.id ? 0 : -1}
+              className={styles.tab}
+              onClick={() => setActiveTab(t.id)}
+              onKeyDown={(e) => onTabKey(e, i)}
+            >
+              {t.label}{t.count !== undefined && <small>{t.count}</small>}
+            </button>
+          ))}
         </div>
 
-        <div className="results-grid">
-
-          {/* LEFT PANEL: Academic Scorecard, Emotion Sliders, Bluffing */}
-          <div className="performance-left-panel" style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
-
-            <div className={`card scorecard-card ${mobileTab === 'overview' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-lg)", position: "relative" }}>
-              <h3 style={{ fontSize: "1.05rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-md)", textAlign: "left" }}>
-                Scorecard Breakdown
-              </h3>
-
-              <div className="scorecard-radial-row">
-                {/* Radial Score Circle */}
-                <div className="radial-svg-wrapper" style={{ width: "110px", height: "110px", flexShrink: 0 }}>
-                  <svg viewBox="0 0 120 120" style={{ width: "100%", height: "100%" }}>
-                    <circle className="radial-svg-circle-bg" cx="60" cy="60" r="50" />
-                    <circle
-                      className="radial-svg-circle-fill"
-                      cx="60"
-                      cy="60"
-                      r="50"
-                      strokeDasharray="314.16"
-                      strokeDashoffset={scoreOffset}
-                      style={{
-                        fill: "none",
-                        stroke: "var(--accent-primary)",
-                        strokeWidth: 10,
-                        strokeLinecap: "round",
-                        transform: "rotate(-90deg)",
-                        transition: "stroke-dashoffset 1.2s cubic-bezier(0.34, 1.56, 0.64, 1)"
-                      }}
-                    />
-                  </svg>
-                  <div className="radial-score-value" style={{ fontSize: "1.6rem", fontWeight: "800", color: "var(--accent-primary)" }}>{displayedScore}%</div>
+        {/* ======================= OVERVIEW ======================= */}
+        <div id="results-panel-overview" role="tabpanel" aria-labelledby="results-tab-overview" hidden={activeTab !== "overview"} className={styles.panel}>
+          <div className={styles.grid2}>
+            <div className={styles.stack}>
+              <section className={styles.card} aria-labelledby="scorecard-h">
+                <div className={styles.cardHead}>
+                  <div>
+                    <span className={styles.eyebrow}>SCORECARD</span>
+                    <h2 id="scorecard-h">Six ways your session read</h2>
+                  </div>
+                  <button className={`${styles.btn} ${styles.btnSmall}`} aria-pressed={sortLowFirst} onClick={() => { setSortLowFirst((v) => !v); setLiveMsg(!sortLowFirst ? "Sorted lowest score first." : "Original order restored."); }}>
+                    {sortLowFirst ? "Showing lowest first" : "Sort lowest first"}
+                  </button>
                 </div>
-
-                <div style={{ textAlign: "left", flex: 1 }}>
-                  <span style={{ fontSize: "0.8rem", textTransform: "uppercase", fontWeight: "600", color: "var(--text-secondary)", letterSpacing: "0.05em" }}>Overall Standing</span>
-                  <h4 style={{ margin: "2px 0", fontSize: "1.15rem", fontWeight: "700", color: "var(--accent-primary)" }}>{gradeLabel}</h4>
-                  <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--text-secondary)", lineHeight: "1.4" }}>{evaluationVerdict}</p>
-                </div>
-              </div>
-
-              {/* Six detailed score fields */}
-              <div className="scorecard-details-grid" style={{ gap: "var(--space-sm)", marginTop: "var(--space-lg)", borderTop: "1px solid var(--border-color)", paddingTop: "var(--space-md)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Technical/Domain Competence" : "Subject Understanding"}</span>
-                  <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{subjectUnderstanding}%</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Communication Confidence" : "Speaking Confidence"}</span>
-                  <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{vocalConfidence}%</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Clarity & Delivery" : "Speaking Clarity"}</span>
-                  <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{clarityOfComm}%</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Problem-Solving Depth" : "Conceptual Depth"}</span>
-                  <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{conceptualDepth}%</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Stress Tolerance" : "Handling Pressure"}</span>
-                  <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{handlingPressure}%</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--bg-primary)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{isProfessional ? "Role Consistency" : "Consistency"}</span>
-                  <strong style={{ fontSize: "0.9rem", color: "var(--accent-primary)" }}>{consistency}%</strong>
-                </div>
-              </div>
-
-              {/* Per-Question Evaluation Breakdown Grid */}
-              {askedQuestions && askedQuestions.length > 0 && (
-                <div style={{ marginTop: "var(--space-md)", borderTop: "1px solid var(--border-color)", paddingTop: "var(--space-md)", textAlign: "left" }}>
-                  <h4 style={{ fontSize: "0.8rem", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)", marginBottom: "var(--space-sm)" }}>
-                    🎯 Per-Question Evaluation Breakdown
-                  </h4>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                    {askedQuestions.map((qText, idx) => {
-                      const emo = detectedEmotions[idx] || { correctness: 80 };
-                      const qObj = askedQuestionsObjects && askedQuestionsObjects[idx] ? askedQuestionsObjects[idx] : null;
-                      const topic = qObj ? qObj.topic : `Question ${idx + 1}`;
-                      const score = emo.correctness !== undefined ? emo.correctness : 80;
-                      const badgeColor = score >= 75 ? "var(--color-success)" : (score >= 50 ? "hsl(38, 85%, 40%)" : "var(--color-error)");
-                      const badgeBg = score >= 75 ? "var(--color-success-bg)" : (score >= 50 ? "hsla(38, 85%, 45%, 0.1)" : "var(--color-error-bg)");
+                {hasData ? (
+                  <ul className={styles.metricList}>
+                    {sortedMetrics.map((m) => {
+                      const t = tone(m.value);
+                      const open = expandedMetric === m.key;
                       return (
-                        <div key={idx} style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          padding: "6px 12px",
-                          borderRadius: "var(--radius-xs)",
-                          backgroundColor: "var(--bg-primary)",
-                          border: "1px solid var(--border-color)",
-                          fontSize: "0.8rem"
-                        }}>
-                          <span style={{ color: "var(--text-primary)", fontWeight: "500", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "70%" }}>
-                            <strong>Q{idx + 1}:</strong> {topic}
-                          </span>
-                          <span style={{
-                            fontWeight: "800",
-                            color: badgeColor,
-                            backgroundColor: badgeBg,
-                            padding: "2px 8px",
-                            borderRadius: "var(--radius-full)",
-                            fontSize: "0.75rem",
-                            flexShrink: 0
-                          }}>
-                            {score}% Correct
-                          </span>
-                        </div>
+                        <li key={m.key}>
+                          <button className={styles.metricRow} aria-expanded={open} onClick={() => setExpandedMetric(open ? null : m.key)}>
+                            <span className={styles.metricTop}>
+                              <span>{m.label}</span>
+                              <span>{m.value}% <span className={`${styles.toneChip} ${t.cls}`}><span aria-hidden="true">{t.icon} </span>{t.label}</span></span>
+                            </span>
+                            <Meter value={m.value} label={m.label} toneCls={t.cls} />
+                            {open && <p className={styles.metricDesc}>{m.desc}</p>}
+                          </button>
+                        </li>
                       );
                     })}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className={`card bluff-card ${mobileTab === 'metrics' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-md) var(--space-lg)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
-                <span style={{ fontSize: "0.95rem", fontWeight: "700", color: "var(--accent-primary)", display: "flex", alignItems: "center", gap: "6px" }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ width: "16px", height: "16px", color: bluffProb > 40 ? "var(--color-warning)" : "var(--color-success)" }}>
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                  </svg>
-                  Bluff Index Analyzer
-                </span>
-                <span style={{ fontSize: "0.85rem", fontWeight: "700", color: bluffProb > 40 ? "var(--color-warning)" : "var(--color-success)" }}>
-                  Probability: {bluffProb}%
-                </span>
-              </div>
-              <div style={{ height: "6px", backgroundColor: "var(--bg-primary)", borderRadius: "var(--radius-full)", position: "relative", marginBottom: "var(--space-sm)" }}>
-                <div style={{
-                  height: "100%",
-                  width: `${bluffProb}%`,
-                  borderRadius: "var(--radius-full)",
-                  backgroundColor: bluffProb > 60 ? "var(--color-error)" : (bluffProb > 30 ? "var(--color-warning)" : "var(--color-success)"),
-                  transition: "width 0.8s ease"
-                }}></div>
-              </div>
-              <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--text-secondary)", textAlign: "left", lineHeight: "1.4" }}>
-                {bluffProb > 40
-                  ? "Note: Lexical metrics indicate confident and structured speaking structure, but with low correlation to specific technical formulas. Recommend reducing generic filler explanations during technical concepts."
-                  : "Note: Outstanding logical congruence. The technical accuracy matches speaking volume perfectly, indicating no memorize-bluff attempts."}
-              </p>
-            </div>
-
-            {/* AI Hindsight Retrospective Card */}
-            <div className={`card hindsight-card ${mobileTab === 'plan' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-lg)", textAlign: "left", position: "relative", overflow: "hidden" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-md)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <div style={{
-                    width: "28px", height: "28px", borderRadius: "50%",
-                    background: "linear-gradient(135deg, hsl(258, 80%, 56%), hsl(280, 75%, 50%))",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: "0.85rem", flexShrink: 0
-                  }}>🔍</div>
-                  <h3 style={{ fontSize: "1.05rem", fontWeight: "700", margin: 0 }}>
-                    {isProfessional ? "AI Interview Retrospective" : "AI Session Retrospective"}
-                  </h3>
-                </div>
-                {hindsightData && !hindsightData.isLocalFallback && (
-                  <span style={{
-                    fontSize: "0.65rem", padding: "2px 8px", borderRadius: "var(--radius-full)",
-                    background: "linear-gradient(135deg, hsl(258, 80%, 56%), hsl(280, 75%, 50%))",
-                    color: "#fff", fontWeight: "700", letterSpacing: "0.05em", textTransform: "uppercase"
-                  }}>AI Powered</span>
-                )}
-              </div>
-              <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "var(--space-md)", marginTop: 0 }}>
-                {isProfessional
-                  ? "Cross-question retrospective analysis of your complete interview session, detecting patterns invisible to per-round scoring."
-                  : "Cross-question retrospective analysis of your complete exam session, detecting patterns invisible to per-round scoring."
-                }
-              </p>
-
-              {hindsightLoading && !hindsightData && (
-                <div style={{
-                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                  padding: "var(--space-lg)", gap: "var(--space-sm)"
-                }}>
-                  <div className="hindsight-loading-spinner" style={{
-                    width: "32px", height: "32px", border: "3px solid var(--border-color)",
-                    borderTopColor: "hsl(258, 80%, 56%)", borderRadius: "50%",
-                    animation: "hindsight-spin 0.8s linear infinite"
-                  }}></div>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)", fontWeight: "500" }}>
-                    Analyzing cross-question patterns...
-                  </span>
-                </div>
-              )}
-
-              {!hindsightLoading && !hindsightData && (
-                <div style={{
-                  padding: "var(--space-md)", borderRadius: "var(--radius-sm)",
-                  backgroundColor: "var(--bg-primary)", border: "1px solid var(--border-color)",
-                  fontSize: "0.8rem", color: "var(--text-secondary)", textAlign: "center"
-                }}>
-                  Hindsight analysis unavailable for this session. Answer at least 2 questions to enable cross-question retrospective.
-                </div>
-              )}
-
-              {hindsightData && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
-
-                  {/* Session Narrative */}
-                  {hindsightData.sessionNarrative && (
-                    <div style={{
-                      padding: "12px var(--space-md)",
-                      borderLeft: "4px solid hsl(258, 80%, 56%)",
-                      backgroundColor: "hsla(258, 80%, 56%, 0.04)",
-                      borderRadius: "0 var(--radius-sm) var(--radius-sm) 0"
-                    }}>
-                      <span style={{ fontSize: "0.7rem", fontWeight: "700", textTransform: "uppercase", color: "hsl(258, 60%, 45%)", letterSpacing: "0.05em" }}>Performance Arc</span>
-                      <p style={{ margin: "4px 0 0 0", fontSize: "0.85rem", color: "var(--text-primary)", lineHeight: "1.5" }}>
-                        {hindsightData.sessionNarrative}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Trajectory Indicator */}
-                  {hindsightData.trajectoryPattern && (
-                    <div style={{
-                      display: "flex", alignItems: "center", gap: "10px",
-                      padding: "10px var(--space-md)",
-                      borderRadius: "var(--radius-sm)",
-                      backgroundColor: "var(--bg-primary)",
-                      border: "1px solid var(--border-color)"
-                    }}>
-                      <div style={{
-                        width: "36px", height: "36px", borderRadius: "50%",
-                        backgroundColor: hindsightData.trajectoryPattern === "ascending" ? "var(--color-success-bg)" : (hindsightData.trajectoryPattern === "declining" ? "var(--color-error-bg)" : "hsla(38, 85%, 45%, 0.08)"),
-                        display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.1rem", flexShrink: 0
-                      }}>
-                        {hindsightData.trajectoryPattern === "ascending" ? "📈" : (hindsightData.trajectoryPattern === "declining" ? "📉" : "➡️")}
-                      </div>
-                      <div>
-                        <span style={{ fontSize: "0.7rem", fontWeight: "700", textTransform: "uppercase", color: "var(--text-secondary)", letterSpacing: "0.04em" }}>Confidence Trajectory</span>
-                        <p style={{ margin: "2px 0 0 0", fontSize: "0.8rem", color: "var(--text-primary)", lineHeight: "1.4" }}>
-                          {hindsightData.trajectoryDescription}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Contradictions Detected */}
-                  {hindsightData.contradictions && hindsightData.contradictions.length > 0 && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-xs)" }}>
-                      <span style={{ fontSize: "0.7rem", fontWeight: "700", textTransform: "uppercase", color: "var(--color-error)", letterSpacing: "0.05em" }}>⚠️ Contradictions Detected</span>
-                      {hindsightData.contradictions.map((c, cIdx) => (
-                        <div key={cIdx} style={{
-                          padding: "10px var(--space-md)",
-                          borderRadius: "var(--radius-sm)",
-                          backgroundColor: "var(--color-error-bg)",
-                          border: "1px solid hsla(0, 60%, 42%, 0.15)",
-                          fontSize: "0.8rem", color: "var(--text-primary)", lineHeight: "1.4"
-                        }}>
-                          <strong style={{ color: "var(--color-error)", fontSize: "0.75rem" }}>Rounds {c.rounds?.join(" ↔ ") || "—"}</strong>
-                          <p style={{ margin: "4px 0 0 0" }}>{c.description}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Bluffing Warning */}
-                  {hindsightData.bluffingWarning && (
-                    <div style={{
-                      padding: "10px var(--space-md)",
-                      borderRadius: "var(--radius-sm)",
-                      backgroundColor: "hsla(38, 85%, 45%, 0.06)",
-                      border: "1px solid hsla(38, 85%, 45%, 0.2)",
-                      fontSize: "0.8rem", color: "var(--text-primary)", lineHeight: "1.4"
-                    }}>
-                      <strong style={{ color: "hsl(38, 85%, 35%)", fontSize: "0.75rem", display: "block", marginBottom: "4px" }}>🎭 Bluffing Pattern Detected</strong>
-                      {hindsightData.bluffingWarning}
-                    </div>
-                  )}
-
-                  {/* Strongest & Weakest Round Evidence */}
-                  <div className="hindsight-evidence-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-sm)" }}>
-                    {hindsightData.strongestRound && (
-                      <div style={{
-                        padding: "10px", borderRadius: "var(--radius-sm)",
-                        backgroundColor: "var(--color-success-bg)",
-                        border: "1px solid rgba(22, 163, 74, 0.15)"
-                      }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
-                          <span style={{ fontSize: "0.95rem" }}>💪</span>
-                          <span style={{ fontSize: "0.7rem", fontWeight: "700", textTransform: "uppercase", color: "var(--color-success)", letterSpacing: "0.04em" }}>Strongest</span>
-                        </div>
-                        <p style={{ margin: 0, fontSize: "0.8rem", fontWeight: "600", color: "var(--text-primary)" }}>
-                          Q{hindsightData.strongestRound.round}: {hindsightData.strongestRound.topic}
-                        </p>
-                        <p style={{ margin: "4px 0 0 0", fontSize: "0.75rem", color: "var(--text-secondary)", lineHeight: "1.35" }}>
-                          {hindsightData.strongestRound.evidence}
-                        </p>
-                      </div>
-                    )}
-                    {hindsightData.weakestRound && (
-                      <div style={{
-                        padding: "10px", borderRadius: "var(--radius-sm)",
-                        backgroundColor: "var(--color-error-bg)",
-                        border: "1px solid hsla(0, 60%, 42%, 0.15)"
-                      }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
-                          <span style={{ fontSize: "0.95rem" }}>🔻</span>
-                          <span style={{ fontSize: "0.7rem", fontWeight: "700", textTransform: "uppercase", color: "var(--color-error)", letterSpacing: "0.04em" }}>Weakest</span>
-                        </div>
-                        <p style={{ margin: 0, fontSize: "0.8rem", fontWeight: "600", color: "var(--text-primary)" }}>
-                          Q{hindsightData.weakestRound.round}: {hindsightData.weakestRound.topic}
-                        </p>
-                        <p style={{ margin: "4px 0 0 0", fontSize: "0.75rem", color: "var(--text-secondary)", lineHeight: "1.35" }}>
-                          {hindsightData.weakestRound.evidence}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* AI Recommendations */}
-                  {hindsightData.recommendations && hindsightData.recommendations.length > 0 && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-xs)" }}>
-                      <span style={{ fontSize: "0.7rem", fontWeight: "700", textTransform: "uppercase", color: "hsl(258, 60%, 45%)", letterSpacing: "0.05em" }}>💡 AI Recommendations</span>
-                      {hindsightData.recommendations.map((rec, rIdx) => (
-                        <div key={rIdx} style={{
-                          display: "flex", alignItems: "flex-start", gap: "8px",
-                          padding: "8px 12px", borderRadius: "var(--radius-sm)",
-                          backgroundColor: "var(--bg-primary)", border: "1px solid var(--border-color)",
-                          fontSize: "0.8rem", color: "var(--text-primary)", lineHeight: "1.4"
-                        }}>
-                          <span style={{ color: "hsl(258, 80%, 56%)", fontWeight: "700", flexShrink: 0 }}>{rIdx + 1}.</span>
-                          <span>{rec}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* No significant patterns found */}
-                  {!hindsightData.contradictions?.length && !hindsightData.bluffingWarning && hindsightData.sessionNarrative && (
-                    <div style={{
-                      display: "flex", gap: "10px", alignItems: "flex-start",
-                      padding: "10px 12px", borderRadius: "var(--radius-sm)",
-                      backgroundColor: "var(--color-success-bg)",
-                      border: "1px solid rgba(22, 163, 74, 0.2)",
-                      color: "var(--color-success)"
-                    }}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" style={{ width: "18px", height: "18px", marginTop: "1px", flexShrink: 0 }}>
-                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                        <polyline points="22 4 12 14.01 9 11.01" />
-                      </svg>
-                      <span style={{ fontSize: "0.8rem", lineHeight: "1.4" }}>
-                        <strong>No cross-question contradictions or bluffing patterns detected.</strong> Your answers were internally consistent across all rounds.
-                      </span>
-                    </div>
-                  )}
-
-                </div>
-              )}
-            </div>
-
-            <div className={`card lexical-card ${mobileTab === 'metrics' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-lg)", textAlign: "left" }}>
-              <h3 style={{ fontSize: "1.05rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
-                Lexical Range & Vocabulary Maturity
-              </h3>
-              <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "var(--space-md)" }}>
-                Syntactic analysis of speech variety, word complexity, and terminology usage.
-              </p>
-
-              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-md)", marginBottom: "var(--space-md)" }}>
-                <div style={{
-                  width: "56px",
-                  height: "56px",
-                  borderRadius: "50%",
-                  backgroundColor: "rgba(99, 102, 241, 0.08)",
-                  border: "1.5px solid rgba(99, 102, 241, 0.2)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "1.4rem",
-                  color: "#6366f1",
-                  flexShrink: 0
-                }}>
-                  🎓
-                </div>
-                <div>
-                  <span style={{ fontSize: "0.75rem", textTransform: "uppercase", fontWeight: "700", color: "var(--text-secondary)", letterSpacing: "0.05em" }}>Lexical Standing</span>
-                  <h4 style={{ margin: "2px 0 0 0", fontSize: "1.1rem", fontWeight: "800", color: "var(--accent-primary)" }}>{maturityLevel}</h4>
-                </div>
-              </div>
-
-              <div style={{ height: "6px", backgroundColor: "var(--bg-primary)", borderRadius: "var(--radius-full)", position: "relative", marginBottom: "var(--space-sm)" }}>
-                <div style={{
-                  height: "100%",
-                  width: `${lexicalScore}%`,
-                  borderRadius: "var(--radius-full)",
-                  backgroundColor: "#6366f1",
-                  transition: "width 0.8s ease"
-                }}></div>
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: "500", marginBottom: "var(--space-md)" }}>
-                <span>Standard Vocabulary</span>
-                <span>Principal Level</span>
-              </div>
-
-              <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--text-secondary)", lineHeight: "1.4" }}>
-                {maturityDesc}
-              </p>
-
-              <div className="lexical-stats-grid">
-                <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
-                  Unique Words: <strong style={{ color: "var(--text-primary)" }}>{uniqueWordsCount}</strong>
-                </div>
-                <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
-                  Advanced Keywords: <strong style={{ color: "var(--text-primary)" }}>{advancedWordsCount}</strong>
-                </div>
-              </div>
-            </div>
-
-            <div className={`card fallacies-card ${mobileTab === 'metrics' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-lg)", textAlign: "left" }}>
-              <h3 style={{ fontSize: "1.05rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
-                Argumentation & Fallacy Diagnostics
-              </h3>
-              <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "var(--space-md)" }}>
-                Lexical deflection scanning and reasoning pattern checks.
-              </p>
-
-              {detectFallacies().length === 0 ? (
-                <div style={{
-                  display: "flex",
-                  gap: "10px",
-                  alignItems: "flex-start",
-                  padding: "12px",
-                  borderRadius: "var(--radius-sm)",
-                  backgroundColor: "var(--color-success-bg)",
-                  border: "1px solid rgba(22, 163, 74, 0.2)",
-                  color: "var(--color-success)"
-                }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" style={{ width: "20px", height: "20px", marginTop: "2px", flexShrink: 0 }}>
-                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                    <polyline points="22 4 12 14.01 9 11.01" />
-                  </svg>
-                  <div style={{ fontSize: "0.8rem", lineHeight: "1.4" }}>
-                    <strong>Zero Fallacies Flagged</strong>
-                    <p style={{ margin: "2px 0 0 0", color: "var(--text-secondary)" }}>
-                      Outstanding logical consistency. You avoided vague qualifier patterns, repetitive circularity, and unqualified absolutes.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
-                  {detectFallacies().map((det, dIdx) => (
-                    <div key={dIdx} style={{
-                      padding: "10px var(--space-md)",
-                      border: "1px solid var(--border-color)",
-                      borderRadius: "var(--radius-sm)",
-                      backgroundColor: "var(--bg-primary)"
-                    }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span style={{ fontSize: "0.75rem", fontWeight: "700", color: "var(--color-error)", textTransform: "uppercase" }}>
-                          🚨 {det.type} • Round {det.round}
-                        </span>
-                      </div>
-                      <h4 style={{ margin: "4px 0 2px 0", fontSize: "0.85rem", fontWeight: "700", color: "var(--text-primary)" }}>
-                        Topic: {det.topic}
-                      </h4>
-                      <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--text-muted)", fontStyle: "italic" }}>
-                        Indicator: {det.marker}
-                      </p>
-                      <p style={{ margin: "6px 0 0 0", fontSize: "0.78rem", color: "var(--text-secondary)", lineHeight: "1.4", borderTop: "1px dashed var(--border-color)", paddingTop: "4px" }}>
-                        <strong>Coach Advice</strong>: {det.fix}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-          </div>
-
-          {/* RIGHT PANEL: Emotion Timelines, Professor Mode Replay, Recommends */}
-          <div className="feedback-right-panel" style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
-
-            <div className={`no-print toggle-tabs-card ${mobileTab === 'metrics' ? '' : 'mobile-hide'}`} style={{ display: "flex", gap: "8px", borderBottom: "1px solid var(--border-color)", paddingBottom: "12px", marginBottom: "4px" }}>
-              <button
-                className={`btn ${activeRightTab === "timeline" ? "btn-primary" : "btn-secondary"}`}
-                onClick={() => setActiveRightTab("timeline")}
-                style={{ padding: "8px 16px", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "6px", flex: 1, border: "1px solid var(--border-color)" }}
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ width: "15px", height: "15px" }}>
-                  <path d="M3 3v18h18M18.7 8l-5.1 5.2-2.8-2.7L7 14.3" />
-                </svg>
-                Emotion Timeline
-              </button>
-              <button
-                className={`btn ${activeRightTab === "fluency" ? "btn-primary" : "btn-secondary"}`}
-                onClick={() => setActiveRightTab("fluency")}
-                style={{ padding: "8px 16px", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "6px", flex: 1, border: "1px solid var(--border-color)" }}
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ width: "15px", height: "15px" }}>
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 6v6l4 2" />
-                </svg>
-                Speech & Fluency
-              </button>
-            </div>
-
-            <div className={`card timeline-card ${mobileTab === 'metrics' ? '' : 'mobile-hide'} ${activeRightTab !== "timeline" ? "screen-hidden" : ""}`} style={{ padding: "var(--space-lg)", textAlign: "left" }}>
-              <h3 style={{ fontSize: "1.05rem", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-xs)", marginBottom: "0" }}>
-                Emotion Timeline
-              </h3>
-              <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "var(--space-md)" }}>
-                Tracking real-time structural levels of Confidence, Nervousness, and Hesitation across the exam duration.
-              </p>
-
-              {renderGraphTimeline()}
-
-              {/* Legends */}
-              <div style={{ display: "flex", justifyContent: "center", gap: "var(--space-md)", margin: "var(--space-sm) 0", fontSize: "0.75rem", fontWeight: "600" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                  <span style={{ width: "12px", height: "3px", backgroundColor: "hsl(215, 35%, 26%)" }}></span>
-                  <span>Confidence</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                  <span style={{ width: "12px", height: "3px", borderTop: "2px dashed hsl(38, 85%, 45%)" }}></span>
-                  <span>Nervousness</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                  <span style={{ width: "12px", height: "3px", borderTop: "2px dotted hsl(0, 60%, 42%)" }}></span>
-                  <span>Hesitation</span>
-                </div>
-              </div>
-
-              {/* Selected point commentator card */}
-              <div style={{
-                marginTop: "var(--space-sm)",
-                padding: "12px var(--space-md)",
-                borderLeft: "4px solid var(--accent-primary)",
-                backgroundColor: "var(--bg-primary)",
-                borderRadius: "var(--radius-sm)",
-                transition: "var(--transition-smooth)"
-              }}>
-                <strong style={{ fontSize: "0.8rem", textTransform: "uppercase", color: "var(--accent-primary)" }}>Milestone commentary</strong>
-                <p style={{ margin: "2px 0 0 0", fontSize: "0.825rem", color: "var(--text-primary)", lineHeight: "1.45" }}>
-                  {getTimelineCommentary(activeTimelineIndex)}
-                </p>
-              </div>
-            </div>
-
-            <div className={`fluency-card-wrapper ${mobileTab === 'metrics' ? '' : 'mobile-hide'} ${activeRightTab !== "fluency" ? "screen-hidden" : ""}`}>
-              {renderFluencyDiagnostics()}
-            </div>
-
-            <div className={`card replay-card ${mobileTab === 'qa' ? '' : 'mobile-hide'}`} style={{ padding: "var(--space-lg)", textAlign: "left" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)", marginBottom: "var(--space-md)" }}>
-                <div>
-                  <h3 style={{ fontSize: "1.05rem", fontWeight: "700", margin: 0 }}>
-                    {isProfessional ? "Interviewer Feedback & Per-Question Evaluation" : "Examiner Evaluation & Question Breakdown"}
-                  </h3>
-                  <p style={{ margin: "2px 0 0 0", fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-                    Per-question correctness scores, semantic accuracy, completeness, and voice delivery analysis.
-                  </p>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
-                {askedQuestions.length === 0 ? (
-                  <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", textAlign: "center", padding: "16px 0", margin: 0 }}>
-                    {isProfessional ? "No recorded rounds. Answer at least one question to replay the interviewer's evaluation." : "No recorded rounds. Answer at least one question to replay the examiner's evaluation."}
-                  </p>
+                  </ul>
                 ) : (
-                  askedQuestions.map((qText, idx) => {
-                    const isExpanded = expandedReplayIndex === idx;
-                    const emotion = detectedEmotions[idx] || { correctness: 80, accuracy: 80, completeness: 75, clarity: 85, confidence: 80 };
-                    const answer = answerTranscripts[idx] || "";
-                    const qObj = askedQuestionsObjects && askedQuestionsObjects[idx] ? askedQuestionsObjects[idx] : null;
-                    const topicText = qObj ? qObj.topic : (isProfessional ? "Competency Skill" : "Syllabus Concept");
-                    const correctnessVal = emotion.correctness !== undefined ? emotion.correctness : 80;
-                    const accuracyVal = emotion.accuracy !== undefined ? emotion.accuracy : correctnessVal;
-                    const completenessVal = emotion.completeness !== undefined ? emotion.completeness : Math.max(correctnessVal - 10, 40);
-                    const clarityVal = emotion.clarity !== undefined ? emotion.clarity : 85;
+                  <p className={styles.empty}>No scores yet. Answer at least one question to see your scorecard.</p>
+                )}
+              </section>
 
-                    const getScoreColor = (score) => {
-                      if (score >= 75) return { bg: "var(--color-success-bg)", text: "var(--color-success)", border: "rgba(22, 163, 74, 0.2)" };
-                      if (score >= 50) return { bg: "hsla(38, 85%, 45%, 0.1)", text: "hsl(38, 85%, 35%)", border: "hsla(38, 85%, 45%, 0.25)" };
-                      return { bg: "var(--color-error-bg)", text: "var(--color-error)", border: "hsla(0, 60%, 42%, 0.2)" };
-                    };
-
-                    const scoreColors = getScoreColor(correctnessVal);
-
-                    return (
-                      <div key={idx} style={{ border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", overflow: "hidden", transition: "var(--transition-smooth)" }}>
-
-                        {/* Accordion trigger row with explicit Correctness Score Badge */}
-                        <div
-                          onClick={() => setExpandedReplayIndex(isExpanded ? null : idx)}
-                          style={{
-                            padding: "12px var(--space-md)",
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            backgroundColor: isExpanded ? "var(--bg-primary)" : "var(--bg-card)",
-                            cursor: "pointer",
-                            transition: "var(--transition-smooth)"
-                          }}
-                        >
-                          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px" }}>
-                            <span style={{ fontSize: "0.85rem", fontWeight: "800", color: "var(--accent-primary)" }}>Q{idx + 1}</span>
-                            <span style={{ fontSize: "0.85rem", color: "var(--text-primary)" }}>Topic: <strong>{topicText}</strong></span>
-                          </div>
-
-                          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                            {/* Correctness Percentage Badge */}
-                            <div style={{
-                              fontSize: "0.775rem",
-                              fontWeight: "800",
-                              padding: "3px 10px",
-                              borderRadius: "var(--radius-full)",
-                              backgroundColor: scoreColors.bg,
-                              color: scoreColors.text,
-                              border: `1px solid ${scoreColors.border}`,
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "4px"
-                            }}>
-                              <span>{correctnessVal}% Correct</span>
-                            </div>
-
-                            {/* Tag Badge */}
-                            <span style={{
-                              fontSize: "0.7rem",
-                              padding: "2px 8px",
-                              borderRadius: "var(--radius-full)",
-                              fontWeight: "600",
-                              backgroundColor: "var(--bg-primary)",
-                              border: "1px solid var(--border-color)",
-                              color: "var(--text-secondary)"
-                            }}>
-                              {emotion.tag || (correctnessVal >= 75 ? "Strong" : correctnessVal >= 50 ? "Partially Correct" : "Weak")}
-                            </span>
-
-                            <svg
-                              width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
-                              style={{ transform: isExpanded ? "rotate(180deg)" : "none", transition: "var(--transition-smooth)" }}
-                            >
-                              <polyline points="6 9 12 15 18 9" />
-                            </svg>
-                          </div>
-                        </div>
-
-                        {/* Accordion expanded content */}
-                        {isExpanded && (
-                          <div style={{ padding: "var(--space-md)", borderTop: "1px solid var(--border-color)", backgroundColor: "var(--bg-card)", textAlign: "left" }}>
-
-                            {/* Question prompt row with Replay Voice button */}
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
-                              <div style={{ fontSize: "0.85rem", color: "var(--text-primary)" }}>
-                                <strong>{isProfessional ? "Interviewer Question:" : "Examiner Question:"}</strong> &quot;{qObj ? qObj.text : qText}&quot;
-                              </div>
-                              <button
-                                className="btn btn-secondary"
-                                onClick={() => handleReplayVoice(qObj ? qObj.speech : qText, idx)}
-                                style={{ padding: "4px 8px", fontSize: "0.7rem", flexShrink: 0, cursor: "pointer" }}
-                              >
-                                {playingReplayIndex === idx ? "Stop Voice" : "Replay Voice"}
-                              </button>
-                            </div>
-
-                            {/* Student answer transcript */}
-                            <div style={{ fontSize: "0.85rem", color: "var(--text-primary)", backgroundColor: "var(--bg-primary)", padding: "10px", borderRadius: "var(--radius-xs)", border: "1px solid var(--border-color)", marginBottom: "var(--space-md)" }}>
-                              <strong style={{ color: "var(--accent-primary)" }}>Your Answer:</strong> &quot;{answer}&quot;
-                            </div>
-
-                            {/* PER-QUESTION EVALUATION BREAKDOWN CARD */}
-                            <div style={{
-                              padding: "var(--space-md)",
-                              backgroundColor: "var(--bg-primary)",
-                              borderRadius: "var(--radius-sm)",
-                              border: `1.5px solid ${scoreColors.border}`,
-                              marginBottom: "var(--space-md)"
-                            }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-sm)" }}>
-                                <span style={{ fontSize: "0.75rem", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)" }}>
-                                  Round {idx + 1} Evaluation Breakdown
-                                </span>
-                                <span style={{ fontSize: "0.85rem", fontWeight: "800", color: scoreColors.text }}>
-                                  Score: {correctnessVal} / 100
-                                </span>
-                              </div>
-
-                              {/* Detailed 4-Metric Bar Grid */}
-                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "var(--space-sm)" }}>
-
-                                {/* Correctness Bar */}
-                                <div>
-                                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", marginBottom: "3px" }}>
-                                    <span style={{ fontWeight: "600" }}>Correctness</span>
-                                    <strong style={{ color: scoreColors.text }}>{correctnessVal}%</strong>
-                                  </div>
-                                  <div style={{ height: "6px", backgroundColor: "var(--bg-card)", borderRadius: "var(--radius-full)", overflow: "hidden" }}>
-                                    <div style={{ height: "100%", width: `${correctnessVal}%`, backgroundColor: scoreColors.text, borderRadius: "var(--radius-full)" }}></div>
-                                  </div>
-                                </div>
-
-                                {/* Accuracy Bar */}
-                                <div>
-                                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", marginBottom: "3px" }}>
-                                    <span style={{ fontWeight: "600" }}>Technical Accuracy</span>
-                                    <strong>{accuracyVal}%</strong>
-                                  </div>
-                                  <div style={{ height: "6px", backgroundColor: "var(--bg-card)", borderRadius: "var(--radius-full)", overflow: "hidden" }}>
-                                    <div style={{ height: "100%", width: `${accuracyVal}%`, backgroundColor: "hsl(215, 35%, 26%)", borderRadius: "var(--radius-full)" }}></div>
-                                  </div>
-                                </div>
-
-                                {/* Completeness Bar */}
-                                <div>
-                                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", marginBottom: "3px" }}>
-                                    <span style={{ fontWeight: "600" }}>Completeness</span>
-                                    <strong>{completenessVal}%</strong>
-                                  </div>
-                                  <div style={{ height: "6px", backgroundColor: "var(--bg-card)", borderRadius: "var(--radius-full)", overflow: "hidden" }}>
-                                    <div style={{ height: "100%", width: `${completenessVal}%`, backgroundColor: "hsl(258, 60%, 55%)", borderRadius: "var(--radius-full)" }}></div>
-                                  </div>
-                                </div>
-
-                                {/* Clarity Bar */}
-                                <div>
-                                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", marginBottom: "3px" }}>
-                                    <span style={{ fontWeight: "600" }}>Articulation & Clarity</span>
-                                    <strong>{clarityVal}%</strong>
-                                  </div>
-                                  <div style={{ height: "6px", backgroundColor: "var(--bg-card)", borderRadius: "var(--radius-full)", overflow: "hidden" }}>
-                                    <div style={{ height: "100%", width: `${clarityVal}%`, backgroundColor: "hsl(180, 60%, 40%)", borderRadius: "var(--radius-full)" }}></div>
-                                  </div>
-                                </div>
-
-                              </div>
-
-                              {/* Per-Question Evaluation Verdict & Chain-of-Thought Rationale */}
-                              <div style={{ marginTop: "10px", pt: "8px", borderTop: "1px dashed var(--border-color)" }}>
-                                <p style={{ margin: "0 0 8px 0", fontSize: "0.78rem", color: "var(--text-secondary)", lineHeight: "1.45" }}>
-                                  <strong style={{ color: "var(--text-primary)" }}>Evaluator Rationale:</strong> {emotion.rationale || (
-                                    correctnessVal >= 75
-                                      ? `Strong answer. The explanation correctly addresses the core principles of ${topicText} with high technical accuracy.`
-                                      : correctnessVal >= 50
-                                        ? `Partially correct answer. Good direction, but missing some key formulas, edge case trade-offs, or precise terminology.`
-                                        : `Weak answer. The explanation was incomplete or lacked essential technical details for ${topicText}.`
-                                  )}
-                                </p>
-
-                                {/* Key Strengths Pills */}
-                                {Array.isArray(emotion.keyStrengths) && emotion.keyStrengths.length > 0 && (
-                                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center", marginBottom: "6px" }}>
-                                    <span style={{ fontSize: "0.7rem", fontWeight: "700", color: "#10b981" }}>Strengths:</span>
-                                    {emotion.keyStrengths.map((str, sIdx) => (
-                                      <span key={sIdx} style={{
-                                        fontSize: "0.68rem",
-                                        padding: "2px 8px",
-                                        borderRadius: "var(--radius-full)",
-                                        backgroundColor: "rgba(16, 185, 129, 0.12)",
-                                        color: "#10b981",
-                                        border: "1px solid rgba(16, 185, 129, 0.25)"
-                                      }}>
-                                        ✓ {str}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-
-                                {/* Missing Concepts Pills */}
-                                {Array.isArray(emotion.missingConcepts) && emotion.missingConcepts.length > 0 && (
-                                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center" }}>
-                                    <span style={{ fontSize: "0.7rem", fontWeight: "700", color: "#f59e0b" }}>Gaps / Omissions:</span>
-                                    {emotion.missingConcepts.map((gap, gIdx) => (
-                                      <span key={gIdx} style={{
-                                        fontSize: "0.68rem",
-                                        padding: "2px 8px",
-                                        borderRadius: "var(--radius-full)",
-                                        backgroundColor: "rgba(245, 158, 11, 0.12)",
-                                        color: "#f59e0b",
-                                        border: "1px solid rgba(245, 158, 11, 0.25)"
-                                      }}>
-                                        ⚠ {gap}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Local Audio Recording Replay */}
-                            {resultsData.recordedAudios && resultsData.recordedAudios[idx] && (
-                              <div className="audio-replay-container" style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "var(--space-sm)",
-                                backgroundColor: "var(--bg-primary)",
-                                padding: "8px 12px",
-                                borderRadius: "var(--radius-xs)",
-                                border: "1px solid var(--border-color)",
-                                marginBottom: "var(--space-sm)"
-                              }}>
-                                <span style={{ fontSize: "0.75rem", fontWeight: "600", color: "var(--text-secondary)", flexShrink: 0 }}>
-                                  Listen back to your voice:
-                                </span>
-                                <audio
-                                  src={resultsData.recordedAudios[idx]}
-                                  controls
-                                  style={{
-                                    height: "32px",
-                                    flex: 1
-                                  }}
-                                />
-                              </div>
-                            )}
-
-                            {/* Expected Correct Answer */}
-                            <div style={{
-                              fontSize: "0.825rem",
-                              color: "hsl(145, 60%, 15%)",
-                              backgroundColor: "hsla(145, 60%, 45%, 0.07)",
-                              padding: "10px 12px",
-                              borderRadius: "var(--radius-xs)",
-                              border: "1px solid hsla(145, 60%, 45%, 0.15)",
-                              marginBottom: "var(--space-sm)",
-                              lineHeight: "1.45"
-                            }}>
-                              <strong style={{ display: "block", color: "hsl(145, 60%, 20%)", marginBottom: "4px", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>{isProfessional ? "Optimal Professional Response:" : "Expected Correct Answer:"}</strong>
-                              {emotion.correctAnswer || qObj?.correctAnswer || getExpectedCorrectAnswer(topicText, qObj ? qObj.text : qText, qObj)}
-                            </div>
-
-                            {/* Confidence coaching tip */}
-                            <div style={{
-                              padding: "8px 12px",
-                              backgroundColor: "var(--accent-light)",
-                              color: "var(--accent-primary)",
-                              fontSize: "0.775rem",
-                              fontWeight: "600",
-                              borderRadius: "var(--radius-xs)",
-                              border: "1px solid rgba(31, 42, 56, 0.15)"
-                            }}>
-                              {getConfidenceCoachingTip(emotion, answer, idx)}
-                            </div>
-
-                          </div>
-                        )}
-
-                      </div>
-                    );
-                  }))}
+              <div className={styles.twoCol}>
+                <section className={styles.card} aria-labelledby="str-h">
+                  <span className={styles.eyebrow}>WHAT WORKED</span>
+                  <h2 id="str-h" style={{ marginBottom: 14 }}>Strengths</h2>
+                  <ul className={`${styles.points} ${styles.toneGood}`}>
+                    {strengths.map((s, i) => <li key={i}><span aria-hidden="true">✓</span><span>{s}</span></li>)}
+                  </ul>
+                </section>
+                <section className={styles.card} aria-labelledby="weak-h">
+                  <span className={styles.eyebrow}>WHERE TO GROW</span>
+                  <h2 id="weak-h" style={{ marginBottom: 14 }}>Focus areas</h2>
+                  <ul className={`${styles.points} ${styles.toneMid}`}>
+                    {weaknesses.length ? weaknesses.map((s, i) => <li key={i}><span aria-hidden="true">!</span><span>{s}</span></li>) : <li><span aria-hidden="true">✓</span><span>No major weak spots were flagged.</span></li>}
+                  </ul>
+                </section>
               </div>
             </div>
 
-          </div>
+            <div className={styles.stack}>
+              <section className={styles.card} aria-labelledby="bluff-h">
+                <span className={styles.eyebrow}>BLUFF INDEX</span>
+                <h2 id="bluff-h">Does confidence match substance?</h2>
+                <p className={styles.bigNum} style={{ marginTop: 14 }}>{bluffProb}<small>% probability</small></p>
+                <Meter value={bluffProb} label="Bluff probability" toneCls={bluffProb > 60 ? styles.toneLow : bluffProb > 30 ? styles.toneMid : styles.toneGood} />
+                <div className={styles.meterLabels}><span>Grounded</span><span>Likely bluffing</span></div>
+                <p className={styles.note} style={{ marginTop: 12 }}>
+                  {bluffProb > 40
+                    ? "You sounded sure, but some answers lacked specific formulas or terms. Lead with the precise rule, then explain."
+                    : "Your technical accuracy matched how confidently you spoke. No sign of memorise-and-bluff attempts."}
+                </p>
+              </section>
 
+              <section className={styles.card} aria-labelledby="lex-h">
+                <span className={styles.eyebrow}>VOCABULARY</span>
+                <h2 id="lex-h">{maturityLevel}</h2>
+                <p className={styles.bigNum} style={{ marginTop: 14 }}>{lexicalScore}<small>/100 range</small></p>
+                <Meter value={lexicalScore} label="Lexical range" toneCls={tone(lexicalScore).cls} />
+                <div className={styles.meterLabels}><span>Everyday words</span><span>Precise terminology</span></div>
+                <p className={styles.note} style={{ marginTop: 12 }}>{maturityDesc}</p>
+                <div className={styles.chipRow}>
+                  <span className={styles.stat}>Unique words <strong>{uniqueWordsCount}</strong></span>
+                  <span className={styles.stat}>Advanced terms <strong>{advancedWordsCount}</strong></span>
+                </div>
+              </section>
+
+              <section className={styles.card} aria-labelledby="fal-h">
+                <span className={styles.eyebrow}>REASONING CHECK</span>
+                <h2 id="fal-h" style={{ marginBottom: 12 }}>Argument patterns</h2>
+                {fallacies.length === 0 ? (
+                  <div className={styles.okBox}><span aria-hidden="true">✓</span><span><strong>No reasoning slips flagged.</strong> You avoided stalling phrases, circular answers and unqualified absolutes.</span></div>
+                ) : (
+                  fallacies.map((d, i) => (
+                    <div key={i} className={styles.flag}>
+                      <h4>{d.type} · Round {d.round}</h4>
+                      <p><strong>Topic:</strong> {d.topic}. {d.marker}.</p>
+                      <p><strong>Try instead:</strong> {d.fix}</p>
+                    </div>
+                  ))
+                )}
+              </section>
+            </div>
+          </div>
         </div>
 
+        {/* ======================= QUESTIONS ======================= */}
+        <div id="results-panel-questions" role="tabpanel" aria-labelledby="results-tab-questions" hidden={activeTab !== "questions"} className={styles.panel}>
+          {questions.length === 0 ? (
+            <p className={styles.empty}>{isProfessional ? "No recorded rounds. Answer at least one question to review the interviewer's feedback." : "No recorded rounds. Answer at least one question to review the examiner's feedback."}</p>
+          ) : (
+            <>
+              <section className={styles.card} style={{ marginBottom: 24 }} aria-labelledby="qbars-h">
+                <div className={styles.cardHead}>
+                  <div>
+                    <span className={styles.eyebrow}>ROUND BY ROUND</span>
+                    <h2 id="qbars-h">Correctness at a glance</h2>
+                    <p className={styles.sub}>Select a bar to open that question below.</p>
+                  </div>
+                </div>
+                <div className={styles.scoreBars}>
+                  {questions.map((q) => (
+                    <button key={q.idx} className={q.tone.cls} aria-pressed={sel && sel.idx === q.idx} aria-label={`Question ${q.idx + 1}, ${q.topic}: ${q.correctness} percent, ${q.tone.label}`} onClick={() => openQuestion(q.idx)}>
+                      <span aria-hidden="true">{q.correctness}</span>
+                      <span className={styles.col} style={{ height: `${Math.max(q.correctness, 4)}%` }} />
+                    </button>
+                  ))}
+                </div>
+                <div className={styles.scoreLabels} aria-hidden="true">
+                  {questions.map((q) => <span key={q.idx}>Q{q.idx + 1}</span>)}
+                </div>
+              </section>
+
+              <div className={styles.qLayout}>
+                <div>
+                  <div className={styles.filters} role="group" aria-label="Filter questions">
+                    {[["all", `All (${questions.length})`], ["strong", `Strong (${strongCount})`], ["work", `To revisit (${workCount})`]].map(([k, l]) => (
+                      <button key={k} aria-pressed={qFilter === k} onClick={() => { setQFilter(k); setLiveMsg(`Showing ${l}.`); }}>{l}</button>
+                    ))}
+                  </div>
+                  <ul className={styles.qList} aria-label="Questions">
+                    {visibleQuestions.length === 0 && <li className={styles.empty}>Nothing in this group.</li>}
+                    {visibleQuestions.map((q) => (
+                      <li key={q.idx}>
+                        <button className={`${styles.qItem} ${q.tone.cls}`} aria-current={sel && sel.idx === q.idx ? "true" : undefined} onClick={() => openQuestion(q.idx)}>
+                          <span className={styles.qNum}>Q{q.idx + 1}</span>
+                          <span className={styles.qTopic}>{q.topic}</span>
+                          <span className={styles.qScore}>{q.correctness}%<small><span aria-hidden="true">{q.tone.icon} </span>{q.tone.label}</small></span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {sel && (
+                  <article className={`${styles.card} ${styles.qDetail}`} aria-labelledby="qd-title" aria-live="polite">
+                    <span className={styles.eyebrow}>QUESTION {sel.idx + 1} OF {questions.length}{sel.qObj?.difficulty ? ` / ${String(sel.qObj.difficulty).toUpperCase()}` : ""}</span>
+                    <h3 id="qd-title">{sel.topic}</h3>
+                    <div className={styles.verdictMeta} style={{ marginTop: 10 }}>
+                      <span className={`${styles.pill} ${sel.tone.cls}`}><span aria-hidden="true">{sel.tone.icon}</span>{sel.correctness}% correct · {sel.tag}</span>
+                    </div>
+
+                    <div className={styles.qBlock}>
+                      <h4>
+                        {isProfessional ? "Interviewer asked" : "Examiner asked"}
+                        <button className={`${styles.btn} ${styles.btnSmall}`} aria-pressed={playingReplayIndex === sel.idx} onClick={() => handleReplayVoice(sel.speech, sel.idx)}>
+                          {playingReplayIndex === sel.idx ? "■ Stop voice" : "▶ Replay voice"}
+                        </button>
+                      </h4>
+                      <p className={styles.quote}>{sel.text}</p>
+                    </div>
+
+                    <div className={styles.qBlock}>
+                      <h4>Your answer</h4>
+                      <p className={styles.answerBox}>{sel.answer || "No transcript was captured for this round."}</p>
+                      {resultsData.recordedAudios && resultsData.recordedAudios[sel.idx] && (
+                        <div style={{ marginTop: 10 }}>
+                          <audio className={styles.audio} src={resultsData.recordedAudios[sel.idx]} controls aria-label={`Listen back to your answer to question ${sel.idx + 1}`} />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className={styles.qBlock}>
+                      <h4>How it scored</h4>
+                      <div className={styles.miniBars}>
+                        {[["Correctness", sel.correctness], ["Technical accuracy", sel.accuracy], ["Completeness", sel.completeness], ["Articulation & clarity", sel.clarity]].map(([l, v]) => (
+                          <div key={l} className={tone(v).cls}>
+                            <div><span>{l}</span><strong>{v}%</strong></div>
+                            <Meter value={v} label={l} toneCls={tone(v).cls} />
+                          </div>
+                        ))}
+                      </div>
+                      <p className={styles.note} style={{ marginTop: 14 }}>
+                        <strong>Evaluator note:</strong> {sel.emo.rationale || (sel.correctness >= 75
+                          ? `Strong answer. It addressed the core principles of ${sel.topic} accurately.`
+                          : sel.correctness >= 50
+                            ? "Partly correct. Good direction, but key formulas, edge cases or precise terms were missing."
+                            : `The explanation was incomplete and lacked essential details for ${sel.topic}.`)}
+                      </p>
+                      {Array.isArray(sel.emo.keyStrengths) && sel.emo.keyStrengths.length > 0 && (
+                        <div className={`${styles.tagList} ${styles.toneGood}`}><span>Strengths:</span>{sel.emo.keyStrengths.map((s, i) => <span key={i} className={styles.t}>✓ {s}</span>)}</div>
+                      )}
+                      {Array.isArray(sel.emo.missingConcepts) && sel.emo.missingConcepts.length > 0 && (
+                        <div className={`${styles.tagList} ${styles.toneMid}`}><span>Gaps:</span>{sel.emo.missingConcepts.map((s, i) => <span key={i} className={styles.t}>! {s}</span>)}</div>
+                      )}
+                    </div>
+
+                    <div className={styles.qBlock}>
+                      <h4>
+                        {isProfessional ? "Optimal professional response" : "Expected answer"}
+                        <button className={`${styles.btn} ${styles.btnSmall}`} aria-expanded={showExpected} aria-controls="expected-answer" onClick={() => setShowExpected((v) => !v)}>
+                          {showExpected ? "Hide" : "Reveal"}
+                        </button>
+                      </h4>
+                      <div id="expected-answer" className={`${styles.expected} ${styles.expectedWrap}`} hidden={!showExpected}>
+                        {sel.emo.correctAnswer || sel.qObj?.correctAnswer || getExpectedCorrectAnswer(sel.topic, sel.text, sel.qObj)}
+                      </div>
+                      {!showExpected && <p className={styles.sub}>Try recalling the answer first, then reveal it to compare.</p>}
+                    </div>
+
+                    <div className={styles.qBlock}>
+                      <h4>Coaching tip</h4>
+                      <p className={styles.tip}>{getConfidenceCoachingTip(sel.emo, sel.answer, sel.idx).replace(/^Coaching:\s*/, "")}</p>
+                    </div>
+
+                    <div className={styles.qNav}>
+                      <button className={styles.btn} disabled={sel.idx === 0} onClick={() => openQuestion(sel.idx - 1)}><span aria-hidden="true">←</span> Previous</button>
+                      <button className={styles.btn} disabled={sel.idx === questions.length - 1} onClick={() => openQuestion(sel.idx + 1)}>Next <span aria-hidden="true">→</span></button>
+                    </div>
+                  </article>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* ======================= DELIVERY ======================= */}
+        <div id="results-panel-delivery" role="tabpanel" aria-labelledby="results-tab-delivery" hidden={activeTab !== "delivery"} className={styles.panel}>
+          <div className={styles.stack}>
+            <section className={styles.card} aria-labelledby="tl-h">
+              <div className={styles.cardHead}>
+                <div>
+                  <span className={styles.eyebrow}>EMOTION TIMELINE</span>
+                  <h2 id="tl-h">How you felt, question by question</h2>
+                  <p className={styles.sub}>Toggle lines on or off, then pick a question to read what happened.</p>
+                </div>
+              </div>
+
+              {!hasData ? (
+                <p className={styles.empty}>No timeline data. Answer at least one question to chart your confidence, calm and fluency.</p>
+              ) : (
+                <>
+                  <div className={styles.legend} role="group" aria-label="Chart lines">
+                    {seriesDefs.map((s) => (
+                      <button key={s.key} aria-pressed={visibleSeries[s.key]} onClick={() => toggleSeries(s.key)}>
+                        <svg viewBox="0 0 26 10" aria-hidden="true"><line x1="1" y1="5" x2="25" y2="5" stroke={s.color} strokeWidth="3" strokeDasharray={s.dash} strokeLinecap="round" /></svg>
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className={styles.chartBox}>
+                    <svg viewBox={`0 0 ${CW} ${CH}`} role="group" aria-label={`Line chart of ${totalRounds} rounds. Use the question buttons below the chart for details.`}>
+                      {[0, 25, 50, 75, 100].map((v) => (
+                        <g key={v}>
+                          <line className={styles.gridLine} x1={padL} x2={CW - padR} y1={cy(v)} y2={cy(v)} strokeDasharray={v === 0 ? "" : "3 4"} />
+                          <text className={styles.axisText} x={padL - 8} y={cy(v) + 4} textAnchor="end">{v}</text>
+                        </g>
+                      ))}
+                      {sel && <rect x={cx(sel.idx) - Math.min(colW / 2 - 2, 34)} y={padT} width={Math.min(colW - 4, 68)} height={CH - padT - padB} fill="#b56c5022" stroke="#b56c5055" rx="6" />}
+                      {seriesDefs.filter((s) => visibleSeries[s.key]).map((s) => {
+                        const d = detectedEmotions.map((e, i) => `${i === 0 ? "M" : "L"} ${cx(i)} ${cy(s.get(e))}`).join(" ");
+                        return totalRounds > 1 ? (
+                          <path key={s.key} d={d} pathLength="1" className={styles.linePath} stroke={s.color} style={s.dash ? { strokeDasharray: s.dash, strokeDashoffset: 0, animation: "none" } : undefined} />
+                        ) : null;
+                      })}
+                      {detectedEmotions.map((e, i) => {
+                        const active = sel && sel.idx === i;
+                        return (
+                          <g
+                            key={i}
+                            className={styles.node}
+                            role="button"
+                            tabIndex={0}
+                            aria-pressed={active}
+                            aria-label={`Question ${i + 1}: ${seriesDefs.map((s) => `${s.label.split(" (")[0]} ${s.get(e)} percent`).join(", ")}`}
+                            onClick={() => openQuestion(i)}
+                            onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); openQuestion(i); } }}
+                          >
+                            <rect x={cx(i) - Math.max(colW / 2, 18)} y={padT} width={Math.max(colW, 36)} height={CH - padT - padB} fill="transparent" />
+                            {seriesDefs.filter((s) => visibleSeries[s.key]).map((s) => (
+                              <circle key={s.key} className={styles.ring} cx={cx(i)} cy={cy(s.get(e))} r={active ? 7 : 5} fill={active ? s.color : "#fffef8"} stroke={s.color} strokeWidth="2.5" />
+                            ))}
+                            <text className={styles.axisText} x={cx(i)} y={CH - 12} textAnchor="middle" style={active ? { fill: "#9a5a40", fontWeight: 800 } : undefined}>Q{i + 1}</text>
+                          </g>
+                        );
+                      })}
+                    </svg>
+                  </div>
+
+                  <div className={styles.pickRow} role="group" aria-label="Choose a question">
+                    {questions.map((q) => (
+                      <button key={q.idx} aria-pressed={sel && sel.idx === q.idx} onClick={() => openQuestion(q.idx)}>Q{q.idx + 1}</button>
+                    ))}
+                  </div>
+
+                  {sel && (
+                    <div className={styles.commentary} aria-live="polite">
+                      <strong>Question {sel.idx + 1} · {sel.topic}</strong>
+                      {getTimelineCommentary(sel.idx).replace(/^Round #\d+ \([^)]*\):\s*/, "")}
+                      <div className={styles.readout}>
+                        {seriesDefs.map((s) => <span key={s.key}>{s.label.split(" (")[0]}: <b>{s.get(sel.emo)}%</b></span>)}
+                      </div>
+                      <button className={`${styles.btn} ${styles.btnSmall}`} style={{ marginTop: 12 }} onClick={() => goTab("questions")}>Open full answer review <span aria-hidden="true">→</span></button>
+                    </div>
+                  )}
+
+                  <details className={styles.dataTable}>
+                    <summary>View chart data as a table</summary>
+                    <table>
+                      <thead><tr><th scope="col">Question</th>{seriesDefs.map((s) => <th key={s.key} scope="col">{s.label.split(" (")[0]}</th>)}</tr></thead>
+                      <tbody>
+                        {detectedEmotions.map((e, i) => (
+                          <tr key={i}><th scope="row">Q{i + 1}</th>{seriesDefs.map((s) => <td key={s.key}>{s.get(e)}%</td>)}</tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </details>
+                </>
+              )}
+            </section>
+
+            <div className={styles.grid2}>
+              <section className={styles.card} aria-labelledby="speech-h">
+                <div className={styles.cardHead}>
+                  <div>
+                    <span className={styles.eyebrow}>SPEECH & FLUENCY</span>
+                    <h2 id="speech-h">Your pace and pauses</h2>
+                  </div>
+                  {hasData && <div className={styles.gradeCircle} role="img" aria-label={`Fluency grade ${fluencyGrade}, score ${fluencyScore} out of 100`}>{fluencyGrade}</div>}
+                </div>
+                {!hasData ? (
+                  <p className={styles.empty}>No speech data yet. Answer a question to see pace and filler diagnostics.</p>
+                ) : (
+                  <div className={styles.gaugeWrap}>
+                    <div>
+                      <svg className={styles.gauge} viewBox="0 0 200 120" role="img" aria-label={`Average speaking pace ${avgWpm} words per minute, ${pacingCategory}`}>
+                        <defs>
+                          <linearGradient id="results-speed-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor="#9b3a2c" /><stop offset="25%" stopColor="#c08a2e" /><stop offset="50%" stopColor="#4f8a3c" /><stop offset="75%" stopColor="#c08a2e" /><stop offset="100%" stopColor="#9b3a2c" />
+                          </linearGradient>
+                        </defs>
+                        <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#e8ecdf" strokeWidth="14" strokeLinecap="round" />
+                        <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#results-speed-grad)" strokeWidth="14" strokeLinecap="round" />
+                        <g className={styles.needle} style={{ transform: `rotate(${needleAngle}deg)` }}>
+                          <line x1="100" y1="100" x2="100" y2="34" stroke="#2e392e" strokeWidth="4" strokeLinecap="round" />
+                        </g>
+                        <circle cx="100" cy="100" r="8" fill="#2e392e" /><circle cx="100" cy="100" r="3.5" fill="#fffef8" />
+                        <text x="20" y="116" textAnchor="middle">0</text><text x="100" y="18" textAnchor="middle">120</text><text x="180" y="116" textAnchor="middle">240+</text>
+                      </svg>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 180 }}>
+                      <p className={styles.bigNum}>{avgWpm}<small> words / min</small></p>
+                      <p className={`${styles.pill} ${paceTone}`} style={{ marginTop: 8 }}>{pacingCategory}</p>
+                      <p className={styles.note} style={{ marginTop: 14 }}><strong>Pause density:</strong> {averageHesitation}% — {pauseDensityDesc}.</p>
+                      <p className={styles.note}><strong>Articulation clarity:</strong> {clarityOfComm}%.</p>
+                    </div>
+                  </div>
+                )}
+              </section>
+
+              <section className={styles.card} aria-labelledby="fill-h">
+                <span className={styles.eyebrow}>FILLER WORDS</span>
+                <h2 id="fill-h">Crutch phrases</h2>
+                <p className={styles.sub}>{fillerConcentration}% of your words were fillers.</p>
+                {Object.entries(fillerCounts).map(([word, count]) => (
+                  <div key={word} className={`${styles.fillerRow} ${fillerTone(count)}`}>
+                    <div><span>&ldquo;{word}&rdquo;</span><span>{count} {count === 1 ? "time" : "times"}</span></div>
+                    <Meter value={(count / maxFiller) * 100} label={`${word}, ${count} occurrences`} valueText={`${count} occurrences`} toneCls={fillerTone(count)} />
+                  </div>
+                ))}
+                <p className={styles.note} style={{ marginTop: 14 }}>
+                  {parseFloat(fillerConcentration) > 5
+                    ? "Try a one-second pause when you feel a filler coming. Silence sounds more confident than “um”."
+                    : "Very few fillers. Your delivery sounds polished and deliberate."}
+                </p>
+              </section>
+            </div>
+
+            <section className={styles.card} aria-labelledby="hind-h">
+              <div className={styles.cardHead}>
+                <div>
+                  <span className={styles.eyebrow}>{hindsightData && !hindsightData.isLocalFallback ? "AI RETROSPECTIVE" : "SESSION RETROSPECTIVE"}</span>
+                  <h2 id="hind-h">{isProfessional ? "Patterns across your interview" : "Patterns across your session"}</h2>
+                  <p className={styles.sub}>Cross-question analysis that single-round scores can&apos;t see.</p>
+                </div>
+              </div>
+
+              {hindsightLoading && !hindsightData && (
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }} role="status">
+                  <div className={styles.spinner} aria-hidden="true" />
+                  <span className={styles.note}>Analysing patterns across your answers…</span>
+                </div>
+              )}
+              {!hindsightLoading && !hindsightData && (
+                <p className={styles.empty}>Retrospective unavailable. Answer at least two questions to enable it.</p>
+              )}
+              {hindsightData && (
+                <div>
+                  {hindsightData.sessionNarrative && (
+                    <div className={styles.hind}>
+                      <span className={styles.eyebrow}>PERFORMANCE ARC</span>
+                      <p>{hindsightData.sessionNarrative}</p>
+                    </div>
+                  )}
+                  {hindsightData.trajectoryPattern && (
+                    <p className={styles.note} style={{ marginBottom: 12 }}><strong>Confidence trajectory: {trajLabel}.</strong> {hindsightData.trajectoryDescription}</p>
+                  )}
+                  {hindsightData.contradictions?.length > 0 && (
+                    <div className={styles.flag}>
+                      <h4>Contradictions between rounds</h4>
+                      {hindsightData.contradictions.map((c, i) => <p key={i}><strong>Rounds {c.rounds?.join(" ↔ ") || "—"}:</strong> {c.description}</p>)}
+                    </div>
+                  )}
+                  {hindsightData.bluffingWarning && (
+                    <div className={styles.flag}><h4>Bluffing pattern</h4><p>{hindsightData.bluffingWarning}</p></div>
+                  )}
+                  {(hindsightData.strongestRound || hindsightData.weakestRound) && (
+                    <div className={styles.evidence}>
+                      {hindsightData.strongestRound && (
+                        <div className={styles.toneGood}><strong>✓ Strongest</strong><p><b>Q{hindsightData.strongestRound.round}: {hindsightData.strongestRound.topic}.</b> {hindsightData.strongestRound.evidence}</p></div>
+                      )}
+                      {hindsightData.weakestRound && (
+                        <div className={styles.toneLow}><strong>! Weakest</strong><p><b>Q{hindsightData.weakestRound.round}: {hindsightData.weakestRound.topic}.</b> {hindsightData.weakestRound.evidence}</p></div>
+                      )}
+                    </div>
+                  )}
+                  {hindsightData.recommendations?.length > 0 && (
+                    <div style={{ marginTop: 16 }}>
+                      <span className={styles.eyebrow}>RECOMMENDATIONS</span>
+                      <ol className={`${styles.points} ${styles.toneGood}`} style={{ marginTop: 10 }}>
+                        {hindsightData.recommendations.map((r, i) => <li key={i}><span aria-hidden="true">{i + 1}</span><span>{r}</span></li>)}
+                      </ol>
+                    </div>
+                  )}
+                  {!hindsightData.contradictions?.length && !hindsightData.bluffingWarning && hindsightData.sessionNarrative && (
+                    <div className={styles.okBox} style={{ marginTop: 14 }}><span aria-hidden="true">✓</span><span><strong>No contradictions or bluffing patterns.</strong> Your answers stayed consistent across all rounds.</span></div>
+                  )}
+                </div>
+              )}
+            </section>
+          </div>
+        </div>
+
+        {/* ======================= PLAN ======================= */}
+        <div id="results-panel-plan" role="tabpanel" aria-labelledby="results-tab-plan" hidden={activeTab !== "plan"} className={styles.panel}>
+          <div className={styles.planTop}>
+            <section className={styles.card} aria-labelledby="rev-h">
+              <div className={styles.cardHead}>
+                <div>
+                  <span className={styles.eyebrow}>{isProfessional ? "DEVELOPMENT AREAS" : "REVISION UNITS"}</span>
+                  <h2 id="rev-h">What to revisit</h2>
+                </div>
+                <button className={`${styles.btn} ${styles.btnSmall}`} onClick={() => { handleDownloadSchedule(); setLiveMsg("Study plan downloaded."); }}>Download plan (.md)</button>
+              </div>
+              <ul className={styles.topics}>
+                {revisionPills.map((p, i) => <li key={i}>{p.topic}<small>{p.time}</small></li>)}
+              </ul>
+              {weakConcepts.length > 0 && <p className={styles.note} style={{ marginTop: 14 }}><strong>Flagged during the session:</strong> {weakConcepts.join(", ")}.</p>}
+            </section>
+            <section className={styles.planProgress} aria-labelledby="prog-h">
+              <span className={styles.eyebrow} id="prog-h">PLAN PROGRESS</span>
+              <strong>{planPct}%</strong>
+              <Meter value={planPct} label="Plan progress" toneCls={styles.toneGood} />
+              <p className={styles.note} style={{ marginTop: 10 }}>{doneCount} of {plan.length} days done. {doneCount === plan.length ? "Lovely work — time for another session." : "Tick a day when you finish it."}</p>
+            </section>
+          </div>
+
+          <ol className={styles.days} aria-label="Five day plan">
+            {plan.map((d) => {
+              const done = !!doneDays[d.day];
+              return (
+                <li key={d.day} className={styles.day} data-done={done}>
+                  <span className={styles.eyebrow}>DAY {d.day}</span>
+                  <h3>{d.focus}</h3>
+                  <span className={styles.when}>{d.time}</span>
+                  <ul>{d.actions.map((a, i) => <li key={i}>{a}</li>)}</ul>
+                  <button className={styles.dayCheck} aria-pressed={done} onClick={() => toggleDay(d.day)}>
+                    <span className={styles.box} aria-hidden="true">{done ? "✓" : ""}</span>
+                    {done ? "Done" : "Mark day complete"}
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+
+        <div className={styles.footer}>
+          <span>PrepSim / Your session report</span>
+          <p>Progress is a practice. Keep showing up.</p>
+          <span>AI feedback is guidance, not an official grade.</span>
+        </div>
       </div>
     </section>
+  );
+}
+
+/* Accessible progress bar: meaningful value for assistive tech, animated fill for sighted users. */
+function Meter({ value, label, toneCls, valueText }) {
+  const [w, setW] = useState(0);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setW(value));
+    return () => cancelAnimationFrame(id);
+  }, [value]);
+  return (
+    <div className={`${styles.bar} ${toneCls || ""}`} role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(value)} aria-valuetext={valueText || `${Math.round(value)} percent`}>
+      <div className={styles.barFill} style={{ width: `${Math.min(Math.max(w, 0), 100)}%` }} />
+    </div>
   );
 }

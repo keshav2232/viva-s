@@ -1,3 +1,4 @@
+import { vivaFetch } from "@/utils/apiClient";
 /**
  * VivaSim - Unified Voice Synthesis Manager (TTS) with ElevenLabs support, preloading, and backup failsafes.
  * Safe for Next.js SSR.
@@ -31,12 +32,16 @@ export const VoiceManager = {
   // Callback for failsafe state shifts
   onFailsafeActive: null,
   isFailsafeMode: false,
+  failsafeSince: 0,
+  failsafeRetryMs: 60000, // retry premium voice after a minute instead of degrading for the whole session
 
   /**
    * Initializes the browser fallback voice synthesis system. Safe for SSR.
    */
   init() {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
+    if (this.initialized) return; // avoid stacking listeners on every mount
+    this.initialized = true;
 
     this.loadVoices();
     window.speechSynthesis.onvoiceschanged = () => {
@@ -107,12 +112,13 @@ export const VoiceManager = {
    * Preloads voice synthesis from ElevenLabs in the background.
    */
   async preload(text, personality = "friendly") {
-    if (typeof window === "undefined" || !text) return;
+    if (typeof window === "undefined" || typeof text !== "string" || !text.trim()) return;
+    if (this.isFailsafeMode) return; // don't burn requests while the premium voice is failing
     const cleanText = text.trim();
     if (this.preloadedCache[cleanText]) return; // Already cached
 
     try {
-      const response = await fetch("/api/viva", {
+      const response = await vivaFetch({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -150,7 +156,17 @@ export const VoiceManager = {
       return;
     }
 
-    const cleanText = text.trim();
+    const cleanText = (typeof text === "string" ? text : "").trim();
+    if (!cleanText) {
+      if (onStart) onStart();
+      if (onEnd) onEnd();
+      return;
+    }
+
+    // Give the premium voice another chance once the cool-down has passed.
+    if (this.isFailsafeMode && Date.now() - this.failsafeSince > this.failsafeRetryMs) {
+      this.isFailsafeMode = false;
+    }
 
     // 1. Attempt ElevenLabs Synthesis (Preloaded or Live)
     if (!this.isFailsafeMode) {
@@ -159,7 +175,7 @@ export const VoiceManager = {
         
         if (!objectUrl) {
           // Fetch live if not preloaded
-          const response = await fetch("/api/viva", {
+          const response = await vivaFetch({
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -223,6 +239,7 @@ export const VoiceManager = {
         if (this.activeSpeakId !== speakId) return;
         console.warn("ElevenLabs TTS failed. Activating Web Speech fallback:", err.message);
         this.isFailsafeMode = true;
+        this.failsafeSince = Date.now();
         if (this.onFailsafeActive) {
           this.onFailsafeActive("Voice quality reduced temporarily.");
         }

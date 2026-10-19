@@ -9,31 +9,25 @@ export const PDFExtractionService = {
   loadingPromise: null,
 
   /**
-   * Dynamically injects the PDF.js CDN script. Safe for SSR.
+   * Loads the bundled pdf.js (pdfjs-dist 4.x, patched for CVE-2024-4367). It ships with the app,
+   * so there is no third-party CDN script to trust. The worker is served from /public and must
+   * match the installed pdfjs-dist version (re-copy it when upgrading the package).
    */
   loadPDFJS() {
-    if (typeof window === "undefined") return Promise.reject("window-undefined");
-    if (window.pdfjsLib) {
-      this.pdfjsLoaded = true;
-      return Promise.resolve(window.pdfjsLib);
-    }
+    if (typeof window === "undefined") return Promise.reject(new Error("PDF reading needs a browser."));
     if (this.loadingPromise) return this.loadingPromise;
 
-    this.loadingPromise = new Promise((resolve, reject) => {
-      const script = document.createElement("script");
-      script.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js";
-      script.onload = () => {
-        window.pdfjsLib = window.pdfjsLib || window["pdfjs-dist/build/pdf"];
-        window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js";
+    this.loadingPromise = import("pdfjs-dist/build/pdf.min.mjs")
+      .then((pdfjs) => {
+        pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
         this.pdfjsLoaded = true;
-        resolve(window.pdfjsLib);
-      };
-      script.onerror = (e) => {
+        return pdfjs;
+      })
+      .catch((e) => {
         this.loadingPromise = null;
-        reject("Failed to load PDF.js from CDN: " + e);
-      };
-      document.head.appendChild(script);
-    });
+        console.error("pdf.js failed to load:", e);
+        throw new Error("Failed to load the PDF reader. Please try again.");
+      });
 
     return this.loadingPromise;
   },
@@ -46,7 +40,11 @@ export const PDFExtractionService = {
   async extractText(file) {
     if (!file) throw new Error("No file provided");
 
-    const extension = file.name.split(".").pop().toLowerCase();
+    const MAX_BYTES = 10 * 1024 * 1024;
+    const MAX_PAGES = 80;
+    if (file.size > MAX_BYTES) throw new Error("File is too large. Please upload a file under 10 MB.");
+
+    const extension = (file.name.split(".").pop() || "").toLowerCase();
 
     // 1. Text & Markdown Files
     if (extension === "txt" || extension === "md") {
@@ -68,11 +66,12 @@ export const PDFExtractionService = {
         reader.onload = async (e) => {
           try {
             const arrayBuffer = e.target.result;
-            const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
+            // isEvalSupported:false mitigates CVE-2024-4367 (arbitrary JS via crafted PDF fonts) in pdf.js < 4.2.67.
+            const loadingTask = pdfjs.getDocument({ data: arrayBuffer, isEvalSupported: false });
             const pdf = await loadingTask.promise;
             
             let fullText = "";
-            const totalPages = pdf.numPages;
+            const totalPages = Math.min(pdf.numPages, MAX_PAGES);
 
             for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
               const page = await pdf.getPage(pageNum);
@@ -83,7 +82,7 @@ export const PDFExtractionService = {
             
             resolve(fullText.trim());
           } catch (err) {
-            reject("PDF parsing failed: " + err.message);
+            reject(new Error("PDF parsing failed: " + (err && err.message ? err.message : "unreadable file")));
           }
         };
 

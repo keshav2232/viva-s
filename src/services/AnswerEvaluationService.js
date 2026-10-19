@@ -1,8 +1,15 @@
+import { vivaFetch } from "@/utils/apiClient";
 /**
  * VivaSim - Answer Evaluation Service
  * Combines server-side Gemini semantic text grading (correctness, accuracy, tags)
  * with client-side lexical-acoustic metrics (speaking rate, hesitation gaps, filler frequencies).
  */
+
+const VALID_TAGS = ["Strong", "Weak", "Partially Correct", "Bluffing", "Incomplete", "Confused"];
+const clampScore = (v, fallback) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.min(Math.max(Math.round(n), 0), 100) : fallback;
+};
 
 export const AnswerEvaluationService = {
   
@@ -12,7 +19,9 @@ export const AnswerEvaluationService = {
    * @returns {Promise<object>} Combined metrics { confidence, clarity, nervousness, hesitation, correctness, accuracy, completeness, tag }
    */
   async evaluateResponse(params) {
-    const { question, answer, syllabus, speechDurationMs, pauseCount, liveMetrics, isHesitationPenalty, mode, audioBase64, cacheId } = params;
+    const { question, syllabus, speechDurationMs, liveMetrics, isHesitationPenalty, mode, audioBase64, cacheId } = params;
+    const answer = typeof params.answer === "string" ? params.answer : "";
+    const pauseCount = Number.isFinite(params.pauseCount) ? params.pauseCount : 0;
 
     // 1. Calculate local acoustic/delivery metrics (prefer live-tracked metrics)
     const local = this.calculateLocalDeliveryMetrics(answer, speechDurationMs, pauseCount);
@@ -20,7 +29,7 @@ export const AnswerEvaluationService = {
 
     try {
       // 2. Call server-side Gemini AI for semantic evaluations
-      const response = await fetch("/api/viva", {
+      const response = await vivaFetch({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -38,7 +47,21 @@ export const AnswerEvaluationService = {
       });
 
       if (!response.ok) throw new Error("Evaluation API request failed");
-      const semanticGrading = await response.json();
+      const rawGrading = await response.json();
+      if (!rawGrading || typeof rawGrading !== "object" || Array.isArray(rawGrading)) throw new Error("Malformed evaluation payload");
+
+      // Never trust model output shape: clamp every score to 0-100 and whitelist the tag.
+      const semanticGrading = {
+        ...rawGrading,
+        correctness: clampScore(rawGrading.correctness, 60),
+        accuracy: clampScore(rawGrading.accuracy, 60),
+        completeness: clampScore(rawGrading.completeness, 60),
+        clarity: rawGrading.clarity === undefined ? undefined : clampScore(rawGrading.clarity, 70),
+        confidence: rawGrading.confidence === undefined ? undefined : clampScore(rawGrading.confidence, 70),
+        nervousness: rawGrading.nervousness === undefined ? undefined : clampScore(rawGrading.nervousness, 30),
+        hesitation: rawGrading.hesitation === undefined ? undefined : clampScore(rawGrading.hesitation, 20),
+        tag: VALID_TAGS.includes(rawGrading.tag) ? rawGrading.tag : "Partially Correct"
+      };
 
       // Adjust dynamic nervousness and confidence based on AI grading results if Gemini didn't return them directly
       let confAdjustment = 0;
@@ -52,7 +75,7 @@ export const AnswerEvaluationService = {
 
       const finalClarity = semanticGrading.clarity !== undefined
         ? semanticGrading.clarity
-        : Math.round((delivery.clarity * 0.4) + (semanticGrading.clarity * 0.6));
+        : delivery.clarity;
 
       const finalNervousness = semanticGrading.nervousness !== undefined
         ? semanticGrading.nervousness
@@ -97,8 +120,8 @@ export const AnswerEvaluationService = {
   /**
    * Computes client-side hesitation and pacing metrics.
    */
-  calculateLocalDeliveryMetrics(answerText, speechDurationMs, pauseCount) {
-    const textLower = answerText.toLowerCase();
+  calculateLocalDeliveryMetrics(answerText, speechDurationMs, pauseCount = 0) {
+    const textLower = (typeof answerText === "string" ? answerText : "").toLowerCase();
     const words = textLower.split(/\s+/).filter(w => w.length > 0);
     const wordCount = words.length;
 
@@ -120,7 +143,7 @@ export const AnswerEvaluationService = {
     });
 
     // Pacing (WPM)
-    const durationMins = speechDurationMs / 1000 / 60;
+    const durationMins = (Number(speechDurationMs) || 0) / 1000 / 60;
     const wpm = durationMins > 0 ? Math.round(wordCount / durationMins) : 120;
     
     let wpmDeviation = 0;
@@ -150,14 +173,13 @@ export const AnswerEvaluationService = {
    * Highly responsive fallback metrics in case API key is offline.
    */
   getLocalFallbackMetrics(delivery, answerText, isHesitationPenalty) {
-    const isShort = answerText.length < 15;
+    const isShort = (answerText || "").length < 15;
     let tag = "Partially Correct";
     if (isShort) tag = "Incomplete";
-    else if (delivery.confidence >= 80) tag = "Strong";
-    else if (delivery.confidence < 60) tag = "Weak";
 
-    let correctness = isShort ? 55 : 82;
-    let accuracy = isShort ? 50 : 80;
+    // Offline we cannot judge correctness, so stay neutral instead of awarding a high grade.
+    let correctness = isShort ? 40 : 62;
+    let accuracy = isShort ? 40 : 60;
 
     if (isHesitationPenalty) {
       correctness = Math.max(Math.round(correctness * 0.8), 0);
@@ -174,12 +196,12 @@ export const AnswerEvaluationService = {
       fillerCount: delivery.fillerCount || 0,
       rationale: isShort 
         ? "Response was very brief. Key details and foundational concepts were not fully addressed." 
-        : "Local rule-based fallback evaluation based on delivery metrics and word volume.",
-      keyStrengths: isShort ? [] : ["Addressed core topic topic"],
+        : "The AI grader was unavailable, so this round was scored neutrally from delivery metrics only. Content accuracy was not assessed.",
+      keyStrengths: [],
       missingConcepts: isShort ? ["Comprehensive explanation", "Precise technical keywords"] : [],
       correctness: correctness,
       accuracy: accuracy,
-      completeness: isShort ? 45 : 78,
+      completeness: isShort ? 40 : 60,
       tag: tag
     };
   }

@@ -8,14 +8,17 @@ import { QuestionGraphEngine } from "@/services/QuestionGraphEngine";
 import { AnswerEvaluationService } from "@/services/AnswerEvaluationService";
 import { SessionContextManager } from "@/services/SessionContextManager";
 import { HindsightEngine } from "@/services/HindsightEngine";
+import room from "./ActiveViva.module.css";
+import MicrophoneCheck from "@/components/MicrophoneCheck";
 import ExaminerAvatar from "@/components/ExaminerAvatar";
+import { getQuestionCountForDuration } from "@/utils/pacing";
 
 // Helper to guarantee render purity by getting timestamp outside component scope
 function getNow() {
   return Date.now();
 }
 
-export default function ActiveViva({ config, activeUser, onFinishViva }) {
+export default function ActiveViva({ config, activeUser, onFinishViva, onBack }) {
   const getPersonaTitle = (p, mode) => {
     const cleanType = p?.toLowerCase();
     if (cleanType === "friendly") return mode === "professional" ? "Warm Recruiter" : "Friendly Professor";
@@ -24,6 +27,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     if (cleanType === "terror") return mode === "professional" ? "Stress Interviewer" : "Viva Terror";
     return mode === "professional" ? "AI Interviewer" : "AI Examiner";
   };
+
+  const totalQuestions = getQuestionCountForDuration(config.duration);
 
   // State machine variables
   const [vivaState, setVivaState] = useState(() => config.isResume ? "speaking" : "intro"); // "intro" | "speaking" | "listening" | "analyzing" | "generating"
@@ -35,7 +40,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
   );
   
   // Timer stopwatch states
-  const [timeRemaining, setTimeRemaining] = useState(config.duration * 60);
+  const [timeRemaining, setTimeRemaining] = useState(() => (config.isResume && Number.isFinite(config.resumeState?.timeRemaining) && config.resumeState.timeRemaining > 0) ? config.resumeState.timeRemaining : config.duration * 60);
   
   // Q&A memory tracking
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(() => config.isResume ? config.resumeState.currentQuestionIndex : 0);
@@ -69,10 +74,11 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
   const introTimeoutRef = useRef(null);
   const transitionTimeoutRef = useRef(null);
   const isMountedRef = useRef(true);
+  const isProcessingRef = useRef(false); // an answer is being evaluated (blocks duplicate submits)
+  const hasFinishedRef = useRef(false); // report already handed off (blocks double save)
   
   // Refs for tracking background evaluations
   const pendingAudioEvalRef = useRef(null);
-  const evaluationPromisesRef = useRef([]);
 
   // Refs for tracking latest state values in async callbacks
   const activeQuestionRef = useRef(activeQuestion);
@@ -132,6 +138,9 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     if (config.isResume) {
       // Restore SessionContextManager state
       SessionContextManager.askedQuestions = config.resumeState.askedQuestions || [];
+      // Older pause files lack question objects; rebuild them so indices stay aligned.
+      SessionContextManager.askedQuestionsObjects = config.resumeState.askedQuestionsObjects
+        || SessionContextManager.askedQuestions.map(q => ({ text: q, speech: q, topic: "Syllabus Concept", difficulty: "Medium" }));
       SessionContextManager.answerTranscripts = config.resumeState.answerTranscripts || [];
       SessionContextManager.detectedEmotions = config.resumeState.detectedEmotions || [];
       SessionContextManager.weakConcepts = config.resumeState.weakConcepts || [];
@@ -284,7 +293,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
 
     SpeechManager.start({
       onResult: (interim, final) => {
-        const text = (interim || "" + final || "").trim();
+        const text = (interim || final || "").trim();
         // If student spoke more than a few words while examiner was actively speaking
         if (text.length > 8 && VoiceManager.isSpeaking() && !interruptedRef.current) {
           interruptedRef.current = true;
@@ -456,51 +465,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     }
   };
 
-  const handleHumeEmotionAnalysis = async (audioBlob, questionIndex) => {
-    try {
-      console.log(`Starting background Hume AI emotion analysis for question #${questionIndex + 1}...`);
-      
-      const reader = new FileReader();
-      reader.readAsDataURL(audioBlob);
-      reader.onloadend = async () => {
-        const base64Data = reader.result.split(',')[1];
-        
-        try {
-          const res = await fetch("/api/viva", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "analyze-hume-emotion",
-              audioBase64: base64Data
-            })
-          });
-          
-          if (!res.ok) throw new Error("Hume AI background analysis failed");
-          const humeMetrics = await res.json();
-          
-          console.log(`Hume AI analysis resolved for question #${questionIndex + 1}:`, humeMetrics);
-          
-          if (SessionContextManager.detectedEmotions && SessionContextManager.detectedEmotions[questionIndex]) {
-            const current = SessionContextManager.detectedEmotions[questionIndex];
-            
-            if (humeMetrics.confidence !== undefined) current.confidence = humeMetrics.confidence;
-            if (humeMetrics.clarity !== undefined) current.clarity = humeMetrics.clarity;
-            if (humeMetrics.nervousness !== undefined) current.nervousness = humeMetrics.nervousness;
-            if (humeMetrics.hesitation !== undefined) current.hesitation = humeMetrics.hesitation;
-            
-            if (SessionContextManager.confidenceEvolution && SessionContextManager.confidenceEvolution[questionIndex] !== undefined) {
-              SessionContextManager.confidenceEvolution[questionIndex] = humeMetrics.confidence;
-            }
-          }
-        } catch (apiErr) {
-          console.warn("Hume AI background API error:", apiErr);
-        }
-      };
-    } catch (err) {
-      console.warn("FileReader error during Hume AI audio capture:", err);
-    }
-  };
-
   const blobToBase64 = (blob) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -513,64 +477,23 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     });
   };
 
-  const startBackgroundEvaluation = async (qIdx, answerText, audioBlob, durationMs, pauseCount, liveMetricsVal, hasPenalty) => {
-    try {
-      console.log(`Starting background evaluation for question #${qIdx + 1}...`);
-      let audioBase64 = null;
-      if (audioBlob) {
-        try {
-          audioBase64 = await blobToBase64(audioBlob);
-        } catch (blobErr) {
-          console.warn("Could not encode audio blob to base64:", blobErr);
-        }
-      }
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-      const currentQ = SessionContextManager.askedQuestionsObjects[qIdx] || activeQuestionRef.current;
-      
-      const resultMetrics = await AnswerEvaluationService.evaluateResponse({
-        question: currentQ.text,
-        answer: answerText,
-        syllabus: config.syllabusStructure,
-        speechDurationMs: durationMs,
-        pauseCount: pauseCount,
-        liveMetrics: liveMetricsVal,
-        isHesitationPenalty: hasPenalty,
-        mode: config.mode,
-        audioBase64,
-        cacheId: SessionContextManager.activeCacheId
-      });
+  // Single-pass grading. In oral mode the recording is attached to the one evaluation call
+  // (so content AND voice are judged together). If no usable recording shows up quickly
+  // we return null and the caller grades the transcript on its own.
+  const evaluateWithAudio = async (qIdx, params) => {
+    const slot = { qIdx, params, cancelled: false, promise: null, onCapture: null };
+    const captured = new Promise((resolve) => { slot.onCapture = resolve; });
+    pendingAudioEvalRef.current = slot;
 
-      console.log(`Background evaluation resolved for question #${qIdx + 1}:`, resultMetrics);
-
-      // Track nervousness for dynamic pressure adaptations
-      latestNervousnessRef.current = resultMetrics.nervousness || 20;
-
-      // Record actual metrics in SessionContextManager
-      SessionContextManager.updateRoundMetrics(qIdx, resultMetrics);
-
-      // Update askedTopics with the real metrics
-      if (currentQ.topic && SessionContextManager.askedTopics) {
-        const topicIdx = SessionContextManager.askedTopics.findIndex(t => t.topic === currentQ.topic);
-        if (topicIdx !== -1) {
-          SessionContextManager.askedTopics[topicIdx].metrics = resultMetrics;
-        }
-      }
-    } catch (err) {
-      console.error(`Background evaluation failed for question #${qIdx + 1}:`, err);
-      // Heuristic fallback if server error
-      const localDelivery = AnswerEvaluationService.calculateLocalDeliveryMetrics(answerText, durationMs, pauseCount);
-      const delivery = liveMetricsVal ? { ...localDelivery, ...liveMetricsVal } : localDelivery;
-      const fallbackMetrics = AnswerEvaluationService.getLocalFallbackMetrics(delivery, answerText, hasPenalty);
-      SessionContextManager.updateRoundMetrics(qIdx, fallbackMetrics);
-
-      const currentQ = SessionContextManager.askedQuestionsObjects[qIdx] || activeQuestionRef.current;
-      if (currentQ.topic && SessionContextManager.askedTopics) {
-        const topicIdx = SessionContextManager.askedTopics.findIndex(t => t.topic === currentQ.topic);
-        if (topicIdx !== -1) {
-          SessionContextManager.askedTopics[topicIdx].metrics = fallbackMetrics;
-        }
-      }
+    const gotAudio = await Promise.race([captured, sleep(1800).then(() => false)]);
+    if (!gotAudio) {
+      slot.cancelled = true;
+      if (pendingAudioEvalRef.current === slot) pendingAudioEvalRef.current = null;
+      return null;
     }
+    return Promise.race([slot.promise.catch(() => null), sleep(12000).then(() => null)]);
   };
 
   const getOfflineHint = (topic, questionText) => {
@@ -754,6 +677,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
 
   // Phase 2: Dynamic Listening
   function startListeningMode() {
+    isProcessingRef.current = false;
     setVivaState("listening");
     setVisualState("listening");
     setStatusText("Listening to your answer...");
@@ -790,18 +714,17 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         processResponse(finalTranscriptText);
       },
       onAudioCaptured: (audioBlob) => {
-        handleHumeEmotionAnalysis(audioBlob, currentQuestionIndex);
-        const qIdx = pendingAudioEvalRef.current ? pendingAudioEvalRef.current.qIdx : currentQuestionIndex;
-        if (audioBlob && audioBlob.size > 100) {
-          recordedAudiosRef.current[qIdx] = audioBlob;
-        }
+        const slot = pendingAudioEvalRef.current;
+        const qIdx = slot ? slot.qIdx : currentQuestionIndexRef.current;
+        const usable = audioBlob && audioBlob.size > 100;
+        if (usable) recordedAudiosRef.current[qIdx] = audioBlob;
 
-        if (pendingAudioEvalRef.current) {
-          const { qIdx: pendingQIdx, answerText, durationMs, pauseCount, liveMetrics: pendingLiveMetrics, hasPenalty } = pendingAudioEvalRef.current;
+        if (slot && !slot.cancelled && usable) {
           pendingAudioEvalRef.current = null;
-          
-          const evalPromise = startBackgroundEvaluation(pendingQIdx, answerText, audioBlob, durationMs, pauseCount, pendingLiveMetrics, hasPenalty);
-          evaluationPromisesRef.current.push(evalPromise);
+          slot.promise = blobToBase64(audioBlob).then((audioBase64) =>
+            AnswerEvaluationService.evaluateResponse({ ...slot.params, audioBase64 })
+          );
+          slot.onCapture(true);
         }
       },
       onError: (err) => {
@@ -828,10 +751,14 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
   }
 
   async function processResponse(answerText) {
+    // Silence auto-submit, the Submit button and the timer can all fire for the same answer.
+    if (isProcessingRef.current || hasFinishedRef.current) return;
+    isProcessingRef.current = true;
     VoiceManager.stop();
     const currentQ = activeQuestionRef.current;
     if (!currentQ) {
       console.warn("Speech input captured before activeQuestion was set, ignoring.");
+      isProcessingRef.current = false;
       return;
     }
     const qIdxStart = currentQuestionIndexRef.current;
@@ -856,20 +783,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     const pauseCount = SpeechManager.gapsHistory.length;
     const hasPenalty = penalties[qIdxStart] || false;
 
-    // Queue for background audio analysis if we are in oral mode (not keyboard fallback)
-    if (!fallbackMode) {
-      pendingAudioEvalRef.current = {
-        qIdx: qIdxStart,
-        answerText,
-        durationMs,
-        pauseCount,
-        liveMetrics: metricsVal,
-        hasPenalty: hasPenalty
-      };
-    }
-
     try {
-      const resultMetrics = await AnswerEvaluationService.evaluateResponse({
+      const evalParams = {
         question: currentQ.text,
         answer: answerText,
         syllabus: config.syllabusStructure,
@@ -879,7 +794,15 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         isHesitationPenalty: hasPenalty,
         mode: config.mode,
         cacheId: SessionContextManager.activeCacheId
-      });
+      };
+
+      let resultMetrics = null;
+      if (!fallbackMode) {
+        resultMetrics = await evaluateWithAudio(qIdxStart, evalParams);
+      }
+      if (!resultMetrics) {
+        resultMetrics = await AnswerEvaluationService.evaluateResponse(evalParams);
+      }
 
       // Track nervousness for dynamic pressure adaptations
       latestNervousnessRef.current = resultMetrics.nervousness || 20;
@@ -929,7 +852,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
 
         // Progress to next question or end
         const qIndex = qIdxStart + 1;
-        if (qIndex >= 4) {
+        if (qIndex >= totalQuestions) {
           handleFinish(false);
           return;
         }
@@ -1058,7 +981,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         setLastEvalRecord(null);
 
         const qIndex = qIdxStart + 1;
-        if (qIndex >= 4) {
+        if (qIndex >= totalQuestions) {
           handleFinish(false);
           return;
         }
@@ -1105,7 +1028,9 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       activeUser,
       currentQuestionIndex,
       activeQuestion,
+      timeRemaining,
       askedQuestions: SessionContextManager.askedQuestions,
+      askedQuestionsObjects: SessionContextManager.askedQuestionsObjects,
       answerTranscripts: SessionContextManager.answerTranscripts,
       detectedEmotions: SessionContextManager.detectedEmotions,
       weakConcepts: SessionContextManager.weakConcepts,
@@ -1120,6 +1045,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
   };
 
   function handleFinish(endedEarly = false) {
+    if (hasFinishedRef.current) return;
+    hasFinishedRef.current = true;
     stopAudioStreams();
     clearInterval(waveIntervalRef.current);
     
@@ -1200,7 +1127,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
     };
 
     // Fire hindsight analysis asynchronously — does NOT block the results screen
-    HindsightEngine.analyze({
+    const hindsightPromise = HindsightEngine.analyze({
       subjectName: config.topic,
       askedQuestions: baseReport.askedQuestions,
       askedQuestionsObjects: baseReport.askedQuestionsObjects,
@@ -1212,12 +1139,15 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
       // Enrich the report data after hindsight resolves
       reportPayload.hindsightData = hindsightResult;
       reportPayload.hindsightLoading = false;
+      return hindsightResult;
     }).catch(err => {
       console.warn("HindsightEngine failed, results will use original data:", err);
       reportPayload.hindsightLoading = false;
+      return null;
     });
 
-    onFinishViva(reportPayload);
+    // The second argument lets the host persist the retrospective once it resolves.
+    onFinishViva(reportPayload, hindsightPromise);
   };
 
   // Unified Submission for Oral & Keyboard Modes
@@ -1268,70 +1198,22 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
   }
 
   if (!sessionUnlocked) {
-    const titleText = config.mode === "professional" ? "Interactive Mock Interview" : "AI Oral Examination Simulator";
-    const descText = config.mode === "professional"
-      ? `You are about to start a professional technical interview on ${config.topic} with ${getPersonaTitle(config.personality, config.mode)}.`
-      : `You are about to start an oral examination on ${config.topic} with ${getPersonaTitle(config.personality, config.mode)}.`;
-    
-    return (
-      <section id="active-viva-screen" className="screen active" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "80vh", padding: "20px" }}>
-        <div className="card start-simulation-overlay" style={{
-          maxWidth: "480px",
-          width: "100%",
-          padding: "var(--space-xl) var(--space-lg)",
-          textAlign: "center",
-          display: "flex",
-          flexDirection: "column",
-          gap: "var(--space-md)",
-          boxShadow: "var(--shadow-lg)"
-        }}>
-          <div style={{ fontSize: "3rem", margin: "10px 0" }}>🎙️</div>
-          <h2 style={{ fontSize: "1.4rem", fontWeight: "800", color: "var(--accent-primary)", margin: 0 }}>{titleText}</h2>
-          <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", lineHeight: 1.5, margin: 0 }}>
-            {descText}
-          </p>
-          <div style={{
-            padding: "12px",
-            borderRadius: "var(--radius-sm)",
-            backgroundColor: "var(--bg-primary)",
-            border: "1px dashed var(--border-color)",
-            fontSize: "0.8rem",
-            color: "var(--text-muted)",
-            textAlign: "left",
-            lineHeight: 1.4
-          }}>
-            <strong>🔊 Audio Safety Check:</strong> Mobile browsers block speech synthesis audio until you interact. Click below to authorize speech audio and start your practice session.
-          </div>
-          <button 
-            type="button" 
-            className="btn btn-primary" 
-            onClick={() => {
-              try {
-                const u = new SpeechSynthesisUtterance("");
-                window.speechSynthesis.speak(u);
-              } catch (e) {
-                console.warn("Speech synthesis pre-unlock failed:", e);
-              }
-              setSessionUnlocked(true);
-            }}
-            style={{
-              padding: "12px 24px",
-              fontSize: "1rem",
-              fontWeight: "700",
-              marginTop: "10px",
-              boxShadow: "0 4px 14px rgba(37, 99, 235, 0.4)",
-              cursor: "pointer"
-            }}
-          >
-            {config.isResume ? "Resume Session" : "Start Session"}
-          </button>
-        </div>
-      </section>
-    );
+    return <MicrophoneCheck config={config} examiner={getPersonaTitle(config.personality, config.mode)} onBack={onBack} onReady={() => {
+      try { window.speechSynthesis.speak(new SpeechSynthesisUtterance("")); } catch {}
+      setSessionUnlocked(true);
+    }} />;
   }
 
   return (
-    <section id="active-viva-screen" className="screen active" style={{ position: "relative" }}>
+    <section id="active-viva-screen" className={`screen active ${room.room}`}>
+      <div className={room.roomHeader}><div><span>PREPSIM / PRACTICE ROOM</span><h1>{config.mode === "professional" ? "The interview room." : "Your viva, in session."}</h1></div><p>Listen carefully. Take a breath. Think aloud.</p></div>
+      <div className={room.roomGrid}>
+      <aside className={room.brief} aria-label="Session brief">
+        <span className={room.eyebrow}>SESSION BRIEF</span><h2>{config.mode === "professional" ? "Mock interview" : "Oral examination"}</h2>
+        <dl><div><dt>Candidate</dt><dd>{activeUser || "Guest"}</dd></div><div><dt>Subject / role</dt><dd>{config.topic}</dd></div><div><dt>Examiner</dt><dd>{getPersonaTitle(config.personality, config.mode)}</dd></div><div><dt>Planned duration</dt><dd>{config.duration} minutes</dd></div><div><dt>Scope</dt><dd>{config.isTargetDrill ? config.targetSubtopic : "Full practice outline"}</dd></div></dl>
+        <div className={room.deskArt} aria-hidden="true"><span>PREPSIM</span><strong>Practice.<br/>Reflect.<br/>Repeat.</strong><i>FIELD NOTES / ORAL PRACTICE</i></div>
+        <div className={room.guidelines}><h3>A good answer has a shape.</h3><ol><li>Start with the core idea.</li><li>Explain your reasoning.</li><li>Add an example or application.</li></ol><p>Need a moment? It’s okay to pause and organise your thoughts.</p></div>
+      </aside>
       {/* Subtle ElevenLabs failsafe warning banner */}
       {failsafeWarning && (
         <div className="failsafe-banner" style={{
@@ -1390,6 +1272,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
           </div>
         </div>
 
+        <div className={room.examinerPlate}><span>YOUR {config.mode === "professional" ? "INTERVIEWER" : "EXAMINER"}</span><strong>{getPersonaTitle(config.personality, config.mode)}</strong><small>AI practice examiner</small></div>
         {/* Middle Stage */}
         <div className={`examiner-stage ${visualState}`} id="viva-examiner-stage">
           <div className="examiner-avatar-box">
@@ -1423,14 +1306,14 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
           </div>
 
           <div className="microphone-box" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
-            <button className="btn-mic" id="btn-microphone" disabled={vivaState !== "listening" || fallbackMode}>
+            <div className="btn-mic" id="btn-microphone" role="img" aria-label={vivaState === "listening" && !fallbackMode ? "Microphone listening" : "Microphone inactive"}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
                 <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
                 <line x1="12" y1="19" x2="12" y2="23"></line>
                 <line x1="8" y1="23" x2="16" y2="23"></line>
               </svg>
-            </button>
+            </div>
             <span className="mic-subtext" id="btn-microphone-sub">
               {fallbackMode ? "Microphone access blocked." : vivaState === "listening" ? "Microphone active. Speak naturally." : (config.mode === "professional" ? "Microphone inactive while interviewer speaks." : "Microphone inactive while examiner speaks.")}
             </span>
@@ -1556,7 +1439,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
         {/* Bottom card */}
         <div className="viva-question-card" id="viva-question-container">
           <span className="viva-question-number" id="viva-question-num-tag">
-            Question {currentQuestionIndex + 1} of 4
+            Question {currentQuestionIndex + 1}
           </span>
           <div className="viva-question-content" id="viva-question-content-text">
             {activeQuestion ? `"${activeQuestion.text}"` : (config.mode === "professional" ? '"Loading interview question..."' : '"Loading examination question..."')}
@@ -1583,6 +1466,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva }) {
           </div>
         </div>
       </div>
+      </div>
+      <div className={room.bottomNote}><span>PREPSIM · PRACTICE, NOT A FORMAL ASSESSMENT</span><p>Your aim is a clear explanation, not a perfect performance.</p></div>
     </section>
   );
 }

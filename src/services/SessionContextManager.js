@@ -1,3 +1,4 @@
+import { vivaFetch } from "@/utils/apiClient";
 /**
  * VivaSim - Session Context Manager Service
  * Manages in-memory context: tracking asked questions, answer transcripts,
@@ -34,7 +35,7 @@ export const SessionContextManager = {
   async refreshSessionCache(config) {
     try {
       if (!config) return null;
-      const res = await fetch("/api/viva", {
+      const res = await vivaFetch({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

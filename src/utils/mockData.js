@@ -154,18 +154,20 @@ export const DEFAULT_HIERARCHIES = {
 
 export function getFallbackSyllabus(topic, isProfessional = false) {
   const lower = (topic || "").toLowerCase();
+  // Whole-word matching: plain substring checks wrongly matched "pm" in "development", "ml" in "html", "data" in "database".
+  const has = (...words) => words.some((w) => new RegExp("\\b(?:" + w + ")\\b").test(lower));
   let key = "";
-  if (lower.includes("software") || lower.includes("backend") || lower.includes("engineer") || lower.includes("developer")) {
+  if (has("software", "backend", "developer", "software engineer")) {
     key = "software";
-  } else if (lower.includes("product manager") || lower.includes("pm")) {
+  } else if (has("product manager", "pm")) {
     key = "pm";
-  } else if (lower.includes("data scientist") || lower.includes("machine learning") || lower.includes("ml")) {
+  } else if (has("data scientist", "machine learning", "ml")) {
     key = "dataScientist";
-  } else if (lower.includes("data") || lower.includes("structure")) {
+  } else if (has("data structures?", "dsa")) {
     key = "dataStructures";
-  } else if (lower.includes("machine") || lower.includes("design")) {
+  } else if (has("machine design", "machine elements")) {
     key = "machineDesign";
-  } else if (lower.includes("thermodynamics") || lower.includes("thermo")) {
+  } else if (has("thermodynamics", "thermo")) {
     key = "thermodynamics";
   }
 

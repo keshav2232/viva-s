@@ -27,7 +27,11 @@ export const SyllabusMasteryService = {
    */
   saveMasteryData(data) {
     if (typeof window === "undefined") return;
-    localStorage.setItem("vivasim_mastery", JSON.stringify(data));
+    try {
+      localStorage.setItem("vivasim_mastery", JSON.stringify(data));
+    } catch (e) {
+      console.warn("Could not persist mastery data:", e);
+    }
   },
 
   /**
@@ -45,13 +49,13 @@ export const SyllabusMasteryService = {
         topic: subjectName,
         units: syllabusStructure.units.map(u => ({
           name: u.name,
-          topics: [...u.topics]
+          topics: [...(u.topics || [])]
         })),
         mastery: {}
       };
       
       syllabusStructure.units.forEach(u => {
-        u.topics.forEach(t => {
+        (u.topics || []).forEach(t => {
           data[subjectName].mastery[t] = 0;
         });
       });
@@ -60,7 +64,8 @@ export const SyllabusMasteryService = {
     // Process each topic with dynamic feedback adjustments
     askedTopics.forEach(item => {
       const topicName = item.topic;
-      const score = item.score || 0;
+      // askedTopics entries carry { topic, metrics }; fall back to a plain score if present.
+      const score = Number.isFinite(item.score) ? item.score : (item.metrics?.correctness ?? 0);
       
       if (topicName && data[subjectName].mastery[topicName] !== undefined) {
         const current = data[subjectName].mastery[topicName];

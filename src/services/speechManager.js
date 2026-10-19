@@ -11,7 +11,7 @@ export const SpeechManager = {
   
   // Timing & Silence Settings
   silenceTimer: null,
-  silenceThresholdMs: 7500, // 7.5s silence triggers auto-submission
+  silenceThresholdMs: 9000, // 9s of silence after speech (18s before any speech) triggers auto-submission
   
   // Acoustic & Temporal analysis metrics
   lastSpeechResultTime: 0,
@@ -50,7 +50,9 @@ export const SpeechManager = {
       this.recognition = new SpeechRecognition();
       this.recognition.continuous = true;
       this.recognition.interimResults = true;
-      this.recognition.lang = "en-US";
+      // Use the browser's English locale (en-IN, en-GB...) for better accuracy; default to en-US.
+      const navLang = typeof navigator !== "undefined" ? navigator.language : "";
+      this.recognition.lang = navLang && navLang.toLowerCase().startsWith("en") ? navLang : "en-US";
 
       this.recognition.onstart = () => {
         this.isActive = true;
@@ -128,11 +130,7 @@ export const SpeechManager = {
           console.log("Speech recognition stopped natively by browser. Scheduling auto-restart...");
           this.isHotRestarting = true;
           
-          if (this.volumeInterval) {
-            clearInterval(this.volumeInterval);
-            this.volumeInterval = null;
-          }
-
+          // The volume meter interval keeps running across the restart (it skips ticks while inactive).
           setTimeout(() => {
             if (!this.shouldBeActive) return;
             try {
@@ -209,9 +207,14 @@ export const SpeechManager = {
 
       // Request media stream after a small hardware delay to prevent parallel device acquisition locks
       setTimeout(async () => {
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia && this.isActive) {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia && this.isActive && this.shouldBeActive) {
           try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            if (!this.shouldBeActive) {
+              // stop() ran while permission/hardware was resolving: release the mic immediately.
+              stream.getTracks().forEach(track => track.stop());
+              return;
+            }
             this.mediaStream = stream;
             
             // Web Audio Analyzer for Volume Level tracking
@@ -364,13 +367,17 @@ export const SpeechManager = {
     
     if (!this.isActive) return;
 
+    // Allow a longer thinking pause before anything has been said, and a fair window mid-answer.
+    const hasSpeech = !!(this.finalTranscript.trim() || this.interimTranscript.trim());
+    const waitMs = hasSpeech ? this.silenceThresholdMs : this.silenceThresholdMs * 2;
+
     this.silenceTimer = setTimeout(() => {
       this.clearSilenceTimer();
       
       if (this.onSilenceDetected) {
         this.onSilenceDetected(this.finalTranscript.trim());
       }
-    }, this.silenceThresholdMs);
+    }, waitMs);
   },
 
   /**

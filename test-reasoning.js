@@ -1,6 +1,7 @@
 async function testRaw() {
   try {
-    const apiKey = "AIzaSyB7diiZGW44bH_VTh1QP6adcWM72qD_9Pc";
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error("Set GEMINI_API_KEY in your environment first.");
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
     
     const prompt = `Act as an academic curriculum specialist. Expand the topic "Thermodynamics" into a structured syllabus with exactly 3 Units. Each Unit must have a name, and exactly 3 or 4 concise core subtopics. 

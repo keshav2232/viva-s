@@ -1,6 +1,7 @@
 async function checkKey() {
   try {
-    const apiKey = "AIzaSyB7diiZGW44bH_VTh1QP6adcWM72qD_9Pc";
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error("Set GEMINI_API_KEY in your environment first.");
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`;
     const payload = {
       contents: [{ parts: [{ text: "Respond ONLY with the word 'Active' if you receive this." }] }]
