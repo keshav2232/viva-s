@@ -6,6 +6,7 @@ import { SpeechManager } from "@/services/speechManager";
 import { EXAMINER_PERSONALITIES } from "@/utils/mockData";
 import { QuestionGraphEngine } from "@/services/QuestionGraphEngine";
 import { AnswerEvaluationService } from "@/services/AnswerEvaluationService";
+import { TurnService } from "@/services/ai/TurnService";
 import { SessionContextManager } from "@/services/SessionContextManager";
 import { HindsightEngine } from "@/services/HindsightEngine";
 import room from "./ActiveViva.module.css";
@@ -14,6 +15,9 @@ import ExaminerAvatar from "@/components/ExaminerAvatar";
 import { getQuestionCountForDuration } from "@/utils/pacing";
 
 // Helper to guarantee render purity by getting timestamp outside component scope
+// How long the examiner reaction stays on screen before the next question (its voice is fetched meanwhile).
+const REACTION_MS = 1100;
+
 function getNow() {
   return Date.now();
 }
@@ -78,7 +82,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
   const hasFinishedRef = useRef(false); // report already handed off (blocks double save)
   
   // Refs for tracking background evaluations
-  const pendingAudioEvalRef = useRef(null);
+  const pendingAudioEvalRef = useRef(null); // { qIdx, resolve } while waiting for the recorder to finalise
+  const firstQuestionPromiseRef = useRef(null); // first question is fetched while the mic check is on screen
 
   // Refs for tracking latest state values in async callbacks
   const activeQuestionRef = useRef(activeQuestion);
@@ -103,6 +108,17 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
     VoiceManager.onFailsafeActive = (msg) => {
       if (isMountedRef.current) setFailsafeWarning(msg);
     };
+
+    // Do not make the candidate wait after pressing "Ready": fetch the first question (and its
+    // voice) now, while the microphone check is still on screen.
+    if (!config.isResume && !firstQuestionPromiseRef.current) {
+      SessionContextManager.reset();
+      const pending = startFirstQuestion();
+      firstQuestionPromiseRef.current = pending;
+      pending.then((q) => {
+        if (isMountedRef.current && q) VoiceManager.preload(buildGreeting() + (q.speech || q.text), config.personality);
+      });
+    }
 
     return () => {
       isMountedRef.current = false;
@@ -346,124 +362,99 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
   }
 
   // Phase 1: Examiner Greeting
+  function startFirstQuestion() {
+    return QuestionGraphEngine.startSession({
+      syllabus: config.syllabusStructure,
+      personality: config.personality,
+      duration: config.duration,
+      isTargetDrill: config.isTargetDrill || false,
+      targetSubtopic: config.targetSubtopic || null,
+      mode: config.mode
+    });
+  }
+
+  function buildGreeting() {
+    let greeting = "";
+    if (config.mode === "professional") {
+      greeting = config.isTargetDrill 
+        ? `Welcome, ${activeUser}. Let's begin the mock session on your selected competency, ${config.targetSubtopic}. `
+        : `Welcome, ${activeUser}. Let's begin the mock interview for the ${config.topic} role. `;
+        
+      if (config.personality === "terror") {
+        greeting = config.isTargetDrill 
+          ? `Hello ${activeUser}. I am Thorne, the bar raiser. Let's immediately probe your competency on ${config.targetSubtopic}. `
+          : `Hello ${activeUser}. I am Thorne, the bar raiser for this panel. Let's begin the mock interview on ${config.topic}. `;
+      } else if (config.personality === "strict") {
+        greeting = config.isTargetDrill 
+          ? `Welcome, ${activeUser}. Let's verify your competence in ${config.targetSubtopic}. `
+          : `Welcome, ${activeUser}. Let's assess your qualifications for ${config.topic}. `;
+      } else if (config.personality === "brutal") {
+        greeting = config.isTargetDrill 
+          ? `Alright, ${activeUser}. Let's test your practical limits in ${config.targetSubtopic}. `
+          : `Alright, ${activeUser}. Let's examine your experience depth for ${config.topic}. `;
+      }
+    } else {
+      greeting = config.isTargetDrill 
+        ? `Good evening, ${activeUser}. Welcome to your dynamic target drill on ${config.targetSubtopic}. `
+        : `Good evening, ${activeUser}. Welcome to your oral examination on ${config.topic}. `;
+        
+      if (config.personality === "terror") {
+        greeting = config.isTargetDrill 
+          ? `Sit down, ${activeUser}. We will begin your high-pressure board drill on ${config.targetSubtopic} now. `
+          : `Sit down, ${activeUser}. Let us begin the examination on ${config.topic}. I expect absolute precision. `;
+      } else if (config.personality === "strict") {
+        greeting = config.isTargetDrill 
+          ? `Good evening, ${activeUser}. We will now begin a focused review on ${config.targetSubtopic}. `
+          : `Good evening, ${activeUser}. We will now begin your viva on ${config.topic}. Answer concisely. `;
+      } else if (config.personality === "brutal") {
+        greeting = config.isTargetDrill 
+          ? `Alright, ${activeUser}. Let's see if you actually understand the limits of ${config.targetSubtopic}. `
+          : `Alright, ${activeUser}. Let's see how well you actually know ${config.topic}. `;
+      }
+    }
+    return greeting;
+  }
+
+  // Speak a question; `speech` may carry a spoken greeting/reaction in front of it.
+  function speakQuestion(question, speech) {
+    setVivaState("speaking");
+    VoiceManager.speak(speech || question.speech || question.text, config.personality,
+      () => {
+        if (!isMountedRef.current) return;
+        setVisualState("speaking");
+        setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
+        startWaveAnimations();
+        if (config.personality !== "friendly" && config.enableInterruption !== false) {
+          startBackgroundListeningForInterruptions(question);
+        }
+      },
+      () => {
+        if (!isMountedRef.current) return;
+        if (interruptedRef.current) return;
+        startListeningMode();
+      }
+    );
+  }
+
   async function triggerIntroduction() {
     setVivaState("generating");
     setVisualState("analyzing");
     setStatusText(config.mode === "professional" ? "Interviewer is initializing the session..." : "Professor is initializing the exam...");
-    
-    // Reset Session Context & trigger Strategy B context caching in background
-    SessionContextManager.reset();
-    SessionContextManager.refreshSessionCache(config).catch(() => {});
-    
+
+    let firstQuestion;
     try {
-      const firstQuestion = await QuestionGraphEngine.generateNextQuestion({
-        syllabus: config.syllabusStructure,
-        personality: config.personality,
-        duration: config.duration,
-        askedList: [],
-        answersList: [],
-        lastEvaluationTag: null,
-        currentTopic: "",
-        nervousness: 20,
-        isTargetDrill: config.isTargetDrill || false,
-        targetSubtopic: config.targetSubtopic || null,
-        mode: config.mode,
-        cacheId: SessionContextManager.activeCacheId
-      });
-      
-      if (!isMountedRef.current) return;
-      
-      setActiveQuestion(firstQuestion);
-      
-      // Dynamic intro speech: combine dynamic introductory greetings based on personality and user name
-      let greeting = "";
-      if (config.mode === "professional") {
-        greeting = config.isTargetDrill 
-          ? `Welcome, ${activeUser}. Let's begin the mock session on your selected competency, ${config.targetSubtopic}. `
-          : `Welcome, ${activeUser}. Let's begin the mock interview for the ${config.topic} role. `;
-          
-        if (config.personality === "terror") {
-          greeting = config.isTargetDrill 
-            ? `Hello ${activeUser}. I am Thorne, the bar raiser. Let's immediately probe your competency on ${config.targetSubtopic}. `
-            : `Hello ${activeUser}. I am Thorne, the bar raiser for this panel. Let's begin the mock interview on ${config.topic}. `;
-        } else if (config.personality === "strict") {
-          greeting = config.isTargetDrill 
-            ? `Welcome, ${activeUser}. Let's verify your competence in ${config.targetSubtopic}. `
-            : `Welcome, ${activeUser}. Let's assess your qualifications for ${config.topic}. `;
-        } else if (config.personality === "brutal") {
-          greeting = config.isTargetDrill 
-            ? `Alright, ${activeUser}. Let's test your practical limits in ${config.targetSubtopic}. `
-            : `Alright, ${activeUser}. Let's examine your experience depth for ${config.topic}. `;
-        }
-      } else {
-        greeting = config.isTargetDrill 
-          ? `Good evening, ${activeUser}. Welcome to your dynamic target drill on ${config.targetSubtopic}. `
-          : `Good evening, ${activeUser}. Welcome to your oral examination on ${config.topic}. `;
-          
-        if (config.personality === "terror") {
-          greeting = config.isTargetDrill 
-            ? `Sit down, ${activeUser}. We will begin your high-pressure board drill on ${config.targetSubtopic} now. `
-            : `Sit down, ${activeUser}. Let us begin the examination on ${config.topic}. I expect absolute precision. `;
-        } else if (config.personality === "strict") {
-          greeting = config.isTargetDrill 
-            ? `Good evening, ${activeUser}. We will now begin a focused review on ${config.targetSubtopic}. `
-            : `Good evening, ${activeUser}. We will now begin your viva on ${config.topic}. Answer concisely. `;
-        } else if (config.personality === "brutal") {
-          greeting = config.isTargetDrill 
-            ? `Alright, ${activeUser}. Let's see if you actually understand the limits of ${config.targetSubtopic}. `
-            : `Alright, ${activeUser}. Let's see how well you actually know ${config.topic}. `;
-        }
-      }
-      
-      const fullSpeech = greeting + (firstQuestion.speech || firstQuestion.text);
-      
-      // Preload the intro speech
-      VoiceManager.preload(fullSpeech, config.personality);
- 
-      setVivaState("speaking");
-      VoiceManager.speak(fullSpeech, config.personality,
-        // onStart
-        () => {
-          setVisualState("speaking");
-          setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
-          startWaveAnimations();
-          if (config.personality !== "friendly" && config.enableInterruption !== false) {
-            startBackgroundListeningForInterruptions(firstQuestion);
-          }
-        },
-        // onEnd
-        () => {
-          if (interruptedRef.current) return;
-          startListeningMode();
-        }
-      );
+      firstQuestion = await (firstQuestionPromiseRef.current || startFirstQuestion());
     } catch (err) {
       console.error("Failed to generate first question:", err);
-      if (!isMountedRef.current) return;
-      // Fallback
-      const fallback = QuestionGraphEngine.getRuleBasedOfflineFallback(1, config.personality, config.topic, config.syllabusStructure);
-      setActiveQuestion(fallback);;
-      
-      // Preload fallback speech
-      VoiceManager.preload(fallback.speech, config.personality);
-
-      setVivaState("speaking");
-      VoiceManager.speak(fallback.speech, config.personality,
-        () => {
-          setVisualState("speaking");
-          setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
-          startWaveAnimations();
-          if (config.personality !== "friendly" && config.enableInterruption !== false) {
-            startBackgroundListeningForInterruptions(fallback);
-          }
-        },
-        () => {
-          if (interruptedRef.current) return;
-          startListeningMode();
-        }
-      );
+      firstQuestion = QuestionGraphEngine.getRuleBasedOfflineFallback(1, config.personality, config.topic, config.syllabusStructure);
     }
-  };
+    if (!isMountedRef.current) return;
+
+    setActiveQuestion(firstQuestion);
+    const fullSpeech = buildGreeting() + (firstQuestion.speech || firstQuestion.text);
+    VoiceManager.preload(fullSpeech, config.personality); // no-op when the prefetch already cached it
+    speakQuestion(firstQuestion, fullSpeech);
+  }
 
   const blobToBase64 = (blob) => {
     return new Promise((resolve, reject) => {
@@ -477,23 +468,17 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
     });
   };
 
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-  // Single-pass grading. In oral mode the recording is attached to the one evaluation call
-  // (so content AND voice are judged together). If no usable recording shows up quickly
-  // we return null and the caller grades the transcript on its own.
-  const evaluateWithAudio = async (qIdx, params) => {
-    const slot = { qIdx, params, cancelled: false, promise: null, onCapture: null };
-    const captured = new Promise((resolve) => { slot.onCapture = resolve; });
-    pendingAudioEvalRef.current = slot;
-
-    const gotAudio = await Promise.race([captured, sleep(1800).then(() => false)]);
-    if (!gotAudio) {
-      slot.cancelled = true;
-      if (pendingAudioEvalRef.current === slot) pendingAudioEvalRef.current = null;
-      return null;
-    }
-    return Promise.race([slot.promise.catch(() => null), sleep(12000).then(() => null)]);
+  // Oral mode: the recording is attached to the single grading request so content AND voice are
+  // judged together. We only wait when the recorder is still finalising (a few ms after stop()),
+  // never on a fixed timer, and give up after 700 ms.
+  const waitForAnswerAudio = async (qIdx) => {
+    if (!SpeechManager.recordingPending) return null;
+    const blob = await new Promise((resolve) => {
+      pendingAudioEvalRef.current = { qIdx, resolve };
+      setTimeout(() => resolve(null), 700);
+    });
+    pendingAudioEvalRef.current = null;
+    return blob;
   };
 
   const getOfflineHint = (topic, questionText) => {
@@ -714,18 +699,11 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
         processResponse(finalTranscriptText);
       },
       onAudioCaptured: (audioBlob) => {
-        const slot = pendingAudioEvalRef.current;
-        const qIdx = slot ? slot.qIdx : currentQuestionIndexRef.current;
+        const waiter = pendingAudioEvalRef.current;
+        const qIdx = waiter ? waiter.qIdx : currentQuestionIndexRef.current;
         const usable = audioBlob && audioBlob.size > 100;
-        if (usable) recordedAudiosRef.current[qIdx] = audioBlob;
-
-        if (slot && !slot.cancelled && usable) {
-          pendingAudioEvalRef.current = null;
-          slot.promise = blobToBase64(audioBlob).then((audioBase64) =>
-            AnswerEvaluationService.evaluateResponse({ ...slot.params, audioBase64 })
-          );
-          slot.onCapture(true);
-        }
+        if (usable) recordedAudiosRef.current[qIdx] = audioBlob; // kept for the results-page replay
+        if (waiter) waiter.resolve(usable ? audioBlob : null);
       },
       onError: (err) => {
         console.warn("React SpeechManager error:", err);
@@ -762,12 +740,12 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
       return;
     }
     const qIdxStart = currentQuestionIndexRef.current;
-    const penalties = hesitationPenaltiesRef.current;
-    const metricsVal = liveMetricsRef.current;
+    const hasPenalty = hesitationPenaltiesRef.current[qIdxStart] || false;
+    const isLast = qIdxStart + 1 >= totalQuestions;
 
     if (!answerText || answerText.length < 5) {
-      answerText = config.mode === "professional" 
-        ? "[Candidate remained silent or provided no substantive answer]" 
+      answerText = config.mode === "professional"
+        ? "[Candidate remained silent or provided no substantive answer]"
         : "[Student remained silent or provided no substantive answer]";
     }
 
@@ -781,242 +759,76 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
 
     const durationMs = getNow() - speechStartTime.current;
     const pauseCount = SpeechManager.gapsHistory.length;
-    const hasPenalty = penalties[qIdxStart] || false;
 
-    try {
-      const evalParams = {
-        question: currentQ.text,
-        answer: answerText,
-        syllabus: config.syllabusStructure,
-        speechDurationMs: durationMs,
-        pauseCount: pauseCount,
-        liveMetrics: metricsVal,
-        isHesitationPenalty: hasPenalty,
-        mode: config.mode,
-        cacheId: SessionContextManager.activeCacheId
-      };
-
-      let resultMetrics = null;
-      if (!fallbackMode) {
-        resultMetrics = await evaluateWithAudio(qIdxStart, evalParams);
+    // 1. Recording (only waits if the recorder is still finalising)
+    let audioBase64 = null;
+    if (!fallbackMode) {
+      const blob = await waitForAnswerAudio(qIdxStart);
+      if (blob) {
+        try { audioBase64 = await blobToBase64(blob); } catch (e) { console.warn("Could not encode audio:", e); }
       }
-      if (!resultMetrics) {
-        resultMetrics = await AnswerEvaluationService.evaluateResponse(evalParams);
-      }
-
-      // Track nervousness for dynamic pressure adaptations
-      latestNervousnessRef.current = resultMetrics.nervousness || 20;
-
-      // Record in SessionContextManager
-      SessionContextManager.recordRound({
-        questionText: currentQ.text,
-        answerText: answerText,
-        metrics: resultMetrics,
-        questionObj: currentQ
-      });
-
-      // Strategy B: Refresh context cache in background after recording round
-      SessionContextManager.refreshSessionCache(config).catch(() => {});
-
-      // Also record the topic asked for custom strengths computation
-      if (currentQ.topic) {
-        if (!SessionContextManager.askedTopics) {
-          SessionContextManager.askedTopics = [];
-        }
-        SessionContextManager.askedTopics.push({
-          topic: currentQ.topic,
-          metrics: resultMetrics
-        });
-      }
-
-      // Save visual reaction state
-      setLastEvalRecord({
-        correctness: resultMetrics.correctness,
-        tag: resultMetrics.tag
-      });
-
-      // Update status text based on reaction
-      let reactionText = config.mode === "professional" ? "Interviewer is noting your response..." : "Professor is noting your response...";
-      if (resultMetrics.correctness >= 75) {
-        reactionText = `${getPersonaTitle(config.personality, config.mode)} is pleased with your answer.`;
-      } else if (resultMetrics.correctness < 55 || resultMetrics.tag === "Bluffing" || resultMetrics.tag === "Incorrect") {
-        reactionText = `${getPersonaTitle(config.personality, config.mode)} looks skeptical.`;
-      }
-      setStatusText(reactionText);
-
-      // Delay transition to let user register visual reaction
-      transitionTimeoutRef.current = setTimeout(async () => {
-        if (!isMountedRef.current) return;
-        // Clear evaluation reaction so face resets
-        setLastEvalRecord(null);
-
-        // Progress to next question or end
-        const qIndex = qIdxStart + 1;
-        if (qIndex >= totalQuestions) {
-          handleFinish(false);
-          return;
-        }
-
-        hasHesitatedInCurrentRoundRef.current = false;
-        setCurrentQuestionIndex(qIndex);
-        setVivaState("generating");
-        setVisualState("analyzing");
-        setStatusText(config.mode === "professional" ? "Formulating next interview question..." : "Formulating next question...");
-
-        try {
-          const nextQuestion = await QuestionGraphEngine.generateNextQuestion({
-            syllabus: config.syllabusStructure,
-            personality: config.personality,
-            duration: config.duration,
-            askedList: SessionContextManager.askedQuestions,
-            answersList: SessionContextManager.answerTranscripts,
-            lastEvaluationTag: resultMetrics.tag,
-            currentTopic: currentQ.topic,
-            nervousness: latestNervousnessRef.current,
-            isTargetDrill: config.isTargetDrill || false,
-            targetSubtopic: config.targetSubtopic || null,
-            mode: config.mode,
-            cacheId: SessionContextManager.activeCacheId
-          });
-
-          if (!isMountedRef.current) return;
-
-          setActiveQuestion(nextQuestion);
-          // Preload next question speech!
-          VoiceManager.preload(nextQuestion.speech, config.personality);
-
-          setVivaState("speaking");
-          VoiceManager.speak(nextQuestion.speech, config.personality,
-            () => {
-              if (!isMountedRef.current) return;
-              setVisualState("speaking");
-              setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
-              startWaveAnimations();
-              if (config.personality !== "friendly" && config.enableInterruption !== false) {
-                startBackgroundListeningForInterruptions(nextQuestion);
-              }
-            },
-            () => {
-              if (!isMountedRef.current) return;
-              if (interruptedRef.current) return;
-              startListeningMode();
-            }
-          );
-        } catch (nextErr) {
-          console.error("Failed to generate next question in delayed block:", nextErr);
-          if (!isMountedRef.current) return;
-          // Catch and handle fallback inside delayed try
-          const qIdx = qIdxStart + 1;
-          setCurrentQuestionIndex(qIdx);
-          setVivaState("generating");
-          setVisualState("analyzing");
-          setStatusText(config.mode === "professional" ? "Formulating next interview question..." : "Formulating next question...");
-
-          const nextQuestion = QuestionGraphEngine.getRuleBasedOfflineFallback(qIdx + 1, config.personality, currentQ.topic, config.syllabusStructure);
-          setActiveQuestion(nextQuestion);
-          VoiceManager.preload(nextQuestion.speech, config.personality);
-
-          setVivaState("speaking");
-          VoiceManager.speak(nextQuestion.speech, config.personality,
-            () => {
-              if (!isMountedRef.current) return;
-              setVisualState("speaking");
-              setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
-              startWaveAnimations();
-              if (config.personality !== "friendly" && config.enableInterruption !== false) {
-                startBackgroundListeningForInterruptions(nextQuestion);
-              }
-            },
-            () => {
-              if (!isMountedRef.current) return;
-              if (interruptedRef.current) return;
-              startListeningMode();
-            }
-          );
-        }
-      }, 3200);
-
-    } catch (err) {
-      console.error("Failed to process answer evaluation:", err);
-      // Heuristic fallback if server error
-      const localDelivery = AnswerEvaluationService.calculateLocalDeliveryMetrics(answerText, durationMs, pauseCount);
-      const hasPenalty = penalties[qIdxStart] || false;
-      const delivery = metricsVal ? { ...localDelivery, ...metricsVal } : localDelivery;
-      const fallbackMetrics = AnswerEvaluationService.getLocalFallbackMetrics(delivery, answerText, hasPenalty);
-      
-      SessionContextManager.recordRound({
-        questionText: currentQ.text,
-        answerText: answerText,
-        metrics: fallbackMetrics,
-        questionObj: currentQ
-      });
-
-      if (!SessionContextManager.askedTopics) {
-        SessionContextManager.askedTopics = [];
-      }
-      SessionContextManager.askedTopics.push({
-        topic: currentQ.topic || (config.mode === "professional" ? "Role Core Competence" : "Syllabus Fundamentals"),
-        metrics: fallbackMetrics
-      });
-
-      // Save visual reaction state
-      setLastEvalRecord({
-        correctness: fallbackMetrics.correctness,
-        tag: fallbackMetrics.tag
-      });
-
-      // Update status text based on reaction
-      let reactionText = config.mode === "professional" ? "Interviewer is noting your response..." : "Professor is noting your response...";
-      if (fallbackMetrics.correctness >= 75) {
-        reactionText = `${getPersonaTitle(config.personality, config.mode)} is pleased with your answer.`;
-      } else if (fallbackMetrics.correctness < 55 || fallbackMetrics.tag === "Bluffing" || fallbackMetrics.tag === "Incorrect") {
-        reactionText = `${getPersonaTitle(config.personality, config.mode)} looks skeptical.`;
-      }
-      setStatusText(reactionText);
-
-      // Delay transition to let user register visual reaction
-      transitionTimeoutRef.current = setTimeout(() => {
-        if (!isMountedRef.current) return;
-        // Clear evaluation reaction so face resets
-        setLastEvalRecord(null);
-
-        const qIndex = qIdxStart + 1;
-        if (qIndex >= totalQuestions) {
-          handleFinish(false);
-          return;
-        }
-
-        hasHesitatedInCurrentRoundRef.current = false;
-        setCurrentQuestionIndex(qIndex);
-        setVivaState("generating");
-        setVisualState("analyzing");
-        setStatusText(config.mode === "professional" ? "Formulating next interview question..." : "Formulating next question...");
-
-        const nextQuestion = QuestionGraphEngine.getRuleBasedOfflineFallback(qIndex + 1, config.personality, currentQ.topic, config.syllabusStructure);
-        setActiveQuestion(nextQuestion);
-        // Preload next question speech!
-        VoiceManager.preload(nextQuestion.speech, config.personality);
-
-        setVivaState("speaking");
-        VoiceManager.speak(nextQuestion.speech, config.personality,
-          () => {
-            if (!isMountedRef.current) return;
-            setVisualState("speaking");
-            setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
-            startWaveAnimations();
-            if (config.personality !== "friendly" && config.enableInterruption !== false) {
-              startBackgroundListeningForInterruptions(nextQuestion);
-            }
-          },
-          () => {
-            if (!isMountedRef.current) return;
-            if (interruptedRef.current) return;
-            startListeningMode();
-          }
-        );
-      }, 3200);
     }
-  };
+
+    // 2. ONE request: grade this answer AND get the next question
+    const turn = await TurnService.submitTurn({
+      config,
+      question: currentQ,
+      answer: answerText,
+      rounds: SessionContextManager.getRounds(),
+      audioBase64,
+      durationMs,
+      pauseCount,
+      liveMetrics: liveMetricsRef.current,
+      nervousness: latestNervousnessRef.current,
+      hasPenalty,
+      isLast,
+      questionNumber: qIdxStart + 1
+    });
+    if (!isMountedRef.current || hasFinishedRef.current) return;
+
+    const resultMetrics = turn.metrics;
+    latestNervousnessRef.current = resultMetrics.nervousness || 20;
+
+    SessionContextManager.recordRound({
+      questionText: currentQ.text,
+      answerText,
+      metrics: resultMetrics,
+      questionObj: currentQ
+    });
+    if (!SessionContextManager.askedTopics) SessionContextManager.askedTopics = [];
+    SessionContextManager.askedTopics.push({
+      topic: currentQ.topic || (config.mode === "professional" ? "Role Core Competence" : "Syllabus Fundamentals"),
+      metrics: resultMetrics
+    });
+
+    // 3. Show the examiner reaction while the next question voice is already being prepared
+    setLastEvalRecord({ correctness: resultMetrics.correctness, tag: resultMetrics.tag });
+    let reactionText = config.mode === "professional" ? "Interviewer is noting your response..." : "Professor is noting your response...";
+    if (resultMetrics.correctness >= 75) {
+      reactionText = `${getPersonaTitle(config.personality, config.mode)} is pleased with your answer.`;
+    } else if (resultMetrics.correctness < 55 || resultMetrics.tag === "Bluffing") {
+      reactionText = `${getPersonaTitle(config.personality, config.mode)} looks skeptical.`;
+    }
+    setStatusText(reactionText);
+
+    const nextQuestion = isLast
+      ? null
+      : (turn.next || QuestionGraphEngine.getRuleBasedOfflineFallback(qIdxStart + 2, config.personality, currentQ.topic, config.syllabusStructure));
+    if (nextQuestion) VoiceManager.preload(nextQuestion.speech || nextQuestion.text, config.personality);
+
+    transitionTimeoutRef.current = setTimeout(() => {
+      if (!isMountedRef.current) return;
+      setLastEvalRecord(null);
+      if (isLast) {
+        handleFinish(false);
+        return;
+      }
+      hasHesitatedInCurrentRoundRef.current = false;
+      setCurrentQuestionIndex(qIdxStart + 1);
+      setActiveQuestion(nextQuestion);
+      speakQuestion(nextQuestion);
+    }, REACTION_MS);
+  }
 
   const handlePauseSession = () => {
     stopAudioStreams();

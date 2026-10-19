@@ -1,4 +1,3 @@
-import { vivaFetch } from "@/utils/apiClient";
 /**
  * VivaSim - Answer Evaluation Service
  * Combines server-side Gemini semantic text grading (correctness, accuracy, tags)
@@ -14,107 +13,58 @@ const clampScore = (v, fallback) => {
 export const AnswerEvaluationService = {
   
   /**
-   * Evaluates the student transcript against asked question and syllabus contexts.
-   * @param {object} params - { question, answer, syllabus, speechDurationMs, pauseCount }
-   * @returns {Promise<object>} Combined metrics { confidence, clarity, nervousness, hesitation, correctness, accuracy, completeness, tag }
+   * Merges the server's grading (content scores, and voice scores when audio was sent) with the
+   * browser's own delivery measurements into the metrics object the rest of the app uses.
+   * No network here: grading now arrives inside the combined `turn` response.
    */
-  async evaluateResponse(params) {
-    const { question, syllabus, speechDurationMs, liveMetrics, isHesitationPenalty, mode, audioBase64, cacheId } = params;
-    const answer = typeof params.answer === "string" ? params.answer : "";
-    const pauseCount = Number.isFinite(params.pauseCount) ? params.pauseCount : 0;
+  buildMetrics(rawGrading, delivery, isHesitationPenalty = false) {
+    if (!rawGrading || typeof rawGrading !== "object") throw new Error("Malformed grading payload");
 
-    // 1. Calculate local acoustic/delivery metrics (prefer live-tracked metrics)
-    const local = this.calculateLocalDeliveryMetrics(answer, speechDurationMs, pauseCount);
-    const delivery = liveMetrics ? { ...local, ...liveMetrics } : local;
+    // Never trust model output shape: clamp every score to 0-100 and whitelist the tag.
+    const g = {
+      ...rawGrading,
+      correctness: clampScore(rawGrading.correctness, 60),
+      accuracy: clampScore(rawGrading.accuracy, 60),
+      completeness: clampScore(rawGrading.completeness, 60),
+      clarity: rawGrading.clarity === undefined ? undefined : clampScore(rawGrading.clarity, 70),
+      confidence: rawGrading.confidence === undefined ? undefined : clampScore(rawGrading.confidence, 70),
+      nervousness: rawGrading.nervousness === undefined ? undefined : clampScore(rawGrading.nervousness, 30),
+      hesitation: rawGrading.hesitation === undefined ? undefined : clampScore(rawGrading.hesitation, 20),
+      tag: VALID_TAGS.includes(rawGrading.tag) ? rawGrading.tag : "Partially Correct"
+    };
 
-    try {
-      // 2. Call server-side Gemini AI for semantic evaluations
-      const response = await vivaFetch({
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "evaluate-answer",
-          question,
-          answer,
-          syllabus,
-          mode,
-          audioBase64,
-          cacheId: cacheId || null,
-          speechDurationMs,
-          pauseCount,
-          delivery
-        })
-      });
+    // Without audio the server returns no voice scores: fall back to the local estimates,
+    // nudging confidence by how the content was judged.
+    const adjust = g.tag === "Strong" ? 10 : g.tag === "Weak" ? -15 : g.tag === "Bluffing" ? -20 : 0;
 
-      if (!response.ok) throw new Error("Evaluation API request failed");
-      const rawGrading = await response.json();
-      if (!rawGrading || typeof rawGrading !== "object" || Array.isArray(rawGrading)) throw new Error("Malformed evaluation payload");
-
-      // Never trust model output shape: clamp every score to 0-100 and whitelist the tag.
-      const semanticGrading = {
-        ...rawGrading,
-        correctness: clampScore(rawGrading.correctness, 60),
-        accuracy: clampScore(rawGrading.accuracy, 60),
-        completeness: clampScore(rawGrading.completeness, 60),
-        clarity: rawGrading.clarity === undefined ? undefined : clampScore(rawGrading.clarity, 70),
-        confidence: rawGrading.confidence === undefined ? undefined : clampScore(rawGrading.confidence, 70),
-        nervousness: rawGrading.nervousness === undefined ? undefined : clampScore(rawGrading.nervousness, 30),
-        hesitation: rawGrading.hesitation === undefined ? undefined : clampScore(rawGrading.hesitation, 20),
-        tag: VALID_TAGS.includes(rawGrading.tag) ? rawGrading.tag : "Partially Correct"
-      };
-
-      // Adjust dynamic nervousness and confidence based on AI grading results if Gemini didn't return them directly
-      let confAdjustment = 0;
-      if (semanticGrading.tag === "Strong") confAdjustment = 10;
-      else if (semanticGrading.tag === "Weak") confAdjustment = -15;
-      else if (semanticGrading.tag === "Bluffing") confAdjustment = -20;
-
-      const finalConfidence = semanticGrading.confidence !== undefined
-        ? semanticGrading.confidence
-        : Math.min(Math.max(delivery.confidence + confAdjustment, 30), 98);
-
-      const finalClarity = semanticGrading.clarity !== undefined
-        ? semanticGrading.clarity
-        : delivery.clarity;
-
-      const finalNervousness = semanticGrading.nervousness !== undefined
-        ? semanticGrading.nervousness
-        : delivery.nervousness;
-
-      const finalHesitation = semanticGrading.hesitation !== undefined
-        ? semanticGrading.hesitation
-        : delivery.hesitation;
-
-      if (isHesitationPenalty) {
-        semanticGrading.correctness = Math.max(Math.round(semanticGrading.correctness * 0.8), 0);
-        semanticGrading.accuracy = Math.max(Math.round(semanticGrading.accuracy * 0.8), 0);
-        semanticGrading.tag = "Partially Correct";
-      }
-
-      return {
-        // Combined metrics
-        confidence: finalConfidence,
-        clarity: finalClarity,
-        nervousness: finalNervousness,
-        hesitation: finalHesitation,
-        wpm: delivery.wpm || 120,
-        fillerCount: delivery.fillerCount || 0,
-        
-        // Gemini Chain-of-Thought & rubric grading outputs
-        rationale: semanticGrading.rationale || "Evaluated response based on factual accuracy, technical completeness, and structural fluency.",
-        keyStrengths: Array.isArray(semanticGrading.keyStrengths) ? semanticGrading.keyStrengths : [],
-        missingConcepts: Array.isArray(semanticGrading.missingConcepts) ? semanticGrading.missingConcepts : [],
-        correctness: semanticGrading.correctness,
-        accuracy: semanticGrading.accuracy,
-        completeness: semanticGrading.completeness,
-        tag: semanticGrading.tag,
-        correctAnswer: semanticGrading.correctAnswer
-      };
-
-    } catch (e) {
-      console.warn("AnswerEvaluationService API error. Falling back to clean local calculations:", e);
-      return this.getLocalFallbackMetrics(delivery, answer, isHesitationPenalty);
+    if (isHesitationPenalty) {
+      g.correctness = Math.max(Math.round(g.correctness * 0.8), 0);
+      g.accuracy = Math.max(Math.round(g.accuracy * 0.8), 0);
+      g.tag = "Partially Correct";
     }
+
+    return {
+      confidence: g.confidence !== undefined ? g.confidence : Math.min(Math.max(delivery.confidence + adjust, 30), 98),
+      clarity: g.clarity !== undefined ? g.clarity : delivery.clarity,
+      nervousness: g.nervousness !== undefined ? g.nervousness : delivery.nervousness,
+      hesitation: g.hesitation !== undefined ? g.hesitation : delivery.hesitation,
+      wpm: delivery.wpm || 120,
+      fillerCount: delivery.fillerCount || 0,
+      rationale: g.rationale || "Evaluated on factual accuracy, technical completeness and structure.",
+      keyStrengths: Array.isArray(g.keyStrengths) ? g.keyStrengths : [],
+      missingConcepts: Array.isArray(g.missingConcepts) ? g.missingConcepts : [],
+      correctness: g.correctness,
+      accuracy: g.accuracy,
+      completeness: g.completeness,
+      tag: g.tag,
+      correctAnswer: g.correctAnswer
+    };
+  },
+
+  /** Delivery metrics for an answer: local estimates, overridden by the live-tracked ones. */
+  buildDelivery(answer, speechDurationMs, pauseCount, liveMetrics) {
+    const local = this.calculateLocalDeliveryMetrics(answer, speechDurationMs, pauseCount);
+    return liveMetrics ? { ...local, ...liveMetrics } : local;
   },
 
   /**

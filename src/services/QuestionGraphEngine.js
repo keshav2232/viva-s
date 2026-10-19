@@ -8,40 +8,24 @@ import { vivaFetch } from "@/utils/apiClient";
 export const QuestionGraphEngine = {
   
   /**
-   * Generates the next question by compiling the session memory and requesting the API route.
-   * @param {object} params - { syllabus, personality, duration, askedList, answersList, lastEvaluationTag, currentTopic }
-   * @returns {Promise<object>} The next question node { text, speech, topic, difficulty }
+   * First question of a session (later questions arrive inside the combined `turn` response,
+   * see TurnService). Falls back to the offline question bank if the server is unreachable.
    */
-  async generateNextQuestion(params) {
-    const { syllabus, personality, duration, askedList, answersList, lastEvaluationTag, currentTopic, nervousness, isTargetDrill, targetSubtopic, mode, cacheId } = params;
-
+  async startSession(params) {
+    const { syllabus, personality, duration, isTargetDrill, targetSubtopic, mode } = params;
     try {
       const response = await vivaFetch({
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "generate-question",
-          syllabus,
-          personality,
-          duration,
-          asked: askedList,
-          history: answersList,
-          lastTag: lastEvaluationTag,
-          activeTopic: currentTopic,
-          nervousness: nervousness || 0,
-          isTargetDrill,
-          targetSubtopic,
-          mode,
-          cacheId: cacheId || null
-        })
+        body: JSON.stringify({ action: "start-session", syllabus, personality, duration, isTargetDrill, targetSubtopic, mode })
       });
-
-      if (!response.ok) throw new Error("Question generation API call failed");
-      const questionNode = await response.json();
-      return questionNode;
+      if (!response.ok) throw new Error("Start-session request failed");
+      const data = await response.json();
+      if (!data?.next?.text) throw new Error("Start-session returned no question");
+      return data.next;
     } catch (e) {
-      console.warn("QuestionGraphEngine API error. Falling back to rule-based offline generation:", e);
-      return this.getRuleBasedOfflineFallback(askedList.length + 1, personality, currentTopic, syllabus);
+      console.warn("QuestionGraphEngine: using offline question bank:", e);
+      return this.getRuleBasedOfflineFallback(1, personality, syllabus?.topic, syllabus);
     }
   },
 

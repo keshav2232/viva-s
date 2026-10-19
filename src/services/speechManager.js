@@ -31,6 +31,7 @@ export const SpeechManager = {
   volumeInterval: null,
   lastError: null,
   isHotRestarting: false,
+  recordingPending: false, // true from recorder start until its final blob has been delivered
   shouldBeActive: false,
   pendingCallbacks: null,
 
@@ -286,6 +287,7 @@ export const SpeechManager = {
             };
             
             recorder.onstop = () => {
+              this.recordingPending = false;
               const blob = new Blob(this.audioChunks, { type: mimeType });
               if (activeAudioCallback && blob.size > 100) {
                 activeAudioCallback(blob);
@@ -299,6 +301,7 @@ export const SpeechManager = {
             };
             
             recorder.start();
+            this.recordingPending = true;
           } catch (mediaErr) {
             console.warn("Unable to capture microphone stream for recording:", mediaErr);
           }
