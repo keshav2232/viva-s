@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="70" viewBox="-1.5 -1.5 141 35" fill="none" role="img" aria-label="PrepSim AI">
+  <path d="M3 6 15 0l12 6v14l-12 7V14l12-8M3 6v20l12 6v-5M3 6l12 8" stroke="#9f5a3f" stroke-width="2.2" stroke-linejoin="round"/>
+  <text x="38" y="23.5" fill="#2e392e" font-family="Inter, Arial, Helvetica, sans-serif" font-size="23" font-weight="650" letter-spacing="-1">PrepSim</text>
+  <text x="125" y="10" fill="#2e392e" font-family="Inter, Arial, Helvetica, sans-serif" font-size="9" font-weight="600">AI</text>
+</svg>

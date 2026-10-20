@@ -72,7 +72,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
   
   // Live Biometric Synchronization
   const [liveMetrics, setLiveMetrics] = useState({ confidence: 85, nervousness: 15, clarity: 80, hesitation: 10 });
-  const [liveStatusText, setLiveStatusText] = useState("Calibration active. Ready.");
   const liveTrackerRef = useRef(null);
 
   const introTimeoutRef = useRef(null);
@@ -273,19 +272,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
           clarity: clar,
           hesitation: hes
         });
-
-        // Live dynamic status chips
-        let status = "System calibrated. Monitoring...";
-        if (nerv > 45) {
-          status = "Warning: Stress Levels Spiking";
-        } else if (hes > 35) {
-          status = "Speech Interruption: Pacing Hesitation";
-        } else if (conf > 85 && clar > 80) {
-          status = "Excellent: Highly Articulate & Confident";
-        } else if (wordCount > 0) {
-          status = "Vocal Stream Locked. Analyzing...";
-        }
-        setLiveStatusText(status);
 
       }, 350);
 
@@ -1038,7 +1024,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
           color: "hsl(25, 85%, 36%)",
           padding: "8px var(--space-md)",
           borderRadius: "var(--radius-full)",
-          fontSize: "0.8rem",
+          fontSize: "0.875rem",
           fontWeight: "600",
           display: "flex",
           alignItems: "center",
@@ -1137,84 +1123,12 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
                   setFallbackMode(true);
                   triggerKeyboardFallback();
                 }}
-                style={{ fontSize: "0.8rem", padding: "4px 12px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-color)", cursor: "pointer", transition: "var(--transition-smooth)" }}
+                style={{ fontSize: "0.875rem", padding: "4px 12px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-color)", cursor: "pointer", transition: "var(--transition-smooth)" }}
               >
                 Switch to Keyboard Input
               </button>
             )}
           </div>
-
-          {/* Biometric live prosody synchronizer */}
-          {vivaState === "listening" && (
-            <div className="biometric-sync-panel">
-              <div className="biometric-header">
-                <span className="biometric-pulse"></span>
-                <span>{config.mode === "professional" ? "Candidate Biometric Sync" : "Student Biometric Sync"}</span>
-              </div>
-              <div className="biometric-grid">
-                
-                {/* Confidence */}
-                <div className="biometric-metric-row">
-                  <div className="biometric-label-container">
-                    <span className="biometric-label">Vocal Confidence</span>
-                    <span className="biometric-value">{liveMetrics.confidence}%</span>
-                  </div>
-                  <div className="biometric-progress-container">
-                    <div 
-                      className={`biometric-progress-bar biometric-bar-confidence ${liveMetrics.confidence >= 80 ? 'high' : ''}`}
-                      style={{ width: `${liveMetrics.confidence}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Nervousness */}
-                <div className="biometric-metric-row">
-                  <div className="biometric-label-container">
-                    <span className="biometric-label">Nervousness Index</span>
-                    <span className="biometric-value">{liveMetrics.nervousness}%</span>
-                  </div>
-                  <div className="biometric-progress-container">
-                    <div 
-                      className={`biometric-progress-bar biometric-bar-nervousness ${liveMetrics.nervousness >= 50 ? 'high' : ''}`}
-                      style={{ width: `${liveMetrics.nervousness}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Clarity */}
-                <div className="biometric-metric-row">
-                  <div className="biometric-label-container">
-                    <span className="biometric-label">Phonetic Clarity</span>
-                    <span className="biometric-value">{liveMetrics.clarity}%</span>
-                  </div>
-                  <div className="biometric-progress-container">
-                    <div 
-                      className="biometric-progress-bar biometric-bar-clarity"
-                      style={{ width: `${liveMetrics.clarity}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Hesitation */}
-                <div className="biometric-metric-row">
-                  <div className="biometric-label-container">
-                    <span className="biometric-label">Hesitation Rate</span>
-                    <span className="biometric-value">{liveMetrics.hesitation}%</span>
-                  </div>
-                  <div className="biometric-progress-container">
-                    <div 
-                      className="biometric-progress-bar biometric-bar-hesitation"
-                      style={{ width: `${liveMetrics.hesitation}%` }}
-                    />
-                  </div>
-                </div>
-
-              </div>
-              <div className={`biometric-status-chip ${liveMetrics.nervousness >= 45 ? 'alert' : liveMetrics.confidence >= 80 ? 'stable' : ''}`}>
-                {liveStatusText}
-              </div>
-            </div>
-          )}
 
           <div className="transcript-stage-card">
             <span className="transcript-label" id="transcript-speaker-label">
@@ -1227,7 +1141,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
             {/* Fallback keyboard block */}
             {fallbackMode && (
               <div id="viva-keyboard-fallback" style={{ display: "block", marginTop: "var(--space-md)", borderTop: "1px solid var(--border-color)", paddingTop: "var(--space-sm)" }}>
-                <label className="form-label" htmlFor="viva-fallback-input" style={{ fontSize: "0.75rem" }}>Type your answer below and press Enter or Submit:</label>
+                <label className="form-label" htmlFor="viva-fallback-input" style={{ fontSize: "0.85rem" }}>Type your answer below and press Enter or Submit:</label>
                 <textarea 
                   className="form-input" 
                   id="viva-fallback-input" 
@@ -1259,10 +1173,10 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
           
           <div className="viva-card-controls">
             <div style={{ display: "flex", gap: "var(--space-xs)" }}>
-              <button className="btn btn-secondary" onClick={handlePauseSession} style={{ fontSize: "0.85rem", padding: "8px 16px" }}>
+              <button className="btn btn-secondary" onClick={handlePauseSession} style={{ fontSize: "0.9rem", padding: "8px 16px" }}>
                 {config.mode === "professional" ? "Pause Interview" : "Pause Exam"}
               </button>
-              <button className="btn btn-secondary" onClick={() => handleFinish(true)} style={{ fontSize: "0.85rem", padding: "8px 16px", color: "var(--color-error)", borderColor: "var(--color-error-bg)" }}>
+              <button className="btn btn-secondary" onClick={() => handleFinish(true)} style={{ fontSize: "0.9rem", padding: "8px 16px", color: "var(--color-error)", borderColor: "var(--color-error-bg)" }}>
                 {config.mode === "professional" ? "End Interview" : "End Exam"}
               </button>
             </div>
@@ -1271,7 +1185,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
               id="btn-next-question" 
               onClick={handleSubmit}
               disabled={vivaState !== "listening"}
-              style={{ fontSize: "0.85rem", padding: "8px 20px" }}
+              style={{ fontSize: "0.9rem", padding: "8px 20px" }}
             >
               Submit Answer
             </button>

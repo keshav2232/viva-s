@@ -15,10 +15,10 @@ html {
 
   --text-primary: hsl(220, 12%, 15%);
   /* Sophisticated dark charcoal (#222427) */
-  --text-secondary: hsl(220, 6%, 45%);
-  /* Muted grey for subtexts and meta */
-  --text-muted: hsl(220, 4%, 60%);
-  /* Light gray for borders and small detail labels */
+  --text-secondary: hsl(220, 8%, 34%);
+  /* Grey for subtexts and meta (about 8:1 on white) */
+  --text-muted: hsl(220, 6%, 41%);
+  /* Small detail labels; still passes WCAG AA (about 5.6:1 on white) */
 
   --accent-primary: hsl(215, 32%, 18%);
   /* Elegant Deep Navy (#1F2A38) */
@@ -79,8 +79,6 @@ html {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
@@ -204,7 +202,7 @@ header {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   font-weight: 600;
 }
 
@@ -511,7 +509,7 @@ p {
   align-items: center;
   text-align: center;
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   font-weight: 500;
   margin: var(--space-lg) 0;
 }
@@ -624,7 +622,7 @@ p {
 }
 
 .stat-label {
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -640,7 +638,7 @@ p {
 }
 
 .stat-sub {
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   color: var(--color-success);
   font-weight: 500;
 }
@@ -691,7 +689,7 @@ p {
   display: flex;
   align-items: center;
   gap: var(--space-md);
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: var(--text-secondary);
   flex-wrap: wrap;
 }
@@ -739,7 +737,7 @@ p {
 }
 
 .session-date {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: var(--text-muted);
 }
 
@@ -791,13 +789,13 @@ p {
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: var(--text-secondary);
   transition: var(--transition-smooth);
 }
 
 .step-label {
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -894,7 +892,7 @@ p {
 
 .suggestion-pill {
   cursor: pointer;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   padding: 6px 12px;
   background-color: var(--bg-primary);
   border: 1px solid var(--border-color);
@@ -987,7 +985,7 @@ p {
 }
 
 .personality-desc {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: var(--text-secondary);
 }
 
@@ -999,7 +997,7 @@ p {
 }
 
 .attribute-tag {
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   font-weight: 600;
   padding: 2px 8px;
   border-radius: var(--radius-full);
@@ -1051,7 +1049,7 @@ p {
 }
 
 .preview-label {
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-weight: 600;
@@ -1201,7 +1199,7 @@ p {
 }
 
 .examiner-status-tag {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 600;
   color: var(--text-secondary);
   display: flex;
@@ -1373,7 +1371,7 @@ p {
 }
 
 .mic-subtext {
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -1394,7 +1392,7 @@ p {
 }
 
 .transcript-label {
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   text-transform: uppercase;
   font-weight: 600;
   letter-spacing: 0.05em;
@@ -1442,7 +1440,7 @@ p {
 }
 
 .viva-question-number {
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -1492,7 +1490,7 @@ p {
 }
 
 .results-subject-tag {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   background-color: var(--accent-light);
   color: var(--accent-primary);
   padding: var(--space-xs) var(--space-sm);
@@ -1572,7 +1570,7 @@ p {
 }
 
 .radial-score-desc {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: var(--text-secondary);
 }
 
@@ -1605,7 +1603,7 @@ p {
 .emotion-header {
   display: flex;
   justify-content: space-between;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 600;
 }
 
@@ -1753,7 +1751,7 @@ p {
   border: 1px solid var(--border-color);
   padding: 6px 14px;
   border-radius: var(--radius-full);
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 600;
   color: var(--text-secondary);
   display: flex;
@@ -1793,7 +1791,7 @@ p {
 }
 
 .graph-axis-label {
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   font-weight: 600;
   fill: var(--text-muted);
 }
@@ -1829,7 +1827,7 @@ p {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-xs);
   padding: var(--space-xs) var(--space-sm);
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   font-weight: 500;
   box-shadow: var(--shadow-subtle);
   display: flex;
@@ -1923,7 +1921,7 @@ p {
   align-items: center;
   gap: 8px;
   font-family: 'Plus Jakarta Sans', sans-serif;
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   font-weight: 800;
   letter-spacing: 0.05em;
   color: var(--text-primary);
@@ -1976,14 +1974,14 @@ p {
 }
 
 .biometric-label {
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
 }
 
 .biometric-value {
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--text-primary);
@@ -2032,7 +2030,7 @@ p {
 
 .biometric-status-chip {
   align-self: flex-start;
-  font-size: 0.65rem;
+  font-size: 0.8rem;
   font-weight: 700;
   text-transform: uppercase;
   color: var(--text-secondary);
@@ -2180,7 +2178,7 @@ p {
 }
 
 .logo-brand-subtitle {
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: #64748b;
   letter-spacing: 0.05em;
@@ -2385,7 +2383,7 @@ p {
   align-items: center;
   text-align: center;
   color: #94a3b8;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 500;
   margin: 24px 0;
 }
@@ -2661,7 +2659,7 @@ p {
 }
 
 .feature-desc {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: #64748b;
   line-height: 1.45;
 }
@@ -2681,7 +2679,7 @@ p {
 }
 
 .copyright-text {
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   color: #94a3b8;
   font-weight: 500;
 }
@@ -2887,7 +2885,7 @@ p {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
 }
 
 .filler-bar-label {
@@ -2897,7 +2895,7 @@ p {
 }
 
 .filler-bar-count {
-  font-size: 0.775rem;
+  font-size: 0.85rem;
   color: var(--text-secondary);
   font-weight: 500;
 }
@@ -2970,7 +2968,7 @@ p {
 }
 
 .fluency-metric-title {
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   text-transform: uppercase;
   color: var(--text-secondary);
   font-weight: 600;
@@ -2984,7 +2982,7 @@ p {
 }
 
 .fluency-metric-desc {
-  font-size: 0.725rem;
+  font-size: 0.8rem;
   color: var(--text-muted);
   line-height: 1.3;
 }
@@ -3210,7 +3208,7 @@ svg path[stroke="var(--color-warning)"] {
 
 .story-nav-label {
   font-family: 'Plus Jakarta Sans', sans-serif;
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   font-weight: 700;
   color: var(--text-secondary);
   background-color: #ffffff;
@@ -3261,7 +3259,7 @@ svg path[stroke="var(--color-warning)"] {
 
 .nav-item-link {
   font-family: 'Plus Jakarta Sans', sans-serif;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   font-weight: 700;
   color: var(--text-secondary);
   background: none;
@@ -3284,7 +3282,7 @@ svg path[stroke="var(--color-warning)"] {
   border-radius: var(--radius-sm);
   padding: 10px 20px;
   font-family: 'Plus Jakarta Sans', sans-serif;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 700;
   cursor: pointer;
   box-shadow: 0 4px 10px rgba(15, 23, 42, 0.15);
@@ -3394,7 +3392,7 @@ svg path[stroke="var(--color-warning)"] {
 
 .hero-badge {
   display: inline-block;
-  font-size: 0.68rem;
+  font-size: 0.8rem;
   font-weight: 800;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -3514,7 +3512,7 @@ svg path[stroke="var(--color-warning)"] {
 
 .telemetry-status {
   font-family: 'Plus Jakarta Sans', sans-serif;
-  font-size: 0.68rem;
+  font-size: 0.8rem;
   font-weight: 800;
   letter-spacing: 0.05em;
   color: var(--text-secondary);
@@ -3571,7 +3569,7 @@ svg path[stroke="var(--color-warning)"] {
 }
 
 .metric-label {
-  font-size: 0.62rem;
+  font-size: 0.8rem;
   font-weight: 800;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -3682,7 +3680,7 @@ svg path[stroke="var(--color-warning)"] {
 }
 
 .feat-number {
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   font-weight: 800;
   color: #2563eb;
   background-color: #eff6ff;
@@ -3696,7 +3694,7 @@ svg path[stroke="var(--color-warning)"] {
 
 .feat-title {
   font-family: 'Plus Jakarta Sans', sans-serif;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 700;
   color: #0f172a;
 }
@@ -3724,7 +3722,7 @@ svg path[stroke="var(--color-warning)"] {
 
 .explorer-badge {
   display: inline-block;
-  font-size: 0.65rem;
+  font-size: 0.8rem;
   font-weight: 800;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -3744,7 +3742,7 @@ svg path[stroke="var(--color-warning)"] {
 }
 
 .explorer-desc {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: var(--text-secondary);
   line-height: 1.4;
 }
@@ -3766,7 +3764,7 @@ svg path[stroke="var(--color-warning)"] {
   border-radius: 6px;
   padding: 10px 6px;
   font-family: 'Plus Jakarta Sans', sans-serif;
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   font-weight: 700;
   cursor: pointer;
   color: var(--text-secondary);
@@ -3797,14 +3795,14 @@ svg path[stroke="var(--color-warning)"] {
 }
 
 .syllabus-code {
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   font-weight: 800;
   color: var(--text-muted);
   letter-spacing: 0.05em;
 }
 
 .syllabus-difficulty {
-  font-size: 0.65rem;
+  font-size: 0.8rem;
   font-weight: 800;
   padding: 2px 6px;
   border-radius: 4px;
@@ -3839,7 +3837,7 @@ svg path[stroke="var(--color-warning)"] {
 
 .topics-label {
   font-family: 'Plus Jakarta Sans', sans-serif;
-  font-size: 0.68rem;
+  font-size: 0.8rem;
   font-weight: 800;
   text-transform: uppercase;
   color: var(--text-secondary);
@@ -3855,7 +3853,7 @@ svg path[stroke="var(--color-warning)"] {
 }
 
 .topic-tag {
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   color: var(--text-secondary);
   font-weight: 500;
 }
@@ -3884,7 +3882,7 @@ svg path[stroke="var(--color-warning)"] {
 
 .bubble-speaker-label {
   font-family: 'Plus Jakarta Sans', sans-serif;
-  font-size: 0.65rem;
+  font-size: 0.8rem;
   font-weight: 800;
   text-transform: uppercase;
   color: var(--text-secondary);
@@ -3895,7 +3893,7 @@ svg path[stroke="var(--color-warning)"] {
 
 .bubble-prompt-text {
   font-family: 'Lora', Georgia, serif;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-style: italic;
   color: #334155;
   line-height: 1.45;
@@ -3917,7 +3915,7 @@ svg path[stroke="var(--color-warning)"] {
 
 .section-badge {
   display: inline-block;
-  font-size: 0.68rem;
+  font-size: 0.8rem;
   font-weight: 800;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -3976,7 +3974,7 @@ svg path[stroke="var(--color-warning)"] {
 
 .spectrum-label {
   font-family: 'Plus Jakarta Sans', sans-serif;
-  font-size: 0.68rem;
+  font-size: 0.8rem;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -4055,7 +4053,7 @@ svg path[stroke="var(--color-warning)"] {
 }
 
 .faculty-card-role {
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -4064,7 +4062,7 @@ svg path[stroke="var(--color-warning)"] {
 }
 
 .faculty-card-badge {
-  font-size: 0.62rem;
+  font-size: 0.8rem;
   font-weight: 800;
   padding: 2px 6px;
   border-radius: 4px;
@@ -4092,7 +4090,7 @@ svg path[stroke="var(--color-warning)"] {
 }
 
 .faculty-card-desc {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: var(--text-secondary);
   line-height: 1.5;
   margin-bottom: 20px;
@@ -4121,7 +4119,7 @@ svg path[stroke="var(--color-warning)"] {
 
 .faculty-card-quote {
   font-family: 'Lora', Georgia, serif;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   font-style: italic;
   color: var(--text-secondary);
   padding-left: 12px;
@@ -4180,7 +4178,7 @@ svg path[stroke="var(--color-warning)"] {
 .pipeline-circle-badge {
   position: absolute;
   top: -14px;
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   font-weight: 800;
   width: 28px;
   height: 28px;
@@ -4243,7 +4241,7 @@ svg path[stroke="var(--color-warning)"] {
 }
 
 .methodology-card-desc {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: var(--text-secondary);
   line-height: 1.5;
   text-align: center;
@@ -4415,7 +4413,7 @@ svg path[stroke="var(--color-warning)"] {
 
   .btn-landing-cta {
     padding: 8px 14px !important;
-    font-size: 0.8rem !important;
+    font-size: 0.875rem !important;
     margin: 0 !important;
   }
 
@@ -4441,7 +4439,7 @@ svg path[stroke="var(--color-warning)"] {
   .btn-hero-secondary {
     flex: 1 !important;
     padding: 8px 10px !important;
-    font-size: 0.78rem !important;
+    font-size: 0.85rem !important;
     min-height: 44px !important;
     display: inline-flex !important;
     align-items: center !important;
@@ -4702,13 +4700,13 @@ footer {
 
   .user-profile {
     padding: 4px 10px !important;
-    font-size: 0.8rem !important;
+    font-size: 0.875rem !important;
   }
 
   .user-avatar {
     width: 22px !important;
     height: 22px !important;
-    font-size: 0.7rem !important;
+    font-size: 0.8rem !important;
   }
 
   /* Hero & Dashboard */
@@ -4854,13 +4852,13 @@ footer {
   }
 
   .landing-back-link {
-    font-size: 0.8rem !important;
+    font-size: 0.875rem !important;
     white-space: nowrap !important;
     flex-shrink: 0 !important;
   }
 
   .auth-nav-toggle {
-    font-size: 0.78rem !important;
+    font-size: 0.85rem !important;
     text-align: right !important;
     flex-shrink: 1 !important;
   }
@@ -4870,11 +4868,11 @@ footer {
   }
 
   .biometric-label {
-    font-size: 0.72rem !important;
+    font-size: 0.8rem !important;
   }
 
   .biometric-value {
-    font-size: 0.75rem !important;
+    font-size: 0.85rem !important;
   }
 
   /* Dialog controllers */
@@ -4901,7 +4899,7 @@ footer {
   .viva-card-controls div button {
     flex: 1 !important;
     padding: 8px 12px !important;
-    font-size: 0.8rem !important;
+    font-size: 0.875rem !important;
   }
 
   .viva-card-controls #btn-next-question {
@@ -4963,7 +4961,7 @@ footer {
   .step-circle {
     width: 28px !important;
     height: 28px !important;
-    font-size: 0.8rem !important;
+    font-size: 0.875rem !important;
   }
 }
 
@@ -4982,11 +4980,11 @@ footer {
   }
 
   .stat-label {
-    font-size: 0.72rem !important;
+    font-size: 0.8rem !important;
   }
 
   .stat-sub {
-    font-size: 0.65rem !important;
+    font-size: 0.8rem !important;
   }
 
   .session-card {
@@ -5004,11 +5002,11 @@ footer {
   }
 
   .session-date {
-    font-size: 0.8rem !important;
+    font-size: 0.875rem !important;
   }
 
   .grade-badge {
-    font-size: 0.8rem !important;
+    font-size: 0.875rem !important;
     padding: 2px 6px !important;
   }
 
@@ -5046,7 +5044,7 @@ footer {
   }
 
   .transcript-text {
-    font-size: 0.85rem !important;
+    font-size: 0.9rem !important;
     max-height: 100px !important;
     overflow-y: auto !important;
   }
@@ -5271,7 +5269,7 @@ footer {
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-xs);
-  font-size: 0.82rem;
+  font-size: 0.875rem;
 }
 
 .mastery-dot-indicator {
@@ -5346,7 +5344,7 @@ footer {
 }
 
 .flashcard-watermark {
-  font-size: 0.68rem;
+  font-size: 0.8rem;
   font-weight: 700;
   letter-spacing: 2px;
   text-transform: uppercase;
@@ -5377,7 +5375,7 @@ footer {
 }
 
 .flashcard-hint-text {
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   color: var(--text-secondary);
   font-style: italic;
 }
@@ -5390,7 +5388,7 @@ footer {
   position: absolute;
   top: 14px;
   right: 14px;
-  font-size: 0.68rem;
+  font-size: 0.8rem;
   font-weight: 700;
   padding: 3px 8px;
   border-radius: var(--radius-full);
@@ -5805,15 +5803,15 @@ footer {
   }
 
   .faculty-card-name {
-    font-size: 0.8rem !important;
+    font-size: 0.875rem !important;
   }
 
   .faculty-card-role {
-    font-size: 0.68rem !important;
+    font-size: 0.8rem !important;
   }
 
   .faculty-card-desc {
-    font-size: 0.72rem !important;
+    font-size: 0.8rem !important;
     line-height: 1.4 !important;
     display: -webkit-box !important;
     -webkit-line-clamp: 3 !important;
@@ -5859,11 +5857,11 @@ footer {
   }
 
   .methodology-card-title {
-    font-size: 0.82rem !important;
+    font-size: 0.875rem !important;
   }
 
   .methodology-card-desc {
-    font-size: 0.72rem !important;
+    font-size: 0.8rem !important;
     line-height: 1.4 !important;
   }
 
@@ -6053,7 +6051,7 @@ footer {
   }
 
   .personality-card .personality-name {
-    font-size: 0.85rem !important;
+    font-size: 0.9rem !important;
     font-weight: 850 !important;
     flex-direction: column !important;
     gap: 8px !important;
@@ -6116,7 +6114,7 @@ footer {
     backdrop-filter: blur(8px) !important;
     border-radius: inherit !important;
     padding: 12px 8px !important;
-    font-size: 0.74rem !important;
+    font-size: 0.8rem !important;
     line-height: 1.35 !important;
     color: #ffffff !important;
     display: flex !important;
@@ -6166,7 +6164,7 @@ footer {
   }
 
   .source-card p {
-    font-size: 0.72rem !important;
+    font-size: 0.8rem !important;
     line-height: 1.35 !important;
     margin-top: 4px !important;
     display: block !important;
@@ -6308,7 +6306,7 @@ footer {
     border: 1px solid var(--border-color);
     padding: 10px 14px;
     border-radius: var(--radius-sm);
-    font-size: 0.825rem;
+    font-size: 0.875rem;
     font-weight: 600;
     color: var(--text-secondary);
     cursor: pointer;
@@ -6411,5 +6409,63 @@ footer {
 @media (max-width: 520px) {
   .hindsight-evidence-grid {
     grid-template-columns: 1fr;
+  }
+}
+/* ==========================================
+   READABILITY & ACCESSIBILITY BASELINE
+   Applies to every screen; page modules can still override with their own rules.
+   ========================================== */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  font-size: 1rem;
+  text-rendering: optimizeLegibility;
+  font-kerning: normal;
+}
+
+/* A clearly visible keyboard focus ring wherever a page has not styled its own. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid #9f5a3f;
+  outline-offset: 3px;
+}
+
+/* Links inside running text are underlined so they do not rely on colour alone. */
+:where(main, article, section) :where(p, li, dd) a:not([class]) {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+::selection {
+  background: #dfe7cf;
+  color: #1f2a1c;
+}
+
+/* Comfortable reading measure and wrapping for long copy. */
+:where(p, li, dd, blockquote) {
+  overflow-wrap: break-word;
+  text-wrap: pretty;
+}
+
+:where(h1, h2, h3) {
+  text-wrap: balance;
+}
+
+/* Users who ask the OS for more contrast get darker secondary text everywhere. */
+@media (prefers-contrast: more) {
+  :root {
+    --text-secondary: hsl(220, 10%, 24%);
+    --text-muted: hsl(220, 8%, 30%);
+    --border-color: hsl(40, 8%, 62%);
+  }
+}
+
+/* Windows high-contrast mode: keep focus and controls visible. */
+@media (forced-colors: active) {
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 3px solid CanvasText;
   }
 }

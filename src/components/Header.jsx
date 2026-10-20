@@ -30,7 +30,7 @@ export default function Header({ userName, onNavigate, onLogout }) {
             id="btn-logout" 
             onClick={onLogout} 
             style={{ 
-              fontSize: "0.85rem", 
+              fontSize: "0.9rem", 
               fontWeight: "600", 
               color: "rgba(248, 113, 113, 0.8)", 
               background: "rgba(248, 113, 113, 0.06)", 

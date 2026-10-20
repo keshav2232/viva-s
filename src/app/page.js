@@ -418,7 +418,7 @@ export default function Home() {
               VivaSim
             </span>
           </div>
-          <p style={{ color: "var(--text-secondary, #475569)", fontSize: "0.85rem", fontWeight: "700", letterSpacing: "1px", textTransform: "uppercase", marginBottom: "8px" }}>
+          <p style={{ color: "var(--text-secondary, #475569)", fontSize: "0.9rem", fontWeight: "700", letterSpacing: "1px", textTransform: "uppercase", marginBottom: "8px" }}>
             Securing academic tunnel... Verifying profile
           </p>
           <div style={{ width: "180px", height: "4px", background: "rgba(31, 42, 56, 0.08)", borderRadius: "10px", margin: "16px auto 0", overflow: "hidden", position: "relative" }}>
@@ -596,12 +596,12 @@ export default function Home() {
                   <h4 style={{ fontWeight: "700", color: "#fff", fontSize: "0.95rem", margin: 0 }}>
                     {syncingGuest ? "Syncing offline practice sessions..." : "Offline practice sessions detected"}
                   </h4>
-                  <p style={{ margin: "2px 0 0", color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                  <p style={{ margin: "2px 0 0", color: "var(--text-muted)", fontSize: "0.9rem" }}>
                     {syncingGuest ? "Please wait while we automatically migrate your offline data to the cloud." : "Merging your guest test histories directly with your cloud profile database..."}
                   </p>
                 </div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#6366f1", fontSize: "0.85rem", fontWeight: "700" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#6366f1", fontSize: "0.9rem", fontWeight: "700" }}>
                 <svg className="animate-spin" style={{ width: "20px", height: "20px", color: "#6366f1" }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" style={{ opacity: 0.15 }}></circle>
                   <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -668,7 +668,7 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer style={{ borderTop: "1px solid var(--border-color)", padding: "var(--space-lg) 0", fontSize: "0.8rem", color: "var(--text-muted)", textAlign: "center", backgroundColor: "var(--bg-card)" }}>
+      <footer style={{ borderTop: "1px solid var(--border-color)", padding: "var(--space-lg) 0", fontSize: "0.875rem", color: "var(--text-muted)", textAlign: "center", backgroundColor: "var(--bg-card)" }}>
         <p>© 2026 PrepSim. Engineered as a high-fidelity academic prep tool.</p>
       </footer>
     </div>

@@ -554,14 +554,14 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-md)", borderBottom: "1px solid var(--border-color)", paddingBottom: "var(--space-sm)" }}>
             <div style={{ textAlign: "left" }}>
               <h2 style={{ fontSize: "1.25rem", fontWeight: "800", color: "var(--accent-primary)", margin: 0 }}>⚡ Quick Cram Mode</h2>
-              <p style={{ margin: "2px 0 0 0", fontSize: "0.8rem", color: "var(--text-secondary)" }}>
+              <p style={{ margin: "2px 0 0 0", fontSize: "0.875rem", color: "var(--text-secondary)" }}>
                 Study key concepts for <strong>{syllabusStructure?.topic || topic || "Custom Subject"}</strong>
               </p>
             </div>
             <button
               className="btn btn-secondary"
               onClick={() => setCramMode(false)}
-              style={{ padding: "6px 12px", fontSize: "0.8rem" }}
+              style={{ padding: "6px 12px", fontSize: "0.875rem" }}
             >
               Exit Cram
             </button>
@@ -573,19 +573,19 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
                 <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" style={{ opacity: 0.15 }}></circle>
                 <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)", fontWeight: "600" }}>AI is compiling study flashcards...</span>
+              <span style={{ fontSize: "0.9rem", color: "var(--text-secondary)", fontWeight: "600" }}>AI is compiling study flashcards...</span>
             </div>
           ) : flashcards.length > 0 ? (
             <div className="flashcards-screen-container">
               {/* Card deck counter */}
-              <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.82rem", color: "var(--text-secondary)", fontWeight: "600" }}>
+              <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.875rem", color: "var(--text-secondary)", fontWeight: "600" }}>
                 <span>Card {currentCardIdx + 1} of {flashcards.length}</span>
                 <span style={{
                   color: masteredCards[currentCardIdx] ? "var(--color-success)" : "var(--color-warning)",
                   backgroundColor: masteredCards[currentCardIdx] ? "var(--color-success-bg)" : "var(--color-warning-bg)",
                   padding: "2px 8px",
                   borderRadius: "var(--radius-full)",
-                  fontSize: "0.72rem",
+                  fontSize: "0.8rem",
                   fontWeight: "700"
                 }}>
                   {masteredCards[currentCardIdx] ? "✓ Mastered" : "⏳ Reviewing"}
@@ -648,7 +648,7 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
                         }, 400);
                       }
                     }}
-                    style={{ padding: "8px 14px", fontSize: "0.8rem", fontWeight: "600" }}
+                    style={{ padding: "8px 14px", fontSize: "0.875rem", fontWeight: "600" }}
                   >
                     Need Review
                   </button>
@@ -664,7 +664,7 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
                         }, 400);
                       }
                     }}
-                    style={{ padding: "8px 14px", fontSize: "0.8rem", fontWeight: "600" }}
+                    style={{ padding: "8px 14px", fontSize: "0.875rem", fontWeight: "600" }}
                   >
                     Mastered ✓
                   </button>
@@ -790,7 +790,7 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
                   </svg>
                   <h3>{practiceMode === "academic" ? "Upload Syllabus" : "Upload JD / Resume"}</h3>
                 </div>
-                <p style={{ fontSize: "0.85rem" }}>
+                <p style={{ fontSize: "0.9rem" }}>
                   {practiceMode === "academic"
                     ? "Upload custom PDF syllabus, notes, or paste table of contents."
                     : "Upload custom PDF job description, resume, or paste recruitment specs."}
@@ -811,7 +811,7 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
                   </svg>
                   <h3>{practiceMode === "academic" ? "Topic-Based" : "Role Presets"}</h3>
                 </div>
-                <p style={{ fontSize: "0.85rem" }}>
+                <p style={{ fontSize: "0.9rem" }}>
                   {practiceMode === "academic"
                     ? "Enter a single subject or chapter to generate an examination automatically."
                     : "Enter or select a job role/domain to generate a mock interview immediately."}
@@ -840,19 +840,19 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
                       <line x1="12" y1="3" x2="12" y2="15"></line>
                     </svg>
                     <p className="form-label" style={{ marginBottom: "2px" }}>{uploadStatus}</p>
-                    <p style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Supports PDF, TXT, MD up to 10MB</p>
+                    <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>Supports PDF, TXT, MD up to 10MB</p>
                   </div>
 
                   {uploadedFiles.length > 0 && (
                     <div className="uploaded-files-list" style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
                       {uploadedFiles.map((file, index) => (
-                        <div key={index} className="uploaded-file-item" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "8px", fontSize: "0.85rem" }}>
+                        <div key={index} className="uploaded-file-item" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "8px", fontSize: "0.9rem" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                             <svg style={{ width: "16px", height: "16px", color: "var(--accent-primary)", flexShrink: 0 }} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
                             </svg>
                             <span style={{ fontWeight: "600", color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "250px" }}>{file.name}</span>
-                            <span style={{ color: "var(--text-muted)", fontSize: "0.75rem", flexShrink: 0 }}>({(file.size / 1024 / 1024).toFixed(2)} MB)</span>
+                            <span style={{ color: "var(--text-muted)", fontSize: "0.85rem", flexShrink: 0 }}>({(file.size / 1024 / 1024).toFixed(2)} MB)</span>
                           </div>
                           <button
                             type="button"
@@ -1030,7 +1030,7 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
                   <h4 style={{ margin: "0 0 2px 0", fontSize: "0.9rem", color: "var(--accent-primary)" }}>
                     {practiceMode === "academic" ? "Last-Minute Viva Mode" : "Rapid Fire Interview"}
                   </h4>
-                  <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                  <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary)" }}>
                     {practiceMode === "academic"
                       ? "5-minute rapid-fire preparation. Ideal for last-minute cram sessions. Focuses on high-yield basic concepts."
                       : "5-minute rapid session focusing on core questions. Perfect for a quick check before stepping in."}
@@ -1078,7 +1078,7 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
                   <h4 style={{ margin: "0 0 2px 0", fontSize: "0.9rem", color: "var(--color-error)" }}>
                     {practiceMode === "academic" ? "Mock External Viva" : "Stress / Bar Raiser Interview"}
                   </h4>
-                  <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                  <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary)" }}>
                     {practiceMode === "academic"
                       ? "High-stress university board review. Intimidating grading, intense questioning, and aggressive verbal interruptions."
                       : "High-stress bar-raiser session. Intimidating recruiter questioning, complex system-design pressure, and interruptions."}
@@ -1126,7 +1126,7 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
                   <h4 style={{ margin: "0 0 2px 0", fontSize: "0.9rem", color: "var(--accent-primary)" }}>
                     {practiceMode === "academic" ? "Examiner Interruption" : "Interviewer Interruption"}
                   </h4>
-                  <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                  <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary)" }}>
                     {practiceMode === "academic"
                       ? "Allows the examiner to verbally cut you off if you speak over them. Disable this if you prefer a calmer, uninterrupted flow."
                       : "Allows the interviewer to verbally cut you off to steer the conversation. Disable this for a calmer flow."}
@@ -1139,7 +1139,7 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
               <label className="form-label" style={{ marginBottom: "var(--space-xs)" }}>
                 {practiceMode === "academic" ? "Examiner Personality" : "Interviewer Style"}
               </label>
-              <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "var(--space-md)" }}>
+              <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", marginBottom: "var(--space-md)" }}>
                 {practiceMode === "academic"
                   ? "Select who will evaluate you. Each persona carries distinct grading traits and oral behaviors."
                   : "Select who will conduct your mock interview. Each interviewer uses a distinct candidate evaluation style."}
@@ -1205,8 +1205,8 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
 
                       {showDetailsKey === key && (
                         <div className="personality-details-overlay" onClick={(e) => { e.stopPropagation(); setShowDetailsKey(null); }}>
-                          <p style={{ margin: 0, fontWeight: "600", fontSize: "0.78rem", color: "var(--text-primary)" }}>{displayDesc}</p>
-                          <div style={{ fontSize: "0.72rem", fontWeight: "700", marginTop: "6px", color: "var(--accent-primary)" }}>
+                          <p style={{ margin: 0, fontWeight: "600", fontSize: "0.85rem", color: "var(--text-primary)" }}>{displayDesc}</p>
+                          <div style={{ fontSize: "0.8rem", fontWeight: "700", marginTop: "6px", color: "var(--accent-primary)" }}>
                             Patience: {details.attributes.patience} | Grading: {details.attributes.grading}
                           </div>
                         </div>
@@ -1252,7 +1252,7 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
 
                 {/* Profile text */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ fontSize: "0.75rem", fontWeight: "600", textTransform: "uppercase", color: "var(--text-secondary)", letterSpacing: "0.05em" }}>
+                  <span style={{ fontSize: "0.85rem", fontWeight: "600", textTransform: "uppercase", color: "var(--text-secondary)", letterSpacing: "0.05em" }}>
                     {practiceMode === "academic" ? "Active Examiner Profile" : "Active Interviewer Profile"}
                   </span>
                   <h4 style={{ margin: "4px 0", fontSize: "1.2rem", color: "var(--accent-primary)" }}>
@@ -1268,7 +1268,7 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
                       "Director Harry Thorne (Bar Raiser)"
                     )}
                   </h4>
-                  <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary)", lineHeight: 1.4 }}>
+                  <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--text-secondary)", lineHeight: 1.4 }}>
                     {practiceMode === "academic" ? (
                       (isMockExternal ? "terror" : personality) === "friendly" ? "A highly supportive educator known for conceptual guiding, patient pauses, and constructive evaluations." :
                       (isMockExternal ? "terror" : personality) === "strict" ? "An exacting formal academic focusing on flawless precision, mathematical derivations, and technical accuracy." :
@@ -1290,7 +1290,7 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
                   onClick={handlePlaySampleVoice}
                   style={{
                     padding: "8px 16px",
-                    fontSize: "0.85rem",
+                    fontSize: "0.9rem",
                     fontWeight: "600",
                     display: "flex",
                     alignItems: "center",
@@ -1345,7 +1345,7 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
                   <h3 style={{ fontSize: "1.25rem", color: "var(--accent-primary)", margin: 0, fontWeight: "700" }}>
                     {syllabusStructure ? syllabusStructure.topic : (practiceMode === "academic" ? "Custom Examination" : "Custom Interview")} Mapped Outline
                   </h3>
-                  <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", margin: "2px 0 0 0" }}>
+                  <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", margin: "2px 0 0 0" }}>
                     {practiceMode === "academic"
                       ? "Select a subtopic leaf node to launch a highly focused Custom Target Drill."
                       : "Select a competency leaf node to launch a highly focused target mock session."}
@@ -1358,7 +1358,7 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
                     type="button"
                     className={`btn ${previewMode === "map" ? "btn-primary" : "btn-secondary"}`}
                     aria-pressed={previewMode === "map"} onClick={() => setPreviewMode("map")}
-                    style={{ padding: "6px 12px", fontSize: "0.75rem", borderRadius: "var(--radius-xs)" }}
+                    style={{ padding: "6px 12px", fontSize: "0.85rem", borderRadius: "var(--radius-xs)" }}
                   >
                     Mind Map
                   </button>
@@ -1366,7 +1366,7 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
                     type="button"
                     className={`btn ${previewMode === "list" ? "btn-primary" : "btn-secondary"}`}
                     aria-pressed={previewMode === "list"} onClick={() => setPreviewMode("list")}
-                    style={{ padding: "6px 12px", fontSize: "0.75rem", borderRadius: "var(--radius-xs)" }}
+                    style={{ padding: "6px 12px", fontSize: "0.85rem", borderRadius: "var(--radius-xs)" }}
                   >
                     Outline List
                   </button>
@@ -1629,7 +1629,7 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
                                       justifyContent: "center",
                                       textAlign: "center",
                                       padding: "4px 8px",
-                                      fontSize: node.type === "subject" ? "0.775rem" : "0.725rem",
+                                      fontSize: node.type === "subject" ? "0.9rem" : "0.8rem",
                                       fontWeight: node.type === "subject" ? "800" : "600",
                                       lineHeight: "1.2",
                                       borderRadius: "var(--radius-sm)",
@@ -1669,7 +1669,7 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
                                     }}
                                   >
                                     {node.type === "unit" ? (
-                                      <div style={{ fontSize: "0.68rem" }}>
+                                      <div style={{ fontSize: "0.8rem" }}>
                                         <strong>{practiceMode === "academic" ? `Unit #${node.unitIndex + 1}` : `Competency #${node.unitIndex + 1}`}</strong>
                                         <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: `${node.width - 20}px` }}>
                                           {node.name.replace(/^(unit|competency)\s*\d+\s*:\s*/i, "")}
@@ -1706,7 +1706,7 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
                                 else setSelectedSubtopic({ unitIndex: idx, topicIndex: tid, name: t });
                               }}
                               style={{
-                                fontSize: "0.75rem",
+                                fontSize: "0.85rem",
                                 padding: "4px 10px",
                                 backgroundColor: isSel ? "var(--color-warning-bg)" : "var(--bg-card)",
                                 border: isSel ? "2.5px solid var(--color-warning)" : "1px solid var(--border-color)",
@@ -1732,25 +1732,25 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
                 <div style={{ textAlign: "left" }}>
                   {selectedSubtopic ? (
                     <>
-                      <div style={{ fontSize: "0.85rem", fontWeight: "700", color: "var(--color-warning)", display: "flex", alignItems: "center", gap: "4px" }}>
+                      <div style={{ fontSize: "0.9rem", fontWeight: "700", color: "var(--color-warning)", display: "flex", alignItems: "center", gap: "4px" }}>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ width: "16px", height: "16px" }}>
                           <circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24M14.83 9.17l4.24-4.24M14.83 14.83l4.24 4.24M9.17 14.83l-4.24 4.24"/>
                         </svg>
                         {practiceMode === "academic" ? "Focus Target Drill Engaged" : "Focused Competency Drill Engaged"}
                       </div>
-                      <p style={{ margin: "2px 0 0 0", fontSize: "0.775rem", color: "var(--text-secondary)" }}>
+                      <p style={{ margin: "2px 0 0 0", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
                         Practice session will center strictly on <strong>&quot;{selectedSubtopic.name}&quot;</strong> ({practiceMode === "academic" ? `Unit #${selectedSubtopic.unitIndex + 1}` : `Competency #${selectedSubtopic.unitIndex + 1}`}).
                       </p>
                     </>
                   ) : (
                     <>
-                      <div style={{ fontSize: "0.85rem", fontWeight: "700", color: "var(--color-success)", display: "flex", alignItems: "center", gap: "4px" }}>
+                      <div style={{ fontSize: "0.9rem", fontWeight: "700", color: "var(--color-success)", display: "flex", alignItems: "center", gap: "4px" }}>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ width: "16px", height: "16px" }}>
                           <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>
                         </svg>
                         {practiceMode === "academic" ? "Comprehensive Oral Mode" : "Comprehensive Interview Mode"}
                       </div>
-                      <p style={{ margin: "2px 0 0 0", fontSize: "0.775rem", color: "var(--text-secondary)" }}>
+                      <p style={{ margin: "2px 0 0 0", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
                         {practiceMode === "academic"
                           ? "Questions will cover all topics mapped throughout the curriculum syllabus."
                           : "Questions will cover all competencies mapped for this role."}
@@ -1763,7 +1763,7 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
                     type="button"
                     className="btn-text"
                     onClick={() => setSelectedSubtopic(null)}
-                    style={{ fontSize: "0.75rem", color: "var(--color-error)", cursor: "pointer", border: "none", background: "none", fontWeight: "600" }}
+                    style={{ fontSize: "0.85rem", color: "var(--color-error)", cursor: "pointer", border: "none", background: "none", fontWeight: "600" }}
                   >
                     Clear Focus
                   </button>
@@ -1776,7 +1776,7 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
                   <span className="preview-label">{practiceMode === "academic" ? "Examiner" : "Interviewer"}</span>
                   <div className="preview-personality-details" style={{ justifyContent: "center", gap: "4px" }}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: "14px", height: "14px" }} dangerouslySetInnerHTML={{ __html: EXAMINER_PERSONALITIES[isMockExternal ? "terror" : personality].icon }} />
-                    <span className="preview-value" style={{ fontSize: "0.8rem" }}>
+                    <span className="preview-value" style={{ fontSize: "0.875rem" }}>
                       {practiceMode === "academic" ? EXAMINER_PERSONALITIES[isMockExternal ? "terror" : personality].name : (
                         (isMockExternal ? "terror" : personality) === "friendly" ? "Warm Recruiter" :
                         (isMockExternal ? "terror" : personality) === "strict" ? "Structured Hiring Manager" :
@@ -1789,19 +1789,19 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
 
                 <div className="preview-item" style={{ padding: "6px" }}>
                   <span className="preview-label">Duration</span>
-                  <span className="preview-value" style={{ fontSize: "0.8rem" }}>{`${isLastMinute ? 5 : getActiveDuration()} Mins`}</span>
+                  <span className="preview-value" style={{ fontSize: "0.875rem" }}>{`${isLastMinute ? 5 : getActiveDuration()} Mins`}</span>
                 </div>
 
                 <div className="preview-item" style={{ padding: "6px" }}>
                   <span className="preview-label">Scope</span>
-                  <span className="preview-value" style={{ fontSize: "0.8rem" }}>
+                  <span className="preview-value" style={{ fontSize: "0.875rem" }}>
                     {selectedSubtopic ? "1 Concept" : (practiceMode === "academic" ? `${syllabusStructure ? syllabusStructure.units.length : 3} Units` : `${syllabusStructure ? syllabusStructure.units.length : 3} Competencies`)}
                   </span>
                 </div>
 
                 <div className="preview-item" style={{ padding: "6px" }}>
                   <span className="preview-label">{practiceMode === "academic" ? "Pedagogical Guard" : "Interview Guard"}</span>
-                  <span className="preview-value" style={{ fontSize: "0.8rem", color: "var(--color-success)" }}>Active</span>
+                  <span className="preview-value" style={{ fontSize: "0.875rem", color: "var(--color-success)" }}>Active</span>
                 </div>
               </div>
 

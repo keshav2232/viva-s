@@ -109,6 +109,33 @@ export const VoiceManager = {
   },
 
   /**
+   * Fetches ElevenLabs audio for a line. Retries once on a network error or a temporary server
+   * error, so one dropped request does not drop the professors to the robotic browser voice.
+   * @returns {Promise<Blob>}
+   */
+  async fetchSpeech(cleanText, personality) {
+    let lastError;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const response = await vivaFetch({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "synthesize-speech", text: cleanText, personality })
+        });
+        if (response.ok) return await response.blob();
+        lastError = new Error(`ElevenLabs synthesis failed (${response.status})`);
+        // 400/401/403/503 (bad input, bad key, not configured) will not succeed on a retry.
+        if (response.status !== 429 && response.status < 500) break;
+        if (response.status === 503) break;
+      } catch (err) {
+        lastError = err;
+      }
+      if (attempt === 0) await new Promise((r) => setTimeout(r, 400));
+    }
+    throw lastError;
+  },
+
+  /**
    * Preloads voice synthesis from ElevenLabs in the background.
    */
   async preload(text, personality = "friendly") {
@@ -118,21 +145,8 @@ export const VoiceManager = {
     if (this.preloadedCache[cleanText]) return; // Already cached
 
     try {
-      const response = await vivaFetch({
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "synthesize-speech",
-          text: cleanText,
-          personality
-        })
-      });
-
-      if (!response.ok) throw new Error("Preload fetch failed");
-
-      const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      this.addToCache(cleanText, objectUrl);
+      const blob = await this.fetchSpeech(cleanText, personality);
+      this.addToCache(cleanText, URL.createObjectURL(blob));
     } catch (err) {
       console.warn(`ElevenLabs speech preload failed for: "${cleanText.substring(0, 20)}...". ${err.message}`);
     }
@@ -175,28 +189,11 @@ export const VoiceManager = {
         
         if (!objectUrl) {
           // Fetch live if not preloaded
-          const response = await vivaFetch({
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "synthesize-speech",
-              text: cleanText,
-              personality
-            })
-          });
+          const blob = await this.fetchSpeech(cleanText, personality);
 
           // Check if this speak call is still the active one
           if (this.activeSpeakId !== speakId) {
             console.log("Speak call superseded during fetch, aborting.");
-            return;
-          }
-
-          if (!response.ok) throw new Error("ElevenLabs live synthesis failed");
-          const blob = await response.blob();
-          
-          // Check again after reading blob
-          if (this.activeSpeakId !== speakId) {
-            console.log("Speak call superseded during blob parse, aborting.");
             return;
           }
 
@@ -237,6 +234,13 @@ export const VoiceManager = {
 
       } catch (err) {
         if (this.activeSpeakId !== speakId) return;
+        if (err && err.name === "NotAllowedError") {
+          // The browser blocked autoplay. ElevenLabs is fine, so keep it for the next line and
+          // only speak this one with the browser voice.
+          console.warn("Audio autoplay was blocked by the browser; using the browser voice for this line only.");
+          this.triggerFailsafeFallback(cleanText, personality, onStart, onEnd, speakId);
+          return;
+        }
         console.warn("ElevenLabs TTS failed. Activating Web Speech fallback:", err.message);
         this.isFailsafeMode = true;
         this.failsafeSince = Date.now();
