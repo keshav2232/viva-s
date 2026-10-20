@@ -39,7 +39,8 @@ export const SessionContextManager = {
           tag: m.tag && m.tag !== "Evaluating..." ? m.tag : "",
           score: Number.isFinite(m.correctness) ? m.correctness : undefined,
           q: q || "",
-          a: this.answerTranscripts[i] || ""
+          a: this.answerTranscripts[i] || "",
+          depth: obj.depth || 0 // follow-up depth within its chain (0 = main question)
         };
       })
       .filter((_, i) => i !== excludeIndex);

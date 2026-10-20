@@ -16,7 +16,7 @@ export const AI_CONFIG = {
   // maxOut = hard cap on output tokens, timeoutMs = per-model timeout, temp = sampling temperature.
   features: {
     start:        { maxOut: 380,  timeoutMs: 7000, temp: 0.7 },
-    turn:         { maxOut: 760,  timeoutMs: 9000, temp: 0.4 },
+    turn:         { maxOut: 1300, timeoutMs: 10000, temp: 0.4 }, // grade + up to two candidate questions (typical ~450 out)
     hint:         { maxOut: 140,  timeoutMs: 6000, temp: 0.7 },
     subquestion:  { maxOut: 140,  timeoutMs: 6000, temp: 0.7 },
     topic:        { maxOut: 700,  timeoutMs: 8000, temp: 0.3 },

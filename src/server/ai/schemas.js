@@ -30,7 +30,18 @@ export const gradingProperties = (withAudio) => ({
   ...(withAudio ? { nervousness: N, confidence: N, hesitation: N } : {})
 });
 
-export const turnSchema = ({ withAudio, withNext }) => ({
+/**
+ * One turn = the grade, then up to two candidate next questions (a follow-up on this answer and a
+ * new topic). Code picks one from the tag (see followUps.js). Grading is generated first so the
+ * candidates can build on it.
+ */
+const followUpSchema = (types) => ({
+  ...nextQuestionSchema,
+  properties: { ...nextQuestionSchema.properties, type: { type: "STRING", enum: types } },
+  required: [...nextQuestionSchema.required, "type"]
+});
+
+export const turnSchema = ({ withAudio, withFollowUp, withNewTopic, followUpTypes = ["deepen"] }) => ({
   type: "OBJECT",
   properties: {
     grading: {
@@ -38,9 +49,11 @@ export const turnSchema = ({ withAudio, withNext }) => ({
       properties: gradingProperties(withAudio),
       required: ["correctness", "completeness", "accuracy", "clarity", "tag", "rationale", "keyStrengths", "missingConcepts", "modelAnswer", ...(withAudio ? ["nervousness", "confidence", "hesitation"] : [])]
     },
-    ...(withNext ? { next: nextQuestionSchema } : {})
+    ...(withFollowUp ? { followUp: followUpSchema(followUpTypes) } : {}),
+    ...(withNewTopic ? { newTopic: nextQuestionSchema } : {})
   },
-  required: ["grading", ...(withNext ? ["next"] : [])]
+  propertyOrdering: ["grading", ...(withFollowUp ? ["followUp"] : []), ...(withNewTopic ? ["newTopic"] : [])],
+  required: ["grading", ...(withFollowUp ? ["followUp"] : []), ...(withNewTopic ? ["newTopic"] : [])]
 });
 
 export const hintSchema = { type: "OBJECT", properties: { hint: S }, required: ["hint"] };

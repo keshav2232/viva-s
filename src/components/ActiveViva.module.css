@@ -15,3 +15,4 @@
 @media(prefers-reduced-motion:reduce) { .room * { animation:none !important; transition:none !important; } }
 
 @media (prefers-contrast: more) { .room { --text-secondary: #3c4439; --text-muted: #3c4439; --text-primary: #151a15; } }
+.room :global(.viva-nudge-note) { margin:0; padding:12px 14px; background:#f3f5eb; border-left:3px solid #7a9163; border-radius:4px; font-size:15px; line-height:1.6; color:#34422f; text-align:left; }

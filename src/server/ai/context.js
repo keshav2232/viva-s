@@ -35,10 +35,27 @@ export function compactRounds(rounds, detailed = 2) {
   const list = Array.isArray(rounds) ? rounds : [];
   if (!list.length) return "none yet";
   return list.map((r, i) => {
-    const head = `${i + 1}. ${clip(r.topic, 60) || "topic"} [${r.tag || "?"} ${Number.isFinite(r.score) ? r.score : "?"}]`;
+    const label = r.depth > 0 ? ` (follow-up ${r.depth})` : "";
+    const head = `${i + 1}. ${clip(r.topic, 60) || "topic"}${label} [${r.tag || "?"} ${Number.isFinite(r.score) ? r.score : "?"}]`;
     if (i < list.length - detailed) return head;
     return `${head} Q: ${clip(r.q, 110)} A: ${clip(r.a, 200)}`;
   }).join("\n");
+}
+
+/**
+ * Number of trailing rounds that belong to the chain the current question continues. When the
+ * current question is a follow-up, its whole chain (main question + earlier follow-ups) must be
+ * visible in full, not just the last two rounds.
+ */
+export function chainLength(rounds, currentDepth) {
+  const list = Array.isArray(rounds) ? rounds : [];
+  if (!(currentDepth > 0)) return 0;
+  let n = 0;
+  for (let i = list.length - 1; i >= 0; i--) {
+    n++;
+    if (!(list[i].depth > 0)) break; // reached the chain's main question
+  }
+  return n;
 }
 
 export const testedTopics = (rounds) =>

@@ -1121,7 +1121,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
                       <li key={q.idx}>
                         <button className={`${styles.qItem} ${q.tone.cls}`} aria-current={sel && sel.idx === q.idx ? "true" : undefined} onClick={() => openQuestion(q.idx)}>
                           <span className={styles.qNum}>Q{q.idx + 1}</span>
-                          <span className={styles.qTopic}>{q.topic}</span>
+                          <span className={styles.qTopic}>{q.qObj?.depth > 0 && <small>↳ Follow-up · </small>}{q.topic}</span>
                           <span className={styles.qScore}>{q.correctness}%<small><span aria-hidden="true">{q.tone.icon} </span>{q.tone.label}</small></span>
                         </button>
                       </li>

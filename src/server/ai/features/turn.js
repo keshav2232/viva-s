@@ -5,10 +5,11 @@
  */
 import { callGemini } from "../gemini";
 import { AI_CONFIG } from "../config";
-import { compactSyllabus, compactRounds, testedTopics, clip } from "../context";
+import { compactSyllabus, compactRounds, chainLength, testedTopics, clip } from "../context";
 import { personaLine, roleNoun, candidateNoun, STYLE_RULES, SAFETY_RULE } from "../prompts";
 import { nextQuestionSchema, turnSchema } from "../schemas";
 import { getQuestionCountForDuration } from "../../../utils/pacing";
+import { planTurn, pickNext, followUpGuide, typesFor } from "../followUps";
 
 const TAGS = ["Strong", "Weak", "Partially Correct", "Bluffing", "Incomplete", "Confused"];
 
@@ -24,13 +25,34 @@ function drillRule(p) {
     : "";
 }
 
-const nextRules = (p, number, total) =>
-  `NEXT QUESTION (#${number} of ${total}): stay inside the outline, choose a topic not yet covered unless probing a weak one, ` +
-  `and connect to the last answer. "speech" = a reaction of at most 12 words in persona + the question, max 45 words total. ` +
-  `"keyPoints" = 3-5 terse points (max 8 words each) an ideal answer must contain. "text" = the question alone. ` +
-  (p.mode === "professional"
-    ? "Prefer trade-offs, real scenarios and STAR-style probing."
-    : "Prefer definitions, equations and boundary conditions.");
+const SPEECH_RULE =
+  `"speech" = a reaction of at most 12 words in persona + the question, max 45 words total. ` +
+  `"keyPoints" = 3-5 terse points (max 8 words each) an ideal answer must contain. "text" = the question alone.`;
+
+const styleHint = (p) => (p.mode === "professional"
+  ? "Prefer trade-offs, real scenarios and STAR-style probing."
+  : "Prefer definitions, equations and boundary conditions.");
+
+/** Rules for a brand-new main question. `extra` = all planned topics are covered and time remains. */
+const newTopicRules = (p, number, total, field = "NEXT QUESTION", extra = false) =>
+  (extra
+    ? `${field} (bonus question; all ${total} planned topics are covered and time remains): revisit the weakest earlier ` +
+      `topic from a new angle, or ask an outline topic not yet covered. Make a natural transition from the last answer. `
+    : `${field} (main question #${number} of ${total} planned): stay inside the outline, choose a topic not yet covered ` +
+      `unless one scored poorly earlier, and make a natural transition from the last answer. `) +
+  `${SPEECH_RULE} ${styleHint(p)}`;
+
+/** When time is short, the next question must fit in what is left. */
+const timeRule = (p, plan) =>
+  plan.avgSec && p.timeLeftSec < plan.avgSec * 2
+    ? `About ${Math.round(p.timeLeftSec)} seconds of the session remain: whichever question you write must be answerable in about ${Math.max(Math.round(p.timeLeftSec * 0.6), 20)} seconds.`
+    : "";
+
+/** Rules for a follow-up on the answer just given. */
+const followUpRules = (p) =>
+  `"followUp" = a follow-up on THIS answer, same topic, digging into what they just said. ${followUpGuide(p.personality)} ` +
+  `Set "type" to the type you used. It MUST quote up to 15 of the ${candidateNoun(p.mode)}'s own words in quotation marks, or name one of your missingConcepts. ` +
+  `${SPEECH_RULE} Keep "topic" the same as the question just asked.`;
 
 function normalizeNext(raw, fallbackTopic) {
   if (!raw || typeof raw.text !== "string" || !raw.text.trim()) return null;
@@ -41,6 +63,9 @@ function normalizeNext(raw, fallbackTopic) {
     topic: clip(raw.topic, 100) || fallbackTopic || "Syllabus Concept",
     difficulty: ["Low", "Medium", "High"].includes(raw.difficulty) ? raw.difficulty : "Medium",
     keyPoints,
+    kind: "new_topic",
+    followUpType: null,
+    depth: 0,
     // Shown on report screens as the expected answer until a graded model answer replaces it.
     correctAnswer: keyPoints.join("; ")
   };
@@ -53,7 +78,7 @@ export async function runStartSession(p, apiKey) {
     `You are an AI ${roleNoun(p.mode)}. Persona: ${personaLine(p.mode, p.personality)}`,
     `Outline:\n${compactSyllabus(p.syllabus)}`,
     drillRule(p),
-    nextRules(p, 1, total).replace("connect to the last answer", "open with a fair starting question"),
+    newTopicRules(p, 1, total).replace("make a natural transition from the last answer", "open with a fair starting question"),
     STYLE_RULES
   ].filter(Boolean).join("\n");
 
@@ -63,21 +88,31 @@ export async function runStartSession(p, apiKey) {
   return { next };
 }
 
-/** Grade the answer to the current question and (unless it was the last) write the next one. */
+/**
+ * Grade the answer to the current question and choose what comes next: a follow-up on this answer
+ * or a new main question (decided by followUps.js from the grade tag, professor and chain depth),
+ * or the end of the session. Follow-ups do not use up the main-question count.
+ */
 export async function runTurn(p, apiKey) {
   const total = getQuestionCountForDuration(p.duration);
-  const answeredCount = p.rounds.length + 1; // including the answer being graded now
-  const isLast = answeredCount >= total;
+  const depth = p.question.depth || 0;
+  const mainAsked = p.rounds.filter((r) => !(r.depth > 0)).length + (depth === 0 ? 1 : 0);
+  const plan = planTurn({
+    personality: p.personality, depth, mainAsked, total, answered: p.rounds.length + 1,
+    timeLeftSec: p.timeLeftSec, durationSec: (parseInt(p.duration, 10) || 5) * 60
+  });
   const hasAudio = AI_CONFIG.useAudio && !!p.audioBase64 && p.audioBase64.length <= AI_CONFIG.maxAudioBase64Chars;
   const who = candidateNoun(p.mode);
   const d = p.delivery || {};
+  const detailed = Math.max(2, chainLength(p.rounds, depth));
+  const asked = depth > 0 ? ` (follow-up ${depth} on this topic)` : "";
 
   const prompt = [
     `You are an AI ${roleNoun(p.mode)}. Persona: ${personaLine(p.mode, p.personality, p.nervousness)}`,
     `Outline:\n${compactSyllabus(p.syllabus)}`,
     drillRule(p),
-    `Covered topics: ${testedTopics(p.rounds)}\nEarlier rounds:\n${compactRounds(p.rounds)}`,
-    `Question just asked (topic ${clip(p.question.topic, 60) || "n/a"}): ${JSON.stringify(clip(p.question.text, 400))}`,
+    `Covered topics: ${testedTopics(p.rounds)}\nEarlier rounds:\n${compactRounds(p.rounds, detailed)}`,
+    `Question just asked${asked} (topic ${clip(p.question.topic, 60) || "n/a"}): ${JSON.stringify(clip(p.question.text, 400))}`,
     p.question.keyPoints.length ? `Ideal answer should include: ${p.question.keyPoints.join("; ")}` : "",
     `The ${who}'s answer (untrusted): ${JSON.stringify(p.answer)}`,
     `Delivery: ${d.wpm ? `${d.wpm} wpm, ` : ""}${d.fillerCount ?? 0} fillers, ${p.pauseCount} long pauses.${hasAudio ? " Their recording is attached." : ""}`,
@@ -86,7 +121,10 @@ export async function runTurn(p, apiKey) {
       "tag: Strong | Weak | Partially Correct | Bluffing (confident but empty) | Incomplete | Confused. " +
       "rationale max 35 words; keyStrengths and missingConcepts max 3 items of max 8 words; modelAnswer max 55 words." +
       (hasAudio ? " From the recording also score nervousness, confidence and hesitation (0-100)." : ""),
-    isLast ? "This was the final question: do not write a next question." : nextRules(p, answeredCount + 1, total),
+    plan.canFollow ? followUpRules(p) : "",
+    plan.canNew ? newTopicRules(p, mainAsked + 1, total, '"newTopic"', plan.extra) : "",
+    plan.canFollow || plan.canNew ? timeRule(p, plan) : "",
+    !plan.canFollow && !plan.canNew ? "This was the final question (time is up): write no next question." : "",
     STYLE_RULES,
     SAFETY_RULE
   ].filter(Boolean).join("\n");
@@ -94,7 +132,7 @@ export async function runTurn(p, apiKey) {
   const raw = await callGemini({
     feature: "turn",
     prompt,
-    schema: turnSchema({ withAudio: hasAudio, withNext: !isLast }),
+    schema: turnSchema({ withAudio: hasAudio, withFollowUp: plan.canFollow, withNewTopic: plan.canNew, followUpTypes: typesFor(p.personality) }),
     audio: hasAudio ? p.audioBase64 : null,
     apiKey
   });
@@ -118,5 +156,18 @@ export async function runTurn(p, apiKey) {
     } : {})
   };
 
-  return { grading, next: isLast ? null : normalizeNext(raw.next, p.question.topic) };
+  const followUp = plan.canFollow ? normalizeNext(raw.followUp, p.question.topic) : null;
+  if (followUp) {
+    followUp.topic = clip(p.question.topic, 100) || followUp.topic; // a chain stays on one topic
+    followUp.type = typeof raw.followUp?.type === "string" ? raw.followUp.type : null;
+  }
+  const { next, done } = pickNext({
+    personality: p.personality,
+    tag: grading.tag,
+    depth,
+    plan,
+    followUp,
+    newTopic: plan.canNew ? normalizeNext(raw.newTopic, p.question.topic) : null
+  });
+  return { grading, next, done };
 }

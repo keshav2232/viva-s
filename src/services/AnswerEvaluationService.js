@@ -40,7 +40,7 @@ export const AnswerEvaluationService = {
     if (isHesitationPenalty) {
       g.correctness = Math.max(Math.round(g.correctness * 0.8), 0);
       g.accuracy = Math.max(Math.round(g.accuracy * 0.8), 0);
-      g.tag = "Partially Correct";
+      // The penalty lowers the scores only; the grader's tag (Weak, Bluffing, Strong...) stays true.
     }
 
     return {
@@ -134,7 +134,6 @@ export const AnswerEvaluationService = {
     if (isHesitationPenalty) {
       correctness = Math.max(Math.round(correctness * 0.8), 0);
       accuracy = Math.max(Math.round(accuracy * 0.8), 0);
-      tag = "Partially Correct";
     }
 
     return {

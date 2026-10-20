@@ -13,8 +13,32 @@ import room from "./ActiveViva.module.css";
 import MicrophoneCheck from "@/components/MicrophoneCheck";
 import ExaminerAvatar from "@/components/ExaminerAvatar";
 import { getQuestionCountForDuration } from "@/utils/pacing";
+import { vivaFetch } from "@/utils/apiClient";
 
 // Helper to guarantee render purity by getting timestamp outside component scope
+// Silence ladder: what each professor does, one step at a time, while the student is stuck.
+const SILENCE_STEPS = {
+  friendly: ["rephrase", "hint", "simplify"],
+  strict: ["definition", "moveOn"],
+  brutal: ["prod", "moveOn"],
+  terror: ["subquestion", "subquestion", "moveOn"]
+};
+const THINK_MS = 8000; // thinking time before the first words (and again after each nudge)
+const STALL_MS = 6000; // pause after a few words that do not yet make an answer
+const ANSWERING_WORDS = 8; // from this many words on, silence means "finished" (auto-submit handles it)
+const countWords = (text) => (text || "").trim().split(/\s+/).filter(Boolean).length;
+
+const FOLLOW_UP_LABELS = {
+  apply: "apply it",
+  clarify: "clarify",
+  precision: "be precise",
+  simplify: "back to basics",
+  challenge: "challenge",
+  counter_example: "counter-example",
+  deepen: "go deeper",
+  expose: "prove it"
+};
+
 // How long the examiner reaction stays on screen before the next question (its voice is fetched meanwhile).
 const REACTION_MS = 1100;
 
@@ -67,7 +91,10 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
   // Hesitation Monitor & Local Audio Replay states/refs
   const [hesitationPenalties, setHesitationPenalties] = useState({});
   const hesitationTimerRef = useRef(null);
-  const hasHesitatedInCurrentRoundRef = useRef(false);
+  const silenceStepRef = useRef(0); // next step of the professor's silence ladder for this question
+  const answerPrefixRef = useRef(""); // words said before a nudge; they still count towards the answer
+  const spokenRef = useRef(""); // everything said so far for the current question (prefix + live)
+  const [nudgeNote, setNudgeNote] = useState(null); // hint / simpler question shown under the question
   const recordedAudiosRef = useRef({});
   
   // Live Biometric Synchronization
@@ -90,12 +117,17 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
   const hesitationPenaltiesRef = useRef(hesitationPenalties);
   const liveMetricsRef = useRef(liveMetrics);
   const transcriptTextRef = useRef(transcriptText);
+  const timeRemainingRef = useRef(timeRemaining);
+  const vivaStateRef = useRef(vivaState);
+  const timeUpRef = useRef(false); // the clock ran out: the answer being given or graded is the last one
 
   useEffect(() => { activeQuestionRef.current = activeQuestion; }, [activeQuestion]);
   useEffect(() => { currentQuestionIndexRef.current = currentQuestionIndex; }, [currentQuestionIndex]);
   useEffect(() => { hesitationPenaltiesRef.current = hesitationPenalties; }, [hesitationPenalties]);
   useEffect(() => { liveMetricsRef.current = liveMetrics; }, [liveMetrics]);
   useEffect(() => { transcriptTextRef.current = transcriptText; }, [transcriptText]);
+  useEffect(() => { timeRemainingRef.current = timeRemaining; }, [timeRemaining]);
+  useEffect(() => { vivaStateRef.current = vivaState; }, [vivaState]);
 
   // Main initial hook: registers failsafes
   useEffect(() => {
@@ -139,10 +171,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
       setTimeRemaining(prev => {
         if (prev <= 1) {
           clearInterval(timer);
-          setTimeout(() => {
-            alert("Time is up! Let's proceed to your final evaluation.");
-            handleFinish(false);
-          }, 0);
+          setTimeout(() => handleTimeUp(), 0);
           return 0;
         }
         return prev - 1;
@@ -467,17 +496,18 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
     return blob;
   };
 
-  const getOfflineHint = (topic, questionText) => {
+  const offlineNudge = (step, q) => {
+    const topic = q.topic || "this topic";
+    if (step === "rephrase") return { hintText: q.text, hintSpeech: `Let me ask that another way. ${q.text}` };
+    if (step === "subquestion") {
+      return {
+        subQuestionText: `What is the basic definition of ${topic}?`,
+        subQuestionSpeech: `Let's simplify. What is the basic definition of ${topic}?`
+      };
+    }
     return {
-      hintText: `Friendly hint: Think about the core principles of ${topic || "this topic"}. How does it relate to its main variables or inputs?`,
-      hintSpeech: `Don't worry, let's take a step back. Think about the core principles of ${topic || "this topic"}. How does it relate to its main variables or inputs? Take your time.`
-    };
-  };
-
-  const getOfflineSubquestion = (topic, questionText) => {
-    return {
-      subQuestionText: `Simpler question: What is the absolute basic definition of ${topic || "this concept"}?`,
-      subQuestionSpeech: `You are taking too long. Let's make it simpler. Just tell me: what is the absolute basic definition of ${topic || "this concept"}?`
+      hintText: `Think about the core principles of ${topic}. What are its main variables or inputs?`,
+      hintSpeech: `No worries. Think about the core principles of ${topic}. What are its main variables or inputs? Take your time.`
     };
   };
 
@@ -488,185 +518,127 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
     }
   };
 
+  // Schedules the next step of the silence ladder. A student who has said little or nothing gets
+  // THINK_MS of thinking time (STALL_MS once they have started); once they are clearly answering,
+  // silence means "finished" and the speech manager's auto-submit takes over instead.
   const resetHesitationTimer = () => {
     clearHesitationTimer();
-    
-    // Only run hesitation monitor if:
-    // 1. We are in listening state
-    // 2. We are NOT in keyboard fallback mode
-    // 3. We haven't already hesitated in this specific question round
-    if (!fallbackMode && !hasHesitatedInCurrentRoundRef.current) {
-      hesitationTimerRef.current = setTimeout(() => {
-        handleStudentHesitation();
-      }, 5000); // 5 seconds of inactivity triggers the hesitation monitor
-    }
+    if (fallbackMode) return;
+    const steps = SILENCE_STEPS[config.personality] || SILENCE_STEPS.friendly;
+    if (silenceStepRef.current >= steps.length) return;
+    const total = countWords(spokenRef.current);
+    if (total >= ANSWERING_WORDS) return;
+    const sinceNudge = total - countWords(answerPrefixRef.current);
+    hesitationTimerRef.current = setTimeout(handleStudentHesitation, sinceNudge > 0 ? STALL_MS : THINK_MS);
   };
 
+  async function fetchNudge(action, question, extra, fallback) {
+    try {
+      const res = await vivaFetch({
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, question: question.text, topic: question.topic, answer: spokenRef.current, mode: config.mode, ...extra })
+      });
+      if (!res.ok) throw new Error(`${action} failed (${res.status})`);
+      return await res.json();
+    } catch (err) {
+      console.warn(`Using offline ${action}:`, err);
+      return fallback;
+    }
+  }
+
+  // One step of the professor's silence ladder (SILENCE_STEPS). The student's words so far are kept.
   const handleStudentHesitation = async () => {
-    hasHesitatedInCurrentRoundRef.current = true;
     clearHesitationTimer();
+    const currentQ = activeQuestionRef.current;
+    if (!currentQ || isProcessingRef.current) return;
+    const persona = SILENCE_STEPS[config.personality] ? config.personality : "friendly";
+    const steps = SILENCE_STEPS[persona];
+    const step = steps[silenceStepRef.current];
+    if (!step) return;
+    const subStep = steps.slice(0, silenceStepRef.current + 1).filter((s) => s === "subquestion").length;
+    silenceStepRef.current += 1;
+    answerPrefixRef.current = spokenRef.current.trim();
+    const qIdx = currentQuestionIndexRef.current;
+    const title = getPersonaTitle(persona, config.mode);
+    const lowTime = timeRemainingRef.current <= 60 ? "We have under a minute left. " : "";
 
-    // Stop Speech Recognition temporarily so it doesn't pick up the examiner's voice
     SpeechManager.stop();
-
-    const persona = config.personality;
-    
     setVivaState("speaking");
     setVisualState("speaking");
     startWaveAnimations();
 
-    const currentQ = activeQuestionRef.current;
-    if (!currentQ) {
-      console.warn("Hesitation triggered but activeQuestion is null, aborting.");
-      startListeningMode();
+    if (step === "moveOn") {
+      if (persona !== "strict") setHesitationPenalties((prev) => ({ ...prev, [qIdx]: true }));
+      setStatusText(`${title} is moving on...`);
+      const line = persona === "strict"
+        ? "We will move on. I will note that answer as incomplete."
+        : persona === "brutal" ? "Nothing? Fine. We move on, and that will cost you." : "Enough. We move on.";
+      const soFar = answerPrefixRef.current;
+      VoiceManager.speak(line, persona, null, () => processResponse(soFar));
       return;
     }
 
-    if (persona === "friendly") {
-      setStatusText(`${getPersonaTitle("friendly", config.mode)} is offering a hint...`);
-      
-      let hintText = "";
-      let hintSpeech = "";
-      
-      try {
-        const res = await fetch("/api/viva", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "generate-hint",
-            question: currentQ.text,
-            answer: transcriptTextRef.current === "Speak now. System is listening..." ? "" : transcriptTextRef.current,
-            topic: currentQ.topic,
-            mode: config.mode
-          })
-        });
-        if (res.ok) {
-          const data = await res.json();
-          hintText = data.hintText;
-          hintSpeech = data.hintSpeech;
-        } else {
-          throw new Error("Hint generation error");
-        }
-      } catch (err) {
-        console.warn("Using offline fallback hint:", err);
-        const fallbackHint = getOfflineHint(currentQ.topic, currentQ.text);
-        hintText = fallbackHint.hintText;
-        hintSpeech = fallbackHint.hintSpeech;
-      }
-
-      setTranscriptText(`[Hint: ${hintText}]`);
-      setIsPlaceholder(false);
-
-      VoiceManager.speak(hintSpeech, "friendly", 
-          null,
-        () => {
-          startListeningMode();
-        }
-      );
-
-    } else if (persona === "strict" || persona === "brutal") {
-      setStatusText(`${getPersonaTitle(persona, config.mode)} is reminding you of the time...`);
-
-      const mins = Math.floor(timeRemaining / 60);
-      const secs = timeRemaining % 60;
-      const timeStr = mins > 0 ? `${mins} minutes and ${secs} seconds` : `${secs} seconds`;
-      const reminderSpeech = config.mode === "professional"
-        ? `We are running out of time. You have ${timeStr} remaining for this interview. Please provide your answer immediately.`
-        : `We are running out of time. You have ${timeStr} remaining for this examination. Please provide your explanation immediately.`;
-      
-      setTranscriptText(config.mode === "professional"
-        ? `[Interviewer reminded you of the remaining time: ${getFormattedTime()}]`
-        : `[Examiner reminded you of the remaining time: ${getFormattedTime()}]`
-      );
-      setIsPlaceholder(false);
-
-      VoiceManager.speak(reminderSpeech, persona,
-        null,
-        () => {
-          startListeningMode();
-        }
-      );
-
-    } else if (persona === "terror") {
-      setStatusText(`${getPersonaTitle("terror", config.mode)} is interrupting you...`);
-      
-      setHesitationPenalties(prev => ({
-        ...prev,
-        [currentQuestionIndexRef.current]: true
-      }));
-
-      let subQuestionText = "";
-      let subQuestionSpeech = "";
-
-      try {
-        const res = await fetch("/api/viva", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "generate-subquestion",
-            question: currentQ.text,
-            answer: transcriptTextRef.current === "Speak now. System is listening..." ? "" : transcriptTextRef.current,
-            topic: currentQ.topic,
-            mode: config.mode
-          })
-        });
-        if (res.ok) {
-          const data = await res.json();
-          subQuestionText = data.subQuestionText;
-          subQuestionSpeech = data.subQuestionSpeech;
-        } else {
-          throw new Error("Sub-question generation failed");
-        }
-      } catch (err) {
-        console.warn("Using offline subquestion fallback:", err);
-        const fallbackSub = getOfflineSubquestion(currentQ.topic, currentQ.text);
-        subQuestionText = fallbackSub.subQuestionText;
-        subQuestionSpeech = fallbackSub.subQuestionSpeech;
-      }
-
-      setActiveQuestion(prev => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          text: `${prev.text} (Simplified: ${subQuestionText})`
-        };
-      });
-      setTranscriptText(config.mode === "professional"
-        ? `[Interviewer interrupted to ask a simpler sub-question. Score penalty applied.]`
-        : `[Examiner interrupted to ask a simpler sub-question. Score penalty applied.]`
-      );
-      setIsPlaceholder(false);
-
-      VoiceManager.speak(subQuestionSpeech, "terror",
-        null,
-        () => {
-          startListeningMode();
-        }
-      );
+    let speech = "";
+    let note = null;
+    if (step === "rephrase" || step === "hint" || step === "simplify") {
+      setStatusText(`${title} is helping you...`);
+      const r = await fetchNudge("generate-hint", currentQ, { level: step }, offlineNudge(step, currentQ));
+      speech = r.hintSpeech;
+      note = step === "rephrase" ? `Asked another way: ${r.hintText}` : step === "simplify" ? `First step: ${r.hintText}` : `Hint: ${r.hintText}`;
+    } else if (step === "subquestion") {
+      setStatusText(`${title} is interrupting you...`);
+      setHesitationPenalties((prev) => ({ ...prev, [qIdx]: true }));
+      const r = await fetchNudge("generate-subquestion", currentQ, { step: subStep }, offlineNudge("subquestion", currentQ));
+      speech = r.subQuestionSpeech;
+      note = `Simpler question: ${r.subQuestionText}`;
+      // The grader is told about the simpler question; the original question text is not rewritten.
+      setActiveQuestion((prev) => (prev ? { ...prev, subQuestions: [...(prev.subQuestions || []), r.subQuestionText] } : prev));
+    } else if (step === "definition") {
+      setStatusText(`${title} is waiting...`);
+      speech = `${lowTime}Take a moment. Start with the precise definition${currentQ.topic ? ` of ${currentQ.topic}` : ""}, then build from there.`;
+    } else if (step === "prod") {
+      setStatusText(`${title} is waiting...`);
+      speech = `${lowTime}Well? Anything at all? I'm waiting.`;
     }
+
+    // The answer may have been submitted, or the question changed, while the nudge was fetched.
+    if (!isMountedRef.current || isProcessingRef.current || activeQuestionRef.current?.text !== currentQ.text) return;
+    if (note) setNudgeNote(note);
+    VoiceManager.speak(speech, persona, null, () => startListeningMode(true));
   };
 
   // Phase 2: Dynamic Listening
-  function startListeningMode() {
+  // keepAnswer: resuming after a nudge, so the words already said stay part of the answer.
+  function startListeningMode(keepAnswer = false) {
     isProcessingRef.current = false;
+    if (!keepAnswer) {
+      answerPrefixRef.current = "";
+      silenceStepRef.current = 0;
+      speechStartTime.current = getNow();
+      setNudgeNote(null);
+    }
+    const prefix = answerPrefixRef.current;
+    spokenRef.current = prefix;
     setVivaState("listening");
     setVisualState("listening");
     setStatusText("Listening to your answer...");
-    setTranscriptText("Speak now. System is listening...");
-    setIsPlaceholder(true);
-    
-    speechStartTime.current = getNow();
+    setTranscriptText(prefix || "Speak now. System is listening...");
+    setIsPlaceholder(!prefix);
+
     startListeningWaveAnimations();
     resetHesitationTimer();
 
     SpeechManager.start({
       onResult: (interim, final) => {
+        const live = (final + (interim ? ` ${interim}` : "")).trim();
+        spokenRef.current = [prefix, live].filter(Boolean).join(" ");
         resetHesitationTimer();
-        if (!final && !interim) {
+        if (!spokenRef.current) {
           setTranscriptText("Speak now. System is listening...");
           setIsPlaceholder(true);
         } else {
-          setTranscriptText(final + (interim ? ` ${interim}` : ""));
+          setTranscriptText(spokenRef.current);
           setIsPlaceholder(false);
         }
       },
@@ -680,9 +652,9 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
         });
       },
       onSilenceDetected: (finalTranscriptText) => {
-        // Hands-free auto submit
+        // Hands-free auto submit (the words said before any nudge are part of the answer)
         SpeechManager.stop();
-        processResponse(finalTranscriptText);
+        processResponse([prefix, finalTranscriptText].filter(Boolean).join(" ").trim());
       },
       onAudioCaptured: (audioBlob) => {
         const waiter = pendingAudioEvalRef.current;
@@ -727,7 +699,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
     }
     const qIdxStart = currentQuestionIndexRef.current;
     const hasPenalty = hesitationPenaltiesRef.current[qIdxStart] || false;
-    const isLast = qIdxStart + 1 >= totalQuestions;
 
     if (!answerText || answerText.length < 5) {
       answerText = config.mode === "professional"
@@ -758,7 +729,10 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
     // 2. ONE request: grade this answer AND get the next question
     const turn = await TurnService.submitTurn({
       config,
-      question: currentQ,
+      // If a simpler sub-question was asked, the grader is told so it judges the answer fairly.
+      question: currentQ.subQuestions?.length
+        ? { ...currentQ, text: `${currentQ.text} (Then asked, simpler: ${currentQ.subQuestions.join(" / ")})` }
+        : currentQ,
       answer: answerText,
       rounds: SessionContextManager.getRounds(),
       audioBase64,
@@ -767,8 +741,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
       liveMetrics: liveMetricsRef.current,
       nervousness: latestNervousnessRef.current,
       hasPenalty,
-      isLast,
-      questionNumber: qIdxStart + 1
+      timeLeftSec: timeRemainingRef.current
     });
     if (!isMountedRef.current || hasFinishedRef.current) return;
 
@@ -797,9 +770,19 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
     }
     setStatusText(reactionText);
 
-    const nextQuestion = isLast
-      ? null
-      : (turn.next || QuestionGraphEngine.getRuleBasedOfflineFallback(qIdxStart + 2, config.personality, currentQ.topic, config.syllabusStructure));
+    // The server chose a follow-up on this answer, a new main question, or the end of the session.
+    // The session runs on time: the server ends it when too little time is left for another question.
+    const isLast = turn.done || timeUpRef.current;
+    const currentMain = currentQ.mainNumber || 1;
+    let nextQuestion = null;
+    if (!isLast) {
+      const picked = turn.next || {
+        ...QuestionGraphEngine.getRuleBasedOfflineFallback(currentMain + 1, config.personality, currentQ.topic, config.syllabusStructure),
+        kind: "new_topic", depth: 0
+      };
+      nextQuestion = { ...picked, mainNumber: picked.depth > 0 ? currentMain : currentMain + 1 };
+      if (picked.depth > 0) setStatusText(`${getPersonaTitle(config.personality, config.mode)} wants to dig deeper...`);
+    }
     if (nextQuestion) VoiceManager.preload(nextQuestion.speech || nextQuestion.text, config.personality);
 
     transitionTimeoutRef.current = setTimeout(() => {
@@ -809,7 +792,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
         handleFinish(false);
         return;
       }
-      hasHesitatedInCurrentRoundRef.current = false;
       setCurrentQuestionIndex(qIdxStart + 1);
       setActiveQuestion(nextQuestion);
       speakQuestion(nextQuestion);
@@ -841,6 +823,21 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
     alert(`Your ${sessionNameText} has been paused and saved securely. You can resume it anytime from the dashboard!`);
     onFinishViva(null); // Return directly to dashboard
   };
+
+  // Time is up. An answer in progress is still graded (it becomes the last one) instead of being lost.
+  function handleTimeUp() {
+    timeUpRef.current = true;
+    clearHesitationTimer();
+    if (hasFinishedRef.current || isProcessingRef.current) return; // a turn in flight finishes the session
+    const spoken = spokenRef.current.trim();
+    if (vivaStateRef.current === "listening" && spoken) {
+      setStatusText("Time is up. Grading your last answer...");
+      SpeechManager.stop();
+      processResponse(spoken);
+      return;
+    }
+    handleFinish(false);
+  }
 
   function handleFinish(endedEarly = false) {
     if (hasFinishedRef.current) return;
@@ -1165,11 +1162,15 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
         {/* Bottom card */}
         <div className="viva-question-card" id="viva-question-container">
           <span className="viva-question-number" id="viva-question-num-tag">
-            Question {currentQuestionIndex + 1}
+            {(activeQuestion?.mainNumber || currentQuestionIndex + 1) > totalQuestions
+              ? "Bonus question"
+              : `Question ${activeQuestion?.mainNumber || currentQuestionIndex + 1} of ${totalQuestions}`}
+            {activeQuestion?.depth > 0 && ` · Follow-up${FOLLOW_UP_LABELS[activeQuestion.followUpType] ? `: ${FOLLOW_UP_LABELS[activeQuestion.followUpType]}` : ""}`}
           </span>
           <div className="viva-question-content" id="viva-question-content-text">
             {activeQuestion ? `"${activeQuestion.text}"` : (config.mode === "professional" ? '"Loading interview question..."' : '"Loading examination question..."')}
           </div>
+          {nudgeNote && <p className="viva-nudge-note" role="status">{nudgeNote}</p>}
           
           <div className="viva-card-controls">
             <div style={{ display: "flex", gap: "var(--space-xs)" }}>

@@ -86,7 +86,8 @@ function normalizeRounds(rounds) {
     tag: VALID_TAGS.includes(r?.tag) ? r.tag : "",
     score: num(r?.score),
     q: clip(r?.q, 160),
-    a: clip(r?.a, 260)
+    a: clip(r?.a, 260),
+    depth: num(r?.depth, 0, 5) ?? 0 // 0 = main question, 1.. = follow-up in a chain
   }));
 }
 
@@ -107,15 +108,20 @@ export function normalizePayload(raw) {
     isTargetDrill: !!raw.isTargetDrill,
     targetSubtopic: clip(raw.targetSubtopic, 120),
     nervousness: num(raw.nervousness) ?? 0,
+    // Seconds left on the session clock (drives when the session ends; undefined = unknown)
+    timeLeftSec: num(raw.timeLeftSec, 0, 4 * 3600),
     // Live-session turn
     question: typeof raw.question === "string"
       ? clip(raw.question, 2000)
-      : { text: clip(q.text, 600), topic: clip(q.topic, 100), keyPoints: arr(q.keyPoints, 5).map((k) => clip(k, 80)).filter(Boolean) },
+      : { text: clip(q.text, 600), topic: clip(q.topic, 100), keyPoints: arr(q.keyPoints, 5).map((k) => clip(k, 80)).filter(Boolean), depth: num(q.depth, 0, 5) ?? 0 },
     answer: typeof raw.answer === "string" ? raw.answer.slice(0, 6000) : "",
     rounds: normalizeRounds(raw.rounds),
     pauseCount: num(raw.pauseCount, 0, 200) ?? 0,
     delivery: { wpm: num(delivery.wpm, 0, 400), fillerCount: num(delivery.fillerCount, 0, 200) },
     audioBase64: typeof raw.audioBase64 === "string" && raw.audioBase64.length <= MAX_AUDIO_BASE64_CHARS ? raw.audioBase64 : null,
+    // Stuck-candidate nudges: hint level (friendly) and sub-question level/tone
+    level: ["rephrase", "hint", "simplify"].includes(raw.level) ? raw.level : "hint",
+    step: num(raw.step, 1, 3) ?? 1,
     // Hindsight
     subjectName: clip(raw.subjectName, 120),
     askedQuestions: arr(raw.askedQuestions, 15).map((x) => clip(x, 400)),

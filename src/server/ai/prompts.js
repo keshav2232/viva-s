@@ -18,7 +18,7 @@ const NERVOUS_NOTE = {
   friendly: "The candidate is very nervous: be extra reassuring and ask an easier question.",
   strict: "The candidate is very nervous: keep standards but give a structured prompt.",
   brutal: "The candidate is very nervous: keep the pressure to test resilience.",
-  terror: "The candidate is very nervous: be unpredictable and test their limits."
+  terror: "The candidate is very nervous: keep the pressure, but ask one clear question at a time."
 };
 
 export function personaLine(mode, personality, nervousness = 0) {

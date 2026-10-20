@@ -3,6 +3,7 @@
  * It is deliberately conservative: it estimates vocabulary overlap with built-in reference answers
  * and never awards top marks. Every online action has a matching offline result here.
  */
+import { MIN_END_SEC } from "./followUps";
 import { getFallbackSyllabus } from "../../utils/mockData";
 import { getQuestionCountForDuration } from "../../utils/pacing";
 import { getTargetUnitsForDuration } from "./features/syllabus";
@@ -27,6 +28,9 @@ export function offlineAction(payload) {
 
   if (action === "generate-hint") {
     const { question, answer, topic } = payload;
+    if (payload.level === "rephrase" && question) {
+      return { hintText: `Rephrased: ${question}`, hintSpeech: `Let me ask that another way. ${question}` };
+    }
     if (isProfessional) {
       return ({
         hintText: `Warm hint: Consider how you would approach this from an industry perspective for ${topic || "this topic"}. What design trade-offs matter?`,
@@ -327,9 +331,14 @@ export function offlineAction(payload) {
     const roundTopics = (payload.rounds || []).map((r) => r.topic).filter(Boolean);
     const asked = [...roundTopics, payload.question?.topic].filter(Boolean);
     const total = getQuestionCountForDuration(payload.duration);
-    const isLast = (payload.rounds || []).length + 1 >= total;
-    const next = isLast ? null : offlineQuestion({ ...payload, asked, lastTag: grading.tag });
-    return { grading: { ...grading, rationale: grading.rationale || "Offline estimate: the AI grader was unavailable." }, next, offline: true };
+    // No follow-ups offline: only main questions count, and the session ends when they are used.
+    const depth = payload.question?.depth || 0;
+    const mainAsked = (payload.rounds || []).filter((r) => !(r.depth > 0)).length + (depth === 0 ? 1 : 0);
+    // Same time rule as online: keep going while there is time for another question.
+    const timeKnown = Number.isFinite(payload.timeLeftSec);
+    const done = timeKnown ? payload.timeLeftSec < MIN_END_SEC : mainAsked >= total;
+    const next = done ? null : { ...offlineQuestion({ ...payload, asked, lastTag: grading.tag }), kind: "new_topic", followUpType: null, depth: 0 };
+    return { grading: { ...grading, rationale: grading.rationale || "Offline estimate: the AI grader was unavailable." }, next, done, offline: true };
   }
 
   if (action === "generate-flashcards") {

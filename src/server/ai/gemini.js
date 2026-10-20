@@ -45,6 +45,8 @@ async function attempt({ model, feature, parts, schema, apiKey, cfg }) {
   if (schema) generationConfig.responseSchema = schema;
   // Gemini 2.5 models "think" by default, which burns hidden tokens and adds seconds of latency.
   if (model.startsWith("gemini-2.5")) generationConfig.thinkingConfig = { thinkingBudget: 0 };
+  // Gemini 3 models cannot switch thinking off, but "minimal" keeps it near zero (20 s -> 4 s measured).
+  else if (model.startsWith("gemini-3")) generationConfig.thinkingConfig = { thinkingLevel: "minimal" };
 
   const started = Date.now();
   const res = await fetch(`${BASE}/${model}:generateContent`, {
