@@ -35,6 +35,7 @@ const AuthContext = createContext({
   isConfigured: false,
   stats: EMPTY_STATS,
   sessions: [],
+  sessionsLoaded: false,
   setSessions: () => {},
   setStats: () => {},
   loginWithEmail: async () => {},
@@ -72,6 +73,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(isFirebaseConfigured);
   const [stats, setStats] = useState(EMPTY_STATS);
   const [sessions, setSessions] = useState([]);
+  const [sessionsLoaded, setSessionsLoaded] = useState(false); // cloud history fetched for the current user
 
   // Check if Firebase is fully initialized and operational
   const isConfigured = isFirebaseConfigured;
@@ -84,6 +86,7 @@ export function AuthProvider({ children }) {
 
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
+        setSessionsLoaded(false);
         setUser(firebaseUser);
         // Load stats and sessions from Firestore in the background (non-blocking)
         loadUserData(firebaseUser.uid, firebaseUser.displayName);
@@ -164,6 +167,8 @@ export function AuthProvider({ children }) {
       setStats(reconciledStats);
     } catch (err) {
       console.error("Error loading user cloud database data:", err);
+    } finally {
+      setSessionsLoaded(true);
     }
   }
 
@@ -393,6 +398,7 @@ export function AuthProvider({ children }) {
     isConfigured,
     stats,
     sessions,
+    sessionsLoaded,
     setSessions,
     setStats,
     loginWithEmail,

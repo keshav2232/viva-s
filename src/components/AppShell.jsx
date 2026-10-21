@@ -1,6 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { usePathname } from "next/navigation";
+import { ROUTES, matchRoute, pathFor, titleFor } from "@/app/routes";
+import shell from "./AppShell.module.css";
 import Header from "@/components/Header";
 import AuthScreen from "@/components/AuthScreen";
 import Dashboard from "@/components/Dashboard";
@@ -21,14 +24,60 @@ function generateSessionId() {
   return `session_${Date.now()}`;
 }
 
-export default function Home() {
-  const { 
-    user, 
-    loading: authLoading, 
-    stats: cloudStats, 
-    sessions: cloudSessions, 
-    logout, 
-    syncGuestData, 
+// Address <-> screen names used inside this component.
+const SCREEN_FOR_ROUTE = { dashboard: "dashboard", setup: "setup", viva: "active-viva", report: "results" };
+const ROUTE_FOR_SCREEN = { dashboard: "dashboard", setup: "setup", "active-viva": "viva", results: "report" };
+
+/** Report data for a saved session (older sessions without a stored report get a sample report). */
+function buildReportData(session) {
+  if (session.reportData) return session.reportData;
+  const mockScore = session.score || 85;
+  const mockData = {
+    subjectName: session.subject || "Thermodynamics",
+    endedEarly: false,
+    isLastMinute: session.duration <= 5,
+    isMockExternal: session.personality === "Viva Terror" || session.personality === "Brutal External",
+    examinerPersonality: session.personality === "Friendly Professor" ? "friendly" : (session.personality === "Strict Professor" ? "strict" : (session.personality === "Brutal External" ? "brutal" : "terror")),
+    askedQuestions: [
+      "Explain the foundational equations in your subject.",
+      "Describe secondary limitations or variables affecting efficiency.",
+      "Explain thermodynamic/computational trade-offs in detailed application contexts.",
+      "Under cyclic/extreme loading, state exact fatigue or failure conditions."
+    ],
+    askedQuestionsObjects: [
+      { text: "Explain the foundational equations in your subject.", speech: "Let us begin with the basics. Explain the foundational equations in your subject.", topic: "Fundamentals", difficulty: "Low" },
+      { text: "Describe secondary limitations or variables affecting efficiency.", speech: "Understood. Now describe secondary limitations or variables affecting efficiency.", topic: "Secondary Limits", difficulty: "Medium" },
+      { text: "Explain thermodynamic/computational trade-offs in detailed application contexts.", speech: "Interesting. Explain thermodynamic or computational trade-offs in detailed application contexts.", topic: "Trade-offs", difficulty: "High" },
+      { text: "Under cyclic/extreme loading, state exact fatigue or failure conditions.", speech: "Let's push to the limit. Under cyclic or extreme loading, state exact fatigue or failure conditions.", topic: "Extreme Loading", difficulty: "High" }
+    ],
+    answerTranscripts: [
+      "We define the core relations and boundary parameters representing standard operational volumes.",
+      "Yes, we can apply equations to calculate secondary variations and entropy increases under open systems.",
+      "We balance space, time complexity, or Alternating fatigue limits against efficiency targets.",
+      "We monitor stress flow fillet curve radius concentrations preventing failure."
+    ],
+    detectedEmotions: [
+      { confidence: mockScore + 2, clarity: mockScore - 1, nervousness: 25, hesitation: 15, correctness: mockScore + 3, accuracy: mockScore + 1, completeness: mockScore, tag: "Strong" },
+      { confidence: mockScore - 4, clarity: mockScore - 2, nervousness: 35, hesitation: 25, correctness: mockScore - 2, accuracy: mockScore - 5, completeness: mockScore - 3, tag: "Partially Correct" },
+      { confidence: mockScore - 1, clarity: mockScore, nervousness: 20, hesitation: 12, correctness: mockScore + 1, accuracy: mockScore + 2, completeness: mockScore, tag: "Strong" },
+      { confidence: mockScore - 2, clarity: mockScore + 1, nervousness: 30, hesitation: 18, correctness: mockScore - 1, accuracy: mockScore, completeness: mockScore - 2, tag: "Strong" }
+    ],
+    confidenceEvolution: [mockScore + 2, mockScore - 4, mockScore - 1, mockScore - 2],
+    weakConcepts: session.subject === "Data Structures" ? ["AVL balance factors", "separate chaining"] : ["Entropy Clausius boundaries", "Sommerfeld clearances"]
+  };
+  return mockData;
+}
+
+/** The whole practice app; the screen follows the address (see app/routes.js). */
+export default function AppShell() {
+  const {
+    user,
+    loading: authLoading,
+    stats: cloudStats,
+    sessions: cloudSessions,
+    sessionsLoaded: cloudSessionsLoaded,
+    logout,
+    syncGuestData,
     addSessionToCloud,
     updateSessionInCloud,
     deleteSessionFromCloud,
@@ -38,7 +87,27 @@ export default function Home() {
 
   // App routing states
   const [setupPreset, setSetupPreset] = useState(null);
-  const [activeScreen, setActiveScreen] = useState("dashboard"); // "auth-screen" | "dashboard" | "setup" | "active-viva" | "results"
+  // --- Routing: the address decides the screen; buttons change the address with pushState. ---
+  // The address is mirrored in state so it changes in the same render as the rest of the app
+  // (Next.js applies pushState as a low-priority update, which could briefly show the wrong screen).
+  const initialPathname = usePathname();
+  const [pathname, setPathname] = useState(initialPathname);
+  const requestedRoute = matchRoute(pathname) || { name: "landing", params: {} };
+  const navigate = useCallback((name, params = {}, { replace = false } = {}) => {
+    if (typeof window === "undefined") return;
+    const path = pathFor(name, params);
+    if (window.location.pathname !== path) window.history[replace ? "replaceState" : "pushState"](null, "", path);
+    setPathname(path);
+  }, []);
+  // Browser Back / Forward.
+  useEffect(() => {
+    const onPop = () => setPathname(window.location.pathname);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  const setActiveScreen = (screen) => navigate(ROUTE_FOR_SCREEN[screen] || screen);
+  const [hydrated, setHydrated] = useState(false); // browser storage has been read
+  const [inViva, setInViva] = useState(false); // a practice session is running in this tab
   const [isGuest, setIsGuest] = useState(false);
   const [syncingGuest, setSyncingGuest] = useState(false);
   const [syncSuccessMsg, setSyncSuccessMsg] = useState("");
@@ -52,8 +121,9 @@ export default function Home() {
   // Viva run states
   const [vivaConfig, setVivaConfig] = useState(null);
   const [resultsData, setResultsData] = useState(null);
+  const [resultsId, setResultsId] = useState(null); // id of the report held in resultsData
   const [pausedSession, setPausedSession] = useState(null);
-  
+
   // Local storage migration alert checker
   const [hasLocalGuestData, setHasLocalGuestData] = useState(false);
 
@@ -100,6 +170,7 @@ export default function Home() {
 
       setHasLocalGuestData(!!localStorage.getItem("vivasim_sessions"));
     }
+    setHydrated(true);
   }, []);
 
   const saveToStorage = (newSessions, newStats) => {
@@ -123,12 +194,11 @@ export default function Home() {
         localStorage.setItem("vivasim_user", guestName);
         sessionStorage.setItem("vivasim_active_session", "true");
       }
-      setActiveScreen("dashboard");
     } else {
       // Fully logged into Firebase Cloud Auth
       setIsGuest(false);
-      setActiveScreen("dashboard");
     }
+    // The redirect effect below moves on to the dashboard (or the page they first asked for).
   };
 
   const handleLogout = async () => {
@@ -146,7 +216,8 @@ export default function Home() {
     if (user) {
       await logout();
     }
-    setActiveScreen("dashboard");
+    setInViva(false);
+    navigate("landing");
   };
 
   const handleMigrateGuestHistory = useCallback(async () => {
@@ -212,6 +283,7 @@ export default function Home() {
     if (config.mode) {
       setCurrentMode(config.mode);
     }
+    setInViva(true);
     setActiveScreen("active-viva");
   };
 
@@ -233,6 +305,7 @@ export default function Home() {
             isResume: true,
             resumeState: parsed
           });
+          setInViva(true);
           setActiveScreen("active-viva");
           localStorage.removeItem("vivasim_paused_session");
           setPausedSession(null);
@@ -279,50 +352,14 @@ export default function Home() {
     if (session.mode) {
       setCurrentMode(session.mode);
     }
-    if (session.reportData) {
-      setResultsData(session.reportData);
-    } else {
-      // Mock report metrics for historic/preloaded compatibilities
-      const mockScore = session.score || 85;
-      const mockData = {
-        subjectName: session.subject || "Thermodynamics",
-        endedEarly: false,
-        isLastMinute: session.duration <= 5,
-        isMockExternal: session.personality === "Viva Terror" || session.personality === "Brutal External",
-        examinerPersonality: session.personality === "Friendly Professor" ? "friendly" : (session.personality === "Strict Professor" ? "strict" : (session.personality === "Brutal External" ? "brutal" : "terror")),
-        askedQuestions: [
-          "Explain the foundational equations in your subject.",
-          "Describe secondary limitations or variables affecting efficiency.",
-          "Explain thermodynamic/computational trade-offs in detailed application contexts.",
-          "Under cyclic/extreme loading, state exact fatigue or failure conditions."
-        ],
-        askedQuestionsObjects: [
-          { text: "Explain the foundational equations in your subject.", speech: "Let us begin with the basics. Explain the foundational equations in your subject.", topic: "Fundamentals", difficulty: "Low" },
-          { text: "Describe secondary limitations or variables affecting efficiency.", speech: "Understood. Now describe secondary limitations or variables affecting efficiency.", topic: "Secondary Limits", difficulty: "Medium" },
-          { text: "Explain thermodynamic/computational trade-offs in detailed application contexts.", speech: "Interesting. Explain thermodynamic or computational trade-offs in detailed application contexts.", topic: "Trade-offs", difficulty: "High" },
-          { text: "Under cyclic/extreme loading, state exact fatigue or failure conditions.", speech: "Let's push to the limit. Under cyclic or extreme loading, state exact fatigue or failure conditions.", topic: "Extreme Loading", difficulty: "High" }
-        ],
-        answerTranscripts: [
-          "We define the core relations and boundary parameters representing standard operational volumes.",
-          "Yes, we can apply equations to calculate secondary variations and entropy increases under open systems.",
-          "We balance space, time complexity, or Alternating fatigue limits against efficiency targets.",
-          "We monitor stress flow fillet curve radius concentrations preventing failure."
-        ],
-        detectedEmotions: [
-          { confidence: mockScore + 2, clarity: mockScore - 1, nervousness: 25, hesitation: 15, correctness: mockScore + 3, accuracy: mockScore + 1, completeness: mockScore, tag: "Strong" },
-          { confidence: mockScore - 4, clarity: mockScore - 2, nervousness: 35, hesitation: 25, correctness: mockScore - 2, accuracy: mockScore - 5, completeness: mockScore - 3, tag: "Partially Correct" },
-          { confidence: mockScore - 1, clarity: mockScore, nervousness: 20, hesitation: 12, correctness: mockScore + 1, accuracy: mockScore + 2, completeness: mockScore, tag: "Strong" },
-          { confidence: mockScore - 2, clarity: mockScore + 1, nervousness: 30, hesitation: 18, correctness: mockScore - 1, accuracy: mockScore, completeness: mockScore - 2, tag: "Strong" }
-        ],
-        confidenceEvolution: [mockScore + 2, mockScore - 4, mockScore - 1, mockScore - 2],
-        weakConcepts: session.subject === "Data Structures" ? ["AVL balance factors", "separate chaining"] : ["Entropy Clausius boundaries", "Sommerfeld clearances"]
-      };
-      setResultsData(mockData);
-    }
-    setActiveScreen("results");
+    const id = String(session.id ?? "current");
+    setResultsData(buildReportData(session));
+    setResultsId(id);
+    navigate("report", { id });
   };
 
   const handleFinishViva = (summary, hindsightPromise) => {
+    setInViva(false);
     if (!summary) {
       if (typeof window !== "undefined") {
         const paused = localStorage.getItem("vivasim_paused_session");
@@ -413,7 +450,8 @@ export default function Home() {
     }
 
     setResultsData(summary);
-    setActiveScreen("results");
+    setResultsId(newSession.id);
+    navigate("report", { id: newSession.id });
   };
 
   const calculateFinalScore = (summary) => computeOverallScore(summary.detectedEmotions, summary.endedEarly);
@@ -429,58 +467,78 @@ export default function Home() {
     }
   };
 
-  // SKELETON LOADER SCREEN (Visible when Firebase is loading auth state)
-  if (authLoading) {
+  const signedIn = !!user || isGuest;
+  const ready = !authLoading && hydrated;
+
+  // Send people to the right place: private pages need a sign-in (or guest session), and the
+  // landing / sign-in pages move signed-in people on to their dashboard. The page they asked for
+  // stays in `pathname`, so after signing in they land where they wanted to go.
+  const isPrivate = !!ROUTES[requestedRoute.name]?.private;
+  const route = !ready
+    ? requestedRoute
+    : (isPrivate && !signedIn ? { name: "login", params: {} } : (!isPrivate && signedIn ? { name: "dashboard", params: {} } : requestedRoute));
+  const routePath = pathFor(route.name, route.params);
+
+  // Keep the browser address in line with what is shown (redirects replace, not push).
+  useEffect(() => {
+    if (window.location.pathname !== routePath) window.history.replaceState(null, "", routePath);
+  }, [routePath]);
+
+  // Each screen gets its own tab title, and new screens start at the top.
+  // (The <title> itself is rendered below; React moves it into the page head.)
+  const pageTitle = <title>{titleFor(route.name)}</title>;
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [route.name, route.params.id]);
+
+  // A running practice session keeps its screen even if the address changes (browser Back);
+  // the person is then asked whether they really want to leave it.
+  const routeScreen = SCREEN_FOR_ROUTE[route.name] || "dashboard";
+  const activeScreen = inViva ? "active-viva" : routeScreen;
+  const leavingViva = inViva && route.name !== "viva";
+
+  // The report for /reports/<id>: the one just finished, or a saved session (after a refresh).
+  const reportId = route.name === "report" ? route.params.id : null;
+  const historyReady = user ? cloudSessionsLoaded : hydrated;
+  const savedSession = reportId ? activeSessions.find((s) => String(s.id) === reportId) : null;
+  const reportData = reportId
+    ? (resultsData && resultsId && String(resultsId) === reportId ? resultsData : (savedSession ? buildReportData(savedSession) : null))
+    : null;
+
+  // SKELETON LOADER SCREEN (Visible while sign-in state and saved history are being read)
+  if (!ready) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", justifyContent: "center", alignItems: "center", background: "var(--bg-primary, #FAF9F6)" }}>
-        <div style={{ textAlign: "center", animation: "pulse 2s infinite ease-in-out" }}>
-          {/* Logo Icon Spinner */}
-          <div style={{ display: "flex", justifyContent: "center", gap: "12px", alignItems: "center", marginBottom: "20px" }}>
-            <svg className="animate-spin" style={{ width: "46px", height: "46px", color: "#6366f1" }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" style={{ opacity: 0.15 }}></circle>
-              <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <span 
-              className="logo-text" 
-              style={{ 
-                fontSize: "2.25rem", 
-                fontWeight: "900", 
-                letterSpacing: "-0.5px", 
-                background: "linear-gradient(135deg, var(--accent-primary, #1f2a38) 0%, #6366f1 100%)", 
-                WebkitBackgroundClip: "text", 
-                WebkitTextFillColor: "transparent" 
-              }}
-            >
-              VivaSim
-            </span>
-          </div>
-          <p style={{ color: "var(--text-secondary, #475569)", fontSize: "0.9rem", fontWeight: "700", letterSpacing: "1px", textTransform: "uppercase", marginBottom: "8px" }}>
-            Securing academic tunnel... Verifying profile
-          </p>
-          <div style={{ width: "180px", height: "4px", background: "rgba(31, 42, 56, 0.08)", borderRadius: "10px", margin: "16px auto 0", overflow: "hidden", position: "relative" }}>
-            <div style={{ position: "absolute", height: "100%", width: "40%", background: "linear-gradient(90deg, #6366f1, #4f46e5)", borderRadius: "10px", animation: "loadingBar 1.5s infinite ease" }}></div>
-          </div>
-        </div>
+      <div className={shell.loader} role="status" aria-live="polite">
+        {pageTitle}
+        <svg width="40" height="43" viewBox="0 0 30 32" fill="none" aria-hidden="true"><path d="M3 6 15 0l12 6v14l-12 7V14l12-8M3 6v20l12 6v-5M3 6l12 8" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" /></svg>
+        <strong>PrepSim</strong>
+        <span>Getting your practice room ready…</span>
+        <i aria-hidden="true" />
       </div>
     );
   }
 
-  // FORCE AUTH SCREEN IF NOT LOGGED IN & NOT GUEST
-  const showAuthScreen = !user && !isGuest;
-  if (showAuthScreen) {
-    return <AuthScreen onLoginSuccess={handleLoginSuccess} />;
+  // Landing page and sign-in / sign-up forms (signed-out visitors only)
+  if (!signedIn) {
+    return (
+      <>
+        {pageTitle}
+        <AuthScreen key={route.name} view={route.name} onNavigate={(name) => navigate(name)} onLoginSuccess={handleLoginSuccess} />
+      </>
+    );
   }
 
   const showHeader = activeScreen !== "active-viva" && activeScreen !== "dashboard" && activeScreen !== "setup" && activeScreen !== "results";
 
   return (
     <div className={(activeScreen === "dashboard" || activeScreen === "setup") ? dashboardStyles.shell : (activeScreen === "results" ? resultsStyles.shell : undefined)} style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+      {pageTitle}
       {/* Aesthetic Academic Background Canvas */}
       <div className="bg-decor-canvas">
         <div className="bg-decor-orb decor-orb-1"></div>
         <div className="bg-decor-orb decor-orb-2"></div>
         <div className="bg-decor-orb decor-orb-3"></div>
-        
+
         {currentMode === "professional" ? (
           <>
             {/* STAR Flowchart Watermark */}
@@ -515,16 +573,16 @@ export default function Home() {
             <svg className="bg-academic-watermark watermark-grid" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="0.3">
               <rect x="10" y="40" width="16" height="20" rx="2" strokeWidth="0.6" />
               <text x="18" y="52" fontSize="4.5" fill="currentColor" textAnchor="middle">Client</text>
-              
+
               <line x1="26" y1="50" x2="34" y2="50" strokeWidth="0.6" />
               <polygon points="34,50 31,48 31,52" fill="currentColor" stroke="none" />
 
               <rect x="35" y="30" width="18" height="40" rx="2" strokeWidth="0.6" />
               <text x="44" y="52" fontSize="4.5" fill="currentColor" textAnchor="middle">LB / API</text>
-              
+
               <line x1="53" y1="42" x2="61" y2="35" strokeWidth="0.6" />
               <polygon points="61,35 57,35 59,38" fill="currentColor" stroke="none" />
-              
+
               <line x1="53" y1="58" x2="61" y2="65" strokeWidth="0.6" />
               <polygon points="61,65 59,62 57,65" fill="currentColor" stroke="none" />
 
@@ -533,7 +591,7 @@ export default function Home() {
 
               <rect x="62" y="60" width="18" height="20" rx="2" strokeWidth="0.6" />
               <text x="71" y="72" fontSize="4.0" fill="currentColor" textAnchor="middle">DB Cluster</text>
-              
+
               <path d="M 80 30 Q 95 50 80 70" strokeWidth="0.5" strokeDasharray="1 1" />
             </svg>
 
@@ -542,7 +600,7 @@ export default function Home() {
               <rect x="10" y="10" width="80" height="80" rx="4" strokeWidth="0.8" />
               <line x1="10" y1="28" x2="90" y2="28" strokeWidth="0.8" />
               <text x="50" y="21" fontSize="6.5" fontWeight="700" fill="currentColor" textAnchor="middle">INTERVIEW SCHEDULE</text>
-              
+
               <line x1="21.4" y1="28" x2="21.4" y2="90" />
               <line x1="32.8" y1="28" x2="32.8" y2="90" />
               <line x1="44.2" y1="28" x2="44.2" y2="90" />
@@ -553,10 +611,10 @@ export default function Home() {
               <line x1="10" y1="43.5" x2="90" y2="43.5" />
               <line x1="10" y1="59" x2="90" y2="59" />
               <line x1="10" y1="74.5" x2="90" y2="74.5" />
-              
+
               <rect x="34.8" y="30" width="7.4" height="11.5" rx="1.5" strokeWidth="0.5" strokeDasharray="1 1" />
               <text x="38.5" y="38" fontSize="4.5" fill="currentColor" textAnchor="middle" fontWeight="700">9a</text>
-              
+
               <rect x="57.6" y="45.5" width="7.4" height="11.5" rx="1.5" strokeWidth="0.5" />
               <path d="M59.5,51.5 L61,53 L63.5,49.5" strokeWidth="0.6" strokeLinecap="round" strokeLinejoin="round" />
 
@@ -608,17 +666,17 @@ export default function Home() {
 
       {/* Header */}
       {showHeader && (
-        <Header 
-          userName={activeUserName} 
-          onNavigate={(scr) => setActiveScreen(scr)} 
-          onLogout={handleLogout} 
+        <Header
+          userName={activeUserName}
+          onNavigate={(scr) => setActiveScreen(scr)}
+          onLogout={handleLogout}
         />
       )}
 
       {/* Main Workspace */}
       <main>
         <div className="content-container">
-          
+
           {/* Guest Data Sync Banner */}
           {user && hasLocalGuestData && (
             <div className="guest-sync-banner" style={{ background: "rgba(99, 102, 241, 0.12)", border: "1px solid rgba(99, 102, 241, 0.3)", borderRadius: "14px", padding: "16px var(--space-xl)", margin: "var(--space-md) 0 var(--space-lg)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", animation: "slideIn 0.4s ease" }}>
@@ -656,13 +714,13 @@ export default function Home() {
               <span>{syncSuccessMsg}</span>
             </div>
           )}
-          
+
           {/* Dashboard View */}
           {activeScreen === "dashboard" && (
-            <Dashboard 
-              userName={activeUserName} 
-              stats={activeStats} 
-              sessions={activeSessions} 
+            <Dashboard
+              userName={activeUserName}
+              stats={activeStats}
+              sessions={activeSessions}
               onStartNewViva={(preset) => { setSetupPreset(preset); setActiveScreen("setup"); }}
               onLogout={handleLogout}
               isGuest={isGuest}
@@ -679,33 +737,78 @@ export default function Home() {
 
           {/* Syllabus Setup View */}
           {activeScreen === "setup" && (
-            <SetupFlow 
+            <SetupFlow
               initialConfig={setupPreset}
-              onCancel={() => setActiveScreen("dashboard")} 
-              onBeginViva={handleBeginViva} 
+              onCancel={() => setActiveScreen("dashboard")}
+              onBeginViva={handleBeginViva}
             />
           )}
 
           {/* Exam Simulator View */}
-          {activeScreen === "active-viva" && (
-            <ActiveViva 
-              config={vivaConfig} 
-              activeUser={activeUserName} 
-              onBack={() => { setSetupPreset(vivaConfig); setActiveScreen("setup"); }}
-              onFinishViva={handleFinishViva} 
+          {activeScreen === "active-viva" && inViva && vivaConfig && (
+            <ActiveViva
+              config={vivaConfig}
+              activeUser={activeUserName}
+              onBack={() => { setSetupPreset(vivaConfig); setInViva(false); setActiveScreen("setup"); }}
+              onFinishViva={handleFinishViva}
             />
           )}
 
+          {/* Viva address opened without a running session (e.g. after a refresh) */}
+          {route.name === "viva" && !inViva && (
+            <section className={shell.notice} aria-labelledby="no-session-title">
+              <span className={shell.eyebrow}>PRACTICE SESSION</span>
+              <h1 id="no-session-title">This session <em>isn&apos;t running.</em></h1>
+              <p>A practice session can&apos;t continue after the page is refreshed or reopened. Use <strong>Pause</strong> during a session to save it and resume later from your dashboard.</p>
+              <div className={shell.actions}>
+                <button className={shell.primary} onClick={() => navigate("setup")}>Start a new session <span aria-hidden="true">→</span></button>
+                <button className={shell.secondary} onClick={() => navigate("dashboard")}>Go to dashboard</button>
+              </div>
+            </section>
+          )}
+
+          {/* Report address that does not match a saved session */}
+          {activeScreen === "results" && !reportData && (
+            <section className={shell.notice} aria-labelledby="no-report-title" aria-busy={!historyReady}>
+              <span className={shell.eyebrow}>SESSION REPORT</span>
+              {historyReady ? (
+                <>
+                  <h1 id="no-report-title">We couldn&apos;t find <em>this report.</em></h1>
+                  <p>{user ? "It may have been deleted, or the link is incomplete." : "Guest reports are kept only in this browser until your next visit. Sign in to keep your reports and open them from any device."}</p>
+                  <div className={shell.actions}>
+                    <button className={shell.primary} onClick={() => navigate("dashboard")}>Go to dashboard <span aria-hidden="true">→</span></button>
+                  </div>
+                </>
+              ) : (
+                <h1 id="no-report-title">Opening your report…</h1>
+              )}
+            </section>
+          )}
+
           {/* Results Summary View */}
-          {activeScreen === "results" && resultsData && (
-            <Results 
-              resultsData={resultsData} 
+          {activeScreen === "results" && reportData && (
+            <Results
+              key={reportId}
+              resultsData={reportData}
               onRestart={() => { setSetupPreset(null); setActiveScreen("setup"); }}
-              onGoDashboard={() => setActiveScreen("dashboard")} 
+              onGoDashboard={() => setActiveScreen("dashboard")}
             />
           )}
         </div>
       </main>
+
+      {leavingViva && (
+        <div className={shell.backdrop}>
+          <div className={shell.dialog} role="alertdialog" aria-modal="true" aria-labelledby="leave-title" aria-describedby="leave-desc">
+            <h2 id="leave-title">Leave this practice session?</h2>
+            <p id="leave-desc">Your answers so far won&apos;t be saved. To keep them, stay and use <strong>Pause</strong> instead.</p>
+            <div className={shell.actions}>
+              <button className={shell.primary} autoFocus onClick={() => navigate("viva")}>Stay in the session</button>
+              <button className={shell.secondary} onClick={() => setInViva(false)}>Leave without saving</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer style={{ borderTop: "1px solid var(--border-color)", padding: "var(--space-lg) 0", fontSize: "0.875rem", color: "var(--text-muted)", textAlign: "center", backgroundColor: "var(--bg-card)" }}>

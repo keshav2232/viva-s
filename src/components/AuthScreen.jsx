@@ -46,10 +46,14 @@ function friendlyError(error) {
   return messages[error?.code] || "We couldn’t complete that request. Please try again or continue as a guest.";
 }
 
-export default function AuthScreen({ onLoginSuccess }) {
+/**
+ * view: "landing" | "login" | "signup" (from the address). onNavigate(name) changes the address;
+ * the app shell re-mounts this screen for the new view.
+ */
+export default function AuthScreen({ onLoginSuccess, view = "landing", onNavigate }) {
   const { loginWithEmail, signupWithEmail, loginWithGoogle, isConfigured } = useAuth();
-  const [screenMode, setScreenMode] = useState("landing");
-  const [authMode, setAuthMode] = useState("login");
+  const [screenMode, setScreenMode] = useState(view === "landing" ? "landing" : "auth");
+  const [authMode, setAuthMode] = useState(view === "signup" ? "signup" : "login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -73,11 +77,13 @@ export default function AuthScreen({ onLoginSuccess }) {
     setShowPassword(false);
   }
   function openAuth(mode) {
+    if (onNavigate) { onNavigate(mode === "signup" ? "signup" : "login"); return; }
     switchMode(mode);
     setScreenMode("auth");
     window.scrollTo({ top: 0, behavior: "instant" });
   }
   function goHome() {
+    if (onNavigate) { onNavigate("landing"); return; }
     setScreenMode("landing");
     setErrorMessage("");
     setPassword("");

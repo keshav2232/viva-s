@@ -1,0 +1,13 @@
+.main { flex: 1; position: relative; overflow: hidden; width: 100%; max-width: 1100px; margin: 0 auto; padding: 90px 24px 100px !important; display: flex !important; flex-direction: column; align-items: flex-start; }
+.code { position: absolute; right: 2%; top: 20px; font-family: Georgia, serif; font-style: italic; font-size: clamp(140px, 24vw, 320px); line-height: 1; color: transparent; -webkit-text-stroke: 1px #9fae8a66; pointer-events: none; user-select: none; }
+.eyebrow { position: relative; font-size: 12px; font-weight: 600; letter-spacing: 1.5px; color: #535c4b; }
+.main h1 { position: relative; font-size: clamp(44px, 6vw, 80px) !important; font-weight: 450; letter-spacing: -0.04em; line-height: 1.05 !important; margin: 18px 0 18px; }
+.main h1 em { font-family: Georgia, serif; font-weight: 400; color: #9f5a3f; }
+.main > p { position: relative; max-width: 520px; font-size: 18px; line-height: 1.7; color: #535c4b; }
+.actions { position: relative; display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+.primary, .secondary { display: inline-flex; align-items: center; gap: 12px; min-height: 48px; padding: 12px 20px; border-radius: 4px; font-size: 16px; text-decoration: none !important; }
+.primary { background: #3e5233; color: #fffdf1 !important; }
+.primary:hover { background: #2f3f27; }
+.secondary { border: 1px solid #c9d2bc; color: #2e392e !important; }
+.secondary:hover { background: #eef2e4; }
+.help { margin-top: 26px !important; font-size: 15px !important; }
