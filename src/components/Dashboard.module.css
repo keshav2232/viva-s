@@ -153,3 +153,10 @@
 @media(prefers-reduced-motion:reduce) { .dashboard * { transition: none !important; animation: none !important; } :global(html):has(.dashboard) { scroll-behavior: auto; } }
 
 @media (prefers-contrast: more) { .dashboard { --muted: #3c4439; --ink: #151a15; } }
+.rowDelete { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; font-size: 14px; color: #5a2c1d; }
+.rowDelete button { min-height: 40px; min-width: 40px; padding: 6px 10px; border: 1px solid #d9dfcf; border-radius: 4px; background: #f8f9f2; font-size: 14px; display: inline-grid; place-items: center; }
+.rowDelete .binButton { background: transparent; border-color: transparent; color: #6d5a4e; }
+.rowDelete .binButton:hover { border-color: #d9b8a6; background: #fbefe8; color: #8f3b26; }
+.rowDelete .rowDanger { background: #8f3b26; border-color: #8f3b26; color: #fffdf6; }
+.deleteStatus { min-height: 0; margin: 10px 0 0 !important; font-size: 15px; color: #3e5233; }
+.deleteStatus:empty { display: none; }

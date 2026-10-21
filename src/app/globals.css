@@ -6474,3 +6474,26 @@ body {
 .navigation-breadcrumbs button, .navigation-top { background: transparent; border: 0; color: inherit; cursor: pointer; min-height: 44px; text-decoration: underline; text-underline-offset: 4px; }
 nav a[aria-current="location"] { text-decoration: underline; text-underline-offset: 6px; font-weight: 700; }
 :where(#experience, #how-it-works, #questions, #dashboard-overview, #practice-history, #results-tabs) { scroll-margin-top: 24px; }
+
+/* Footer links to the privacy, terms and contact pages (components/legal/LegalLinks.jsx). */
+.legal-links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  font-size: 14px;
+}
+
+.legal-links a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 4px 0;
+}
+
+.legal-links a:hover {
+  color: #9f5a3f;
+}
+
+.legal-links + .navigation-top {
+  margin-left: 18px;
+}

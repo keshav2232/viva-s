@@ -7,6 +7,7 @@ import { auth } from "@/services/firebase";
 import { useAuth } from "@/context/AuthContext";
 import LandingPage from "./LandingPage";
 import styles from "./AuthScreen.module.css";
+import LegalLinks from "@/components/legal/LegalLinks";
 
 const scenes = [
   { image: "/workspace_desk.png", alt: "Sunlit desk with an open notebook, books, and a small green plant", title: "Make a little room for yourself.", caption: "A quiet start", label: "01 / THE EVERYDAY PRACTICE" },
@@ -190,7 +191,7 @@ export default function AuthScreen({ onLoginSuccess }) {
           <div className={styles.underCard}><span>◈</span> Your pace. Your progress. Your next chapter.</div>
         </section>
       </main>
-      <footer className={styles.footer}><span>© {new Date().getFullYear()} PrepSim</span><p>Practice for the moments that matter.</p><span>THINK IT. SAY IT. BECOME IT.</span></footer>
+      <footer className={styles.footer}><span>© {new Date().getFullYear()} PrepSim</span><p>Practice for the moments that matter.</p><LegalLinks /><span>THINK IT. SAY IT. BECOME IT.</span></footer>
     </div>
   );
 }

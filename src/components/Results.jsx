@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { VoiceManager } from "@/services/voiceManager";
 import styles from "./Results.module.css";
 import { computeOverallScore } from "@/utils/scoring";
+import LegalLinks from "@/components/legal/LegalLinks";
 
 export default function Results({ resultsData, onRestart, onGoDashboard }) {
   const [activeTab, setActiveTab] = useState("overview"); // "overview" | "questions" | "delivery" | "plan"
@@ -1475,6 +1476,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
           <span>PrepSim / Your session report</span>
           <p>Progress is a practice. Keep showing up.</p>
           <span>AI feedback is guidance, not an official grade.</span>
+          <LegalLinks />
         </div>
       </div>
     </section>

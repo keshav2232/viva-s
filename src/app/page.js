@@ -14,6 +14,7 @@ import { useAuth } from "@/context/AuthContext";
 import { INITIAL_STATS, DEFAULT_SESSIONS, EMPTY_STATS } from "@/utils/mockData";
 import { computeOverallScore, computeSessionStats } from "@/utils/scoring";
 import { SyllabusMasteryService } from "@/services/SyllabusMasteryService";
+import LegalLinks from "@/components/legal/LegalLinks";
 
 // Helper function declared outside of component to ensure render purity
 function generateSessionId() {
@@ -29,7 +30,10 @@ export default function Home() {
     logout, 
     syncGuestData, 
     addSessionToCloud,
-    updateSessionInCloud
+    updateSessionInCloud,
+    deleteSessionFromCloud,
+    deleteAllCloudHistory,
+    deleteAccount
   } = useAuth();
 
   // App routing states
@@ -237,6 +241,38 @@ export default function Home() {
         }
       }
     }
+  };
+
+  // --- Data deletion (dashboard "Your data" panel and the bin button on each session) ---
+  const handleDeleteSession = async (session) => {
+    if (user) {
+      await deleteSessionFromCloud(session.id);
+      return;
+    }
+    const remaining = sessions.filter((s) => s !== session && !(session.id && s.id === session.id));
+    const nextStats = computeSessionStats(remaining);
+    setSessions(remaining);
+    setStats(nextStats);
+    saveToStorage(remaining, nextStats);
+  };
+
+  const handleDeleteAllHistory = async () => {
+    if (user) await deleteAllCloudHistory();
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("vivasim_sessions");
+      localStorage.removeItem("vivasim_stats");
+      localStorage.removeItem("vivasim_mastery");
+      localStorage.removeItem("vivasim_paused_session");
+    }
+    setSessions([]);
+    setStats(EMPTY_STATS);
+    setPausedSession(null);
+    setHasLocalGuestData(false);
+  };
+
+  const handleDeleteAccount = async (password) => {
+    await deleteAccount(password);
+    await handleLogout(); // clears anything left in this browser and returns to the start screen
   };
 
   const handleViewReport = (session) => {
@@ -634,6 +670,10 @@ export default function Home() {
               onClearPausedSession={handleClearPausedSession}
               onResumePausedSession={handleResumePausedSession}
               onViewReport={handleViewReport}
+              isSignedIn={!!user}
+              onDeleteSession={handleDeleteSession}
+              onDeleteAllHistory={handleDeleteAllHistory}
+              onDeleteAccount={handleDeleteAccount}
             />
           )}
 
@@ -670,6 +710,7 @@ export default function Home() {
       {/* Footer */}
       <footer style={{ borderTop: "1px solid var(--border-color)", padding: "var(--space-lg) 0", fontSize: "0.875rem", color: "var(--text-muted)", textAlign: "center", backgroundColor: "var(--bg-card)" }}>
         <p>© {new Date().getFullYear()} PrepSim. Engineered as a high-fidelity academic prep tool.</p>
+        <LegalLinks />
         {activeScreen !== "active-viva" && <button className="navigation-top" onClick={() => window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" })}>Back to top ↑</button>}
       </footer>
     </div>

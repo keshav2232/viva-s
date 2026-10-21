@@ -7,7 +7,11 @@ import {
   signOut, 
   signInWithPopup, 
   onAuthStateChanged,
-  updateProfile
+  updateProfile,
+  deleteUser,
+  reauthenticateWithPopup,
+  reauthenticateWithCredential,
+  EmailAuthProvider
 } from "firebase/auth";
 import { 
   doc, 
@@ -18,7 +22,8 @@ import {
   query, 
   orderBy,
   updateDoc,
-  writeBatch
+  writeBatch,
+  deleteDoc
 } from "firebase/firestore";
 import { auth, db, googleProvider, isFirebaseConfigured } from "@/services/firebase";
 import { INITIAL_STATS, EMPTY_STATS } from "@/utils/mockData";
@@ -38,7 +43,10 @@ const AuthContext = createContext({
   logout: async () => {},
   syncGuestData: async () => {},
   addSessionToCloud: async () => {},
-  updateSessionInCloud: async () => {}
+  updateSessionInCloud: async () => {},
+  deleteSessionFromCloud: async () => {},
+  deleteAllCloudHistory: async () => {},
+  deleteAccount: async () => {}
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -256,6 +264,75 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // 5c. Delete one saved session and recompute the dashboard stats from what is left.
+  const deleteSessionFromCloud = async (sessionId) => {
+    if (!user || !isConfigured || !sessionId) return;
+    const uid = user.uid;
+    await deleteDoc(doc(db, "users", uid, "vivas", String(sessionId)));
+    const remaining = sessions.filter((s) => String(s.id) !== String(sessionId));
+    const nextStats = computeSessionStats(remaining);
+    await setDoc(doc(db, "users", uid, "stats", "dashboard"), nextStats);
+    setSessions(remaining);
+    setStats(nextStats);
+  };
+
+  // Deletes every practice document under users/{uid} (sessions, stats, topic progress).
+  // Firestore batches hold at most 500 writes, so sessions are removed in chunks.
+  async function deletePracticeData(uid) {
+    const snap = await getDocs(collection(db, "users", uid, "vivas"));
+    const refs = snap.docs.map((d) => d.ref);
+    for (let i = 0; i < refs.length; i += 450) {
+      const batch = writeBatch(db);
+      refs.slice(i, i + 450).forEach((ref) => batch.delete(ref));
+      await batch.commit();
+    }
+    const batch = writeBatch(db);
+    batch.delete(doc(db, "users", uid, "stats", "dashboard"));
+    batch.delete(doc(db, "users", uid, "mastery", "syllabus"));
+    await batch.commit();
+    localStorage.removeItem("vivasim_mastery");
+  }
+
+  // 5d. Delete the whole practice history but keep the account.
+  const deleteAllCloudHistory = async () => {
+    if (!user || !isConfigured) return;
+    await deletePracticeData(user.uid);
+    setSessions([]);
+    setStats(EMPTY_STATS);
+  };
+
+  // 5e. Delete the account and everything stored for it. Firebase only allows deleting an account
+  // shortly after signing in, so older sign-ins are confirmed again first (Google pop-up, or the
+  // password for email accounts). Data is deleted before the account so the security rules still
+  // allow it; if the final step fails, the error says so and the user can retry.
+  const RECENT_SIGN_IN_MS = 4 * 60 * 1000;
+  const deleteAccount = async (password) => {
+    const current = auth?.currentUser;
+    if (!current || !isConfigured) throw new Error("You need to be signed in to delete an account.");
+
+    const lastSignIn = new Date(current.metadata?.lastSignInTime || 0).getTime();
+    if (Date.now() - lastSignIn > RECENT_SIGN_IN_MS) {
+      const usesPassword = current.providerData.some((p) => p.providerId === "password");
+      if (usesPassword) {
+        if (!password) {
+          const err = new Error("Enter your password to confirm.");
+          err.code = "needs-password";
+          throw err;
+        }
+        await reauthenticateWithCredential(current, EmailAuthProvider.credential(current.email, password));
+      } else {
+        await reauthenticateWithPopup(current, googleProvider);
+      }
+    }
+
+    const uid = current.uid;
+    await deletePracticeData(uid);
+    await deleteDoc(doc(db, "users", uid));
+    await deleteUser(current);
+    setSessions([]);
+    setStats(EMPTY_STATS);
+  };
+
   // 6. Migrate guest sessions from Local Storage to Cloud Firestore
   const syncGuestData = async () => {
     if (!user || !isConfigured) return;
@@ -324,7 +401,10 @@ export function AuthProvider({ children }) {
     logout,
     syncGuestData,
     addSessionToCloud,
-    updateSessionInCloud
+    updateSessionInCloud,
+    deleteSessionFromCloud,
+    deleteAllCloudHistory,
+    deleteAccount
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

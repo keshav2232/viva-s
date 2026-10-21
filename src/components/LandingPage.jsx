@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import useSectionNavigation from "./useSectionNavigation";
 import styles from "./LandingPage.module.css";
+import LegalLinks from "@/components/legal/LegalLinks";
 
 function Arrow({ diagonal = false }) {
   return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d={diagonal ? "M6 18 18 6M6 6h12v12" : "M4 12h15m-6-6 6 6-6 6"} /></svg>;
@@ -133,7 +134,7 @@ export default function LandingPage({ onSignIn, onGetStarted, onGuest }) {
 
           <section className={styles.finalCta}><div className={styles.ctaOrb} aria-hidden="true" /><span className={styles.eyebrow}>YOUR NEXT CHAPTER STARTS HERE</span><h2>Meet your<br /><em>more confident self.</em></h2><button className={styles.primary} onClick={onGuest}>Step into your practice room <Arrow diagonal /></button><p>Start as a guest. Take it at your pace.</p></section>
         </main>
-        <footer className={styles.footer}><a className={styles.brand} href="#top"><Mark />PrepSim</a><span>Practice for the moments that matter.</span><div><a href="#questions">FAQs</a><button onClick={onSignIn}>Log in <Arrow diagonal /></button><a href="#top" aria-label="Back to top">↑</a></div><small>© {new Date().getFullYear()} PrepSim</small></footer>
+        <footer className={styles.footer}><a className={styles.brand} href="#top"><Mark />PrepSim</a><span>Practice for the moments that matter.</span><div><a href="#questions">FAQs</a><LegalLinks /><button onClick={onSignIn}>Log in <Arrow diagonal /></button><a href="#top" aria-label="Back to top">↑</a></div><small>© {new Date().getFullYear()} PrepSim</small></footer>
       </div>
     </div>
   );
