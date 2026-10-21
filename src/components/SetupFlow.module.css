@@ -108,3 +108,4 @@
 
 @media (prefers-contrast: more) { .setup { --text-secondary: #3c4439; --text-muted: #3c4439; --text-primary: #151a15; } }
 .setup :global(.attribute-tag.strict) { color:#874a31; }
+@media(max-height:700px) { .setup .sidebar { position: static; } }

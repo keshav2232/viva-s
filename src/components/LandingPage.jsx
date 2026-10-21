@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import useSectionNavigation from "./useSectionNavigation";
 import styles from "./LandingPage.module.css";
 
 function Arrow({ diagonal = false }) {
@@ -32,6 +33,21 @@ export default function LandingPage({ onSignIn, onGetStarted, onGuest }) {
   const [mode, setMode] = useState("academic");
   const [showAnswer, setShowAnswer] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuButton = useRef(null);
+  const activeSection = useSectionNavigation("how-it-works,experience,questions");
+  useEffect(() => {
+    if (!menuOpen) return;
+    function dismiss(event) {
+      if (event.type === "keydown") {
+        if (event.key !== "Escape") return;
+        menuButton.current?.focus();
+      } else if (event.target.closest("#landing-mobile-menu") || menuButton.current?.contains(event.target)) return;
+      setMenuOpen(false);
+    }
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("keydown", dismiss);
+    return () => { document.removeEventListener("pointerdown", dismiss); document.removeEventListener("keydown", dismiss); };
+  }, [menuOpen]);
   const scene = useRef(null);
   const example = examples[mode];
 
@@ -53,10 +69,10 @@ export default function LandingPage({ onSignIn, onGetStarted, onGuest }) {
       <div className={styles.darkIntro}>
         <nav className={styles.nav} aria-label="Main navigation">
           <a className={styles.brand} href="#top" aria-label="PrepSim home"><Mark />PrepSim<span className={styles.brandDot}>AI</span></a>
-          <div className={styles.navLinks}><a href="#experience">The experience</a><a href="#how-it-works">How it works</a><a href="#questions">FAQs</a></div>
-          <div className={styles.navActions}><button className={styles.signIn} onClick={onSignIn}>Log in</button><button className={styles.navCta} onClick={onGetStarted}>Start practising <Arrow diagonal /></button><button className={styles.menuButton} aria-label={menuOpen ? "Close navigation" : "Open navigation"} aria-expanded={menuOpen} aria-controls="landing-mobile-menu" onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? "Close" : "Menu"}</button></div>
+          <div className={styles.navLinks}>{[["experience", "The experience"], ["how-it-works", "How it works"], ["questions", "FAQs"]].map(([id, label]) => <a key={id} href={`#${id}`} aria-current={activeSection === id ? "location" : undefined}>{label}</a>)}</div>
+          <div className={styles.navActions}><button className={styles.signIn} onClick={onSignIn}>Log in</button><button className={styles.navCta} onClick={onGetStarted}>Start practising <Arrow diagonal /></button><button ref={menuButton} className={styles.menuButton} aria-label={menuOpen ? "Close navigation" : "Open navigation"} aria-expanded={menuOpen} aria-controls="landing-mobile-menu" onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? "Close" : "Menu"}</button></div>
         </nav>
-        {menuOpen && <div className={styles.mobileMenu} id="landing-mobile-menu"><a href="#experience" onClick={() => setMenuOpen(false)}>The experience</a><a href="#how-it-works" onClick={() => setMenuOpen(false)}>How it works</a><a href="#questions" onClick={() => setMenuOpen(false)}>FAQs</a><button onClick={onSignIn}>Log in <Arrow /></button></div>}
+        {menuOpen && <div className={styles.mobileMenu} id="landing-mobile-menu">{[["experience", "The experience"], ["how-it-works", "How it works"], ["questions", "FAQs"]].map(([id, label]) => <a key={id} href={`#${id}`} aria-current={activeSection === id ? "location" : undefined} onClick={() => { setMenuOpen(false); document.getElementById(id)?.focus({ preventScroll: true }); }}>{label}</a>)}<button onClick={() => { setMenuOpen(false); onSignIn(); }}>Log in <Arrow /></button></div>}
 
         <main id="landing-main">
           <div className={styles.atlasRail} aria-hidden="true"><span>THE CONFIDENCE ATLAS</span><i /><span>EST. FOR YOUR NEXT CHAPTER</span><b>↓</b></div>

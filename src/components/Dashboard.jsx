@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { buildDashboardMetrics, sessionTime, validScore } from "@/utils/dashboardMetrics.mjs";
 import styles from "./Dashboard.module.css";
+import useSectionNavigation from "./useSectionNavigation";
 
 function Arrow() { return <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6" /></svg>; }
 function Book({ interview = false }) { return <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">{interview ? <><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V4h8v3M3 12l9 3 9-3M12 13v4"/></> : <><path d="M12 5C8 2 3 4 3 4v15s5-2 9 1c4-3 9-1 9-1V4s-5-2-9 1ZM12 5v15"/></>}</svg>; }
@@ -11,6 +12,7 @@ function dateLabel(session) { const time = sessionTime(session); return time ===
 
 export default function Dashboard({ userName, sessions, onStartNewViva, pausedSession, onClearPausedSession, onResumePausedSession, onViewReport, onLogout, isGuest }) {
   const [filter, setFilter] = useState("all");
+  useSectionNavigation("dashboard-overview,practice-history");
   const [query, setQuery] = useState("");
   const [limit, setLimit] = useState(5);
   const [discardOpen, setDiscardOpen] = useState(false);

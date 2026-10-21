@@ -669,7 +669,8 @@ export default function Home() {
 
       {/* Footer */}
       <footer style={{ borderTop: "1px solid var(--border-color)", padding: "var(--space-lg) 0", fontSize: "0.875rem", color: "var(--text-muted)", textAlign: "center", backgroundColor: "var(--bg-card)" }}>
-        <p>© 2026 PrepSim. Engineered as a high-fidelity academic prep tool.</p>
+        <p>© {new Date().getFullYear()} PrepSim. Engineered as a high-fidelity academic prep tool.</p>
+        {activeScreen !== "active-viva" && <button className="navigation-top" onClick={() => window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" })}>Back to top ↑</button>}
       </footer>
     </div>
   );

@@ -6469,3 +6469,8 @@ body {
     outline: 3px solid CanvasText;
   }
 }
+/* Navigation additions: normal document flow keeps controls clear of content. */
+.navigation-breadcrumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 16px 24px; font-size: 14px; }
+.navigation-breadcrumbs button, .navigation-top { background: transparent; border: 0; color: inherit; cursor: pointer; min-height: 44px; text-decoration: underline; text-underline-offset: 4px; }
+nav a[aria-current="location"] { text-decoration: underline; text-underline-offset: 6px; font-weight: 700; }
+:where(#experience, #how-it-works, #questions, #dashboard-overview, #practice-history, #results-tabs) { scroll-margin-top: 24px; }

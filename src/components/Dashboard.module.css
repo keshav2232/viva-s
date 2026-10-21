@@ -14,7 +14,12 @@
 .brand svg { color: var(--rust); }
 .brand sup { font-size: 12px; align-self: flex-start; margin: 5px 0 0 -5px; }
 .navLinks { display: flex; gap: 28px; font-size: 14px; color: #59644e; }
-.navLinks a:first-child { color: #34482c; }
+.navLinks a[aria-current] { color: #34482c; text-decoration: underline; text-underline-offset: 6px; font-weight: 700; }
+.navLinks a { min-height: 44px; display: inline-flex; align-items: center; }
+@media(max-width:760px) {
+  .nav { flex-wrap: wrap; }
+  .nav .navLinks { display: flex; order: 3; flex-basis: 100%; flex-wrap: wrap; gap: 8px 24px; }
+}
 .account { display: flex; align-items: center; gap: 10px; font-size: 14px; }
 .avatar { width: 29px; height: 29px; border-radius: 50%; display: grid; place-items: center; background: #e1e7d3; color: #546540; }
 .account button { border: 0; border-left: 1px solid #aab79966; background: transparent; font-size: 13px; margin-left: 10px; padding: 6px 0 6px 17px; }

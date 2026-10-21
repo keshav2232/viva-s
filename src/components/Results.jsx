@@ -868,7 +868,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
           <svg width="28" height="30" viewBox="0 0 30 32" fill="none" aria-hidden="true"><path d="M3 6 15 0l12 6v14l-12 7V14l12-8M3 6v20l12 6v-5M3 6l12 8" stroke="currentColor" strokeWidth="2" /></svg>
           PrepSim<sup>AI</sup>
         </button>
-        <span className={styles.navCrumb}>Session report</span>
+        <span className={styles.navCrumb}><button onClick={onGoDashboard}>Dashboard</button> / <span aria-current="page">Session report</span></span>
       </nav>
 
       <div className={styles.content}>
