@@ -20,7 +20,7 @@ export const TurnService = {
    * @param {number} p.pauseCount        long pauses
    * @param {object} p.liveMetrics       live delivery estimates from the sidebar
    * @param {number} p.nervousness       latest nervousness (adapts examiner tone)
-   * @param {boolean} p.hasPenalty       examiner interrupted this round
+   * @param {boolean} p.hasPenalty       examiner moved on or gave a simpler question (silence penalty)
    * @param {number} p.timeLeftSec       seconds left on the session clock (the session runs on time)
    * @returns {Promise<{metrics: object, next: object|null, done: boolean, source: "ai"|"offline"}>}
    *   next = a follow-up on this answer (kind "follow_up") or a new main question ("new_topic");

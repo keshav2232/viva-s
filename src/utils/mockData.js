@@ -70,7 +70,7 @@ export const EXAMINER_PERSONALITIES = {
     name: "Strict Professor",
     icon: `<path d="M12 2a4 4 0 0 0-4 4v2a4 4 0 0 0 8 0V6a4 4 0 0 0-4-4z"></path><path d="M18 21a6 6 0 0 0-12 0"></path><line x1="8" y1="11" x2="16" y2="11"></line>`,
     speed: 80,
-    description: "Professional, interrupting, demanding precision.",
+    description: "Professional, demanding precision.",
     attributes: { patience: "Moderate", strictness: "High", stressLevel: "Moderate" }
   },
   brutal: {

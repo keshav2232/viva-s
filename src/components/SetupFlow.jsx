@@ -46,7 +46,6 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
   // Hackathon differentiator toggles
   const [isLastMinute, setIsLastMinute] = useState(!!initialConfig?.isLastMinute);
   const [isMockExternal, setIsMockExternal] = useState(!!initialConfig?.isMockExternal);
-  const [enableInterruption, setEnableInterruption] = useState(initialConfig?.enableInterruption ?? true);
 
   // Target Drill & Mind Map States
   const [selectedSubtopic, setSelectedSubtopic] = useState(null);
@@ -395,7 +394,6 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
       isMockExternal,
       isTargetDrill: !!selectedSubtopic,
       targetSubtopic: selectedSubtopic ? selectedSubtopic.name : null,
-      enableInterruption,
       mode: practiceMode
     });
   };
@@ -1081,56 +1079,8 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
                   </h4>
                   <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary)" }}>
                     {practiceMode === "academic"
-                      ? "High-stress university board review. Intimidating grading, intense questioning, and aggressive verbal interruptions."
-                      : "High-stress bar-raiser session. Intimidating recruiter questioning, complex system-design pressure, and interruptions."}
-                  </p>
-                </div>
-              </div>
-
-              <div
-                className={`card ${enableInterruption ? "selected" : ""}`}
-                role="switch" tabIndex={0} aria-checked={enableInterruption} aria-label="Examiner interruptions"
-                onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setEnableInterruption(prev => !prev); } }}
-                onClick={() => setEnableInterruption(prev => !prev)}
-                style={{
-                  padding: "var(--space-md)",
-                  border: enableInterruption ? "1px solid var(--accent-primary)" : "1px solid var(--border-color)",
-                  borderRadius: "var(--radius-md)",
-                  cursor: "pointer",
-                  display: "flex",
-                  gap: "var(--space-sm)",
-                  alignItems: "flex-start",
-                  backgroundColor: enableInterruption ? "var(--bg-primary)" : "var(--bg-card)",
-                  transition: "var(--transition-smooth)"
-                }}
-              >
-                <div style={{
-                  width: "20px",
-                  height: "20px",
-                  borderRadius: "var(--radius-xs)",
-                  border: "2px solid var(--accent-primary)",
-                  backgroundColor: enableInterruption ? "var(--accent-primary)" : "transparent",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "white",
-                  flexShrink: 0,
-                  marginTop: "2px"
-                }}>
-                  {enableInterruption && (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                      <polyline points="20 6 9 17 4 12"/>
-                    </svg>
-                  )}
-                </div>
-                <div style={{ textAlign: "left" }}>
-                  <h4 style={{ margin: "0 0 2px 0", fontSize: "0.9rem", color: "var(--accent-primary)" }}>
-                    {practiceMode === "academic" ? "Examiner Interruption" : "Interviewer Interruption"}
-                  </h4>
-                  <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-                    {practiceMode === "academic"
-                      ? "Allows the examiner to verbally cut you off if you speak over them. Disable this if you prefer a calmer, uninterrupted flow."
-                      : "Allows the interviewer to verbally cut you off to steer the conversation. Disable this for a calmer flow."}
+                      ? "High-stress university board review. Intimidating grading and intense questioning."
+                      : "High-stress bar-raiser session. Intimidating recruiter questioning and complex system-design pressure."}
                   </p>
                 </div>
               </div>

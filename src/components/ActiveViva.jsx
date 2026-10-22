@@ -85,7 +85,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
   const speechStartTime = useRef(0);
   const waveIntervalRef = useRef(null);
   const [failsafeWarning, setFailsafeWarning] = useState(null);
-  const interruptedRef = useRef(false);
   const latestNervousnessRef = useRef(20);
   
   // Hesitation Monitor & Local Audio Replay states/refs
@@ -200,12 +199,8 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
           setVisualState("speaking");
           setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
           startWaveAnimations();
-          if (config.personality !== "friendly" && config.enableInterruption !== false) {
-            startBackgroundListeningForInterruptions(config.resumeState.activeQuestion);
-          }
         },
         () => {
-          if (interruptedRef.current) return;
           startListeningMode();
         }
       );
@@ -318,58 +313,6 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
     };
   }, [vivaState, transcriptText, isPlaceholder]);
 
-  function startBackgroundListeningForInterruptions(activeQ) {
-    interruptedRef.current = false;
-    SpeechManager.stop();
-
-    SpeechManager.start({
-      onResult: (interim, final) => {
-        const text = (interim || final || "").trim();
-        // If student spoke more than a few words while examiner was actively speaking
-        if (text.length > 8 && VoiceManager.isSpeaking() && !interruptedRef.current) {
-          interruptedRef.current = true;
-          handleExaminerInterruption(activeQ);
-        }
-      },
-      onError: (err) => {
-        console.warn("Background speech recognition error:", err);
-      }
-    });
-  }
-
-  function handleExaminerInterruption(activeQ) {
-    VoiceManager.stop();
-    SpeechManager.stop();
-    
-    setVivaState("speaking");
-    setVisualState("speaking");
-    setStatusText(config.mode === "professional" ? "Interviewer interrupted you..." : "Professor interrupted you...");
-    
-    const interruptionPhrases = config.mode === "professional" ? {
-      strict: "One moment, please. Let me finish framing the scenario before you answer.",
-      brutal: "Hold on. Let's finish the question before we dig into the details. Hear me out.",
-      terror: "Excuse me! Let me complete the question. Pacing is key here. Answer what is asked."
-    } : {
-      strict: "One moment, please. Do not speak over me. Listen to the question carefully first.",
-      brutal: "Hold on. Stop talking. Let me finish my question before you jump in with your answer.",
-      terror: "Silence! Do not interrupt me. Answer precisely what is being asked, and nothing else."
-    };
-    
-    const phrase = interruptionPhrases[config.personality] || "Excuse me, let me finish speaking.";
-    const followUpSpeech = phrase + " Let me repeat: " + activeQ.text;
-    
-    VoiceManager.speak(followUpSpeech, config.personality, 
-      () => {
-        setTranscriptText("[Examiner interrupted your speech]");
-        setIsPlaceholder(false);
-      },
-      () => {
-        interruptedRef.current = false;
-        startListeningMode();
-      }
-    );
-  }
-
   function getFormattedTime() {
     const mins = Math.floor(timeRemaining / 60);
     const secs = timeRemaining % 60;
@@ -439,13 +382,9 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
         setVisualState("speaking");
         setStatusText(config.mode === "professional" ? "Interviewer is speaking..." : "Professor is speaking...");
         startWaveAnimations();
-        if (config.personality !== "friendly" && config.enableInterruption !== false) {
-          startBackgroundListeningForInterruptions(question);
-        }
       },
       () => {
         if (!isMountedRef.current) return;
-        if (interruptedRef.current) return;
         startListeningMode();
       }
     );
@@ -587,7 +526,7 @@ export default function ActiveViva({ config, activeUser, onFinishViva, onBack })
       speech = r.hintSpeech;
       note = step === "rephrase" ? `Asked another way: ${r.hintText}` : step === "simplify" ? `First step: ${r.hintText}` : `Hint: ${r.hintText}`;
     } else if (step === "subquestion") {
-      setStatusText(`${title} is interrupting you...`);
+      setStatusText(`${title} is stepping in...`);
       setHesitationPenalties((prev) => ({ ...prev, [qIdx]: true }));
       const r = await fetchNudge("generate-subquestion", currentQ, { step: subStep }, offlineNudge("subquestion", currentQ));
       speech = r.subQuestionSpeech;
