@@ -55,7 +55,7 @@ Choose between four distinct examiner personas, each equipped with custom speech
 | **Framework** | Next.js 16.2.6 (Turbopack) | App Router & serverless API routes |
 | **UI Library** | React 19.2.4 | Client components & dynamic state management |
 | **AI Intelligence** | Gemini AI (`v1beta`) | Adaptive questions, CoT evaluations, syllabus parsing |
-| **Voice Synthesis** | ElevenLabs REST API | Neural text-to-speech (`eleven_flash_v2_5`) |
+| **Voice Synthesis** | ElevenLabs REST API | Neural text-to-speech (`eleven_v4_turbo`) |
 | **TTS Fallback** | Web Speech API | Browser-native audio synthesis fallback |
 | **Database & Auth** | Firebase 12.13.0 | Firestore cloud storage & auth state persistence |
 | **PDF Extraction** | PDF.js 3.4.120 | Client-side syllabus text extraction |

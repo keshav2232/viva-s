@@ -10,6 +10,9 @@ const VOICES = {
   terror: "SOYHLrjzK2X1ezoPC6cr" // Harry
 };
 
+// Eleven v4 Turbo: low latency, same credit cost as Flash v2.5. Override with ELEVENLABS_MODEL.
+const MODEL = process.env.ELEVENLABS_MODEL || "eleven_v4_turbo";
+
 const SETTINGS = {
   friendly: { stability: 0.65, style: 0.0 },
   strict: { stability: 0.65, style: 0.0 },
@@ -38,7 +41,7 @@ export async function synthesizeSpeech(text, personality) {
   if (!apiKey) return { ok: false, status: 503, error: "Speech synthesis is not configured." };
   if (!text || !text.trim()) return { ok: false, status: 400, error: "No text to synthesize." };
 
-  const key = `${personality}:${text}`;
+  const key = `${MODEL}:${personality}:${text}`;
   const hit = lru.get(key);
   if (hit) {
     lru.delete(key); // refresh recency
@@ -53,7 +56,7 @@ export async function synthesizeSpeech(text, personality) {
       headers: { "Content-Type": "application/json", "xi-api-key": apiKey },
       body: JSON.stringify({
         text,
-        model_id: "eleven_flash_v2_5",
+        model_id: MODEL,
         voice_settings: { stability: s.stability, similarity_boost: 0.75, style: s.style, use_speaker_boost: true }
       }),
       signal: AbortSignal.timeout(10000)
