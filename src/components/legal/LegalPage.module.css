@@ -47,11 +47,16 @@
 .footer nav { display: flex; gap: 18px; flex-wrap: wrap; }
 @media (max-width: 820px) { .body { grid-template-columns: 1fr; gap: 24px; } .toc { position: static; } .head h1 { font-size: 34px !important; } .cards { grid-template-columns: 1fr; } }
 @media (max-width: 820px) {
-  /* Let the privacy text shrink independently of the wide, scrollable table. */
-  .page[data-legal-page="/privacy"] { width: 100%; min-width: 0; }
-  .page[data-legal-page="/privacy"] .layout { min-width: 0; }
-  .page[data-legal-page="/privacy"] .body { grid-template-columns: minmax(0, 1fr); }
-  .page[data-legal-page="/privacy"] .content { min-width: 0; width: 100%; overflow-wrap: anywhere; }
-  .page[data-legal-page="/privacy"] .tableWrap { max-width: 100%; }
+  .nav[data-mobile-menu="true"] { display: none; }
+  /* Keep both legal pages within the viewport; wide tables scroll internally. */
+  .page:is([data-legal-page="/privacy"], [data-legal-page="/terms"]) { width: 100%; min-width: 0; }
+  .page:is([data-legal-page="/privacy"], [data-legal-page="/terms"]) .layout { min-width: 0; padding: 28px 20px 40px !important; }
+  .page:is([data-legal-page="/privacy"], [data-legal-page="/terms"]) .body { grid-template-columns: minmax(0, 1fr); }
+  .page:is([data-legal-page="/privacy"], [data-legal-page="/terms"]) .content { min-width: 0; width: 100%; overflow-wrap: anywhere; }
+  .page:is([data-legal-page="/privacy"], [data-legal-page="/terms"]) .tableWrap { max-width: 100%; }
+  .page:is([data-legal-page="/privacy"], [data-legal-page="/terms"]) .toc { display: none; }
+  .page:is([data-legal-page="/privacy"], [data-legal-page="/terms"]) .content section { scroll-margin-top: 92px; padding-bottom: 28px; margin-bottom: 28px; border-bottom: 1px solid #cbd5be; }
+  .page:is([data-legal-page="/privacy"], [data-legal-page="/terms"]) .content h2 { font-weight: 600; margin-bottom: 14px; color: var(--ink); }
+  .page:is([data-legal-page="/privacy"], [data-legal-page="/terms"]) .footer { padding: 24px 20px; }
 }
 @media (prefers-reduced-motion: reduce) { :global(html):has(.page) { scroll-behavior: auto; } }

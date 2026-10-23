@@ -27,7 +27,12 @@ export default function ContactPage() {
   return (
     <div className={`${legal.page} ${styles.page}`}>
       <a className={legal.skip} href="#contact-content">Skip to content</a>
-      <LegalNav current="/contact" />
+      <LegalNav current="/contact" title="Contact and support" sections={[
+        ["founders", "Meet the founders"],
+        ["report-title", "Report a bug"],
+        ["faq-title", "Quick answers"],
+        ["privacy-title", "Privacy requests"],
+      ]} />
 
       <main className={styles.main} id="contact-content" tabIndex={-1}>
         <section className={styles.hero} aria-labelledby="contact-title">

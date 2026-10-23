@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { SITE, isLegalConfigured } from "@/config/site";
 import styles from "./LegalPage.module.css";
+import PrivacyMobileNav from "./PrivacyMobileNav";
 
 function Mark() {
   return <svg width="26" height="28" viewBox="0 0 30 32" fill="none" aria-hidden="true"><path d="M3 6 15 0l12 6v14l-12 7V14l12-8M3 6v20l12 6v-5M3 6l12 8" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" /></svg>;
@@ -9,9 +10,11 @@ function Mark() {
 const LINKS = [["/privacy", "Privacy"], ["/terms", "Terms"], ["/contact", "Contact"]];
 
 /** Top bar shared by the legal and contact pages. */
-export function LegalNav({ current }) {
+export function LegalNav({ current, title, sections = [] }) {
   return (
-    <header className={styles.nav}>
+    <>
+    {title && <PrivacyMobileNav name={SITE.name} logo={<Mark />} current={current} title={title} sections={sections} />}
+    <header className={styles.nav} data-mobile-menu={title ? "true" : undefined}>
       <Link className={styles.brand} href="/"><Mark />{SITE.name}</Link>
       <nav aria-label="Legal and support">
         {LINKS.map(([href, label]) => (
@@ -19,6 +22,7 @@ export function LegalNav({ current }) {
         ))}
       </nav>
     </header>
+    </>
   );
 }
 
@@ -35,13 +39,13 @@ export function LegalFooter() {
   );
 }
 
-/** Shared shell for the privacy, terms and contact pages (server component, no JavaScript needed). */
+/** Shared server shell; privacy and terms include a mobile navigation dialog. */
 export default function LegalPage({ eyebrow, title, intro, current, toc, children }) {
   const missing = !isLegalConfigured() && process.env.NODE_ENV !== "production";
   return (
     <div className={styles.page} data-legal-page={current}>
       <a className={styles.skip} href="#legal-content">Skip to content</a>
-      <LegalNav current={current} />
+      <LegalNav current={current} title={title} sections={toc || []} />
 
       <main className={styles.layout} id="legal-content" tabIndex={-1}>
         <div className={styles.head}>
