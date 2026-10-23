@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import styles from "./PrivacyMobileNav.module.css";
+import Brand from "../Brand";
 
 function Icon({ name }) {
   const paths = {
@@ -18,7 +19,7 @@ function Icon({ name }) {
   return <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
 
-export default function PrivacyMobileNav({ name, logo, current, title, sections }) {
+export default function PrivacyMobileNav({ name, current, title, sections }) {
   const pageIcon = current === "/privacy" ? "lock" : current === "/terms" ? "info" : "contact";
   const dialog = useRef(null);
   const trigger = useRef(null);
@@ -57,7 +58,7 @@ export default function PrivacyMobileNav({ name, logo, current, title, sections 
 
   return <>
     <header className={styles.header}>
-      <Link href="/" className={styles.brand}>{logo}<span>{name}</span></Link>
+      <Brand as={Link} href="/" aria-label="PrepSim AI home" />
       <button ref={trigger} type="button" className={styles.iconButton} onClick={openMenu} aria-label="Open page navigation" aria-haspopup="dialog" aria-controls="legal-mobile-navigation"><Icon name="menu" /></button>
     </header>
     <dialog ref={dialog} id="legal-mobile-navigation" className={styles.dialog} aria-labelledby="legal-navigation-title" onClose={restoreScroll} onClick={event => {

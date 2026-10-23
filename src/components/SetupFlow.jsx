@@ -1,4 +1,5 @@
 "use client";
+import Brand from "./Brand";
 
 import React, { useState, useEffect } from "react";
 import { vivaFetch } from "@/utils/apiClient";
@@ -704,7 +705,7 @@ export default function SetupFlow({ onCancel, onBeginViva, initialConfig }) {
 
   return (
     <section id="setup-screen" className={`screen active ${styles.setup}`}>
-      <nav className={styles.nav} aria-label="Setup navigation"><button onClick={onCancel} className={styles.brand} aria-label="PrepSim home — dashboard">PrepSim<sup>AI</sup></button><span aria-current="page">Practice setup</span><button onClick={onCancel}>← Dashboard</button></nav>
+      <nav className={styles.nav} aria-label="Setup navigation"><Brand as="button" type="button" onClick={onCancel} aria-label="PrepSim AI home — dashboard" /><span aria-current="page">Practice setup</span><button onClick={onCancel}>← Dashboard</button></nav>
       <nav className="navigation-breadcrumbs" aria-label="Breadcrumb"><button onClick={onCancel}>Dashboard</button><span aria-hidden="true">/</span><span aria-current="page">Practice setup</span></nav>
       <header className={styles.heading}><span className={styles.eyebrow}>A LITTLE PREPARATION. A BETTER CONVERSATION.</span><h1>Make this session <em>yours.</em></h1><p>Choose your material, set the pace, and step into practice with a plan.</p></header>
       <div className={styles.workspace}>

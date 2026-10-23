@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import styles from "./MicrophoneCheck.module.css";
+import Brand from "./Brand";
 
 export default function MicrophoneCheck({ config, examiner, onBack, onReady }) {
   const [status, setStatus] = useState("idle");
@@ -58,7 +59,7 @@ export default function MicrophoneCheck({ config, examiner, onBack, onReady }) {
     }
   }
   return <section className={styles.screen} aria-labelledby="mic-title">
-    <nav className={styles.nav}><strong>PrepSim<span>AI</span></strong><button onClick={() => { release(); onBack(); }}>← Back to setup</button></nav>
+    <nav className={styles.nav}><Brand /><button onClick={() => { release(); onBack(); }}>← Back to setup</button></nav>
     {status === "requesting" && <aside className={styles.guide} role="status"><svg viewBox="0 0 100 90" aria-hidden="true"><path d="M85 80Q20 80 20 10M7 24 20 10 34 24" /></svg><strong>Choose “Allow” in your browser</strong><p>Look near the address bar for the microphone prompt. On mobile, it may appear at the bottom of the screen.</p></aside>}
     <div className={styles.card}>
       <div className={styles.intro}><span className={styles.eyebrow}>ONE LAST CHECK / BEFORE YOU BEGIN</span><div className={styles.mic} aria-hidden="true"><svg viewBox="0 0 64 80"><rect x="20" y="4" width="24" height="43" rx="12"/><path d="M10 32v6a22 22 0 0 0 44 0v-6M32 60v14M20 75h24M25 17h14M25 25h14"/></svg></div><h1>Make room for<br/><em>your voice.</em></h1><p>A quick microphone check, then you’re ready to practise.</p><dl><div><dt>YOUR TOPIC</dt><dd>{config.topic}</dd></div><div><dt>YOUR SESSION</dt><dd>{config.duration} minutes · {examiner}</dd></div></dl></div>

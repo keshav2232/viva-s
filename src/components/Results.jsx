@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { VoiceManager } from "@/services/voiceManager";
 import styles from "./Results.module.css";
 import { computeOverallScore } from "@/utils/scoring";
-import LegalLinks from "@/components/legal/LegalLinks";
+import Brand from "./Brand";
 
 export default function Results({ resultsData, onRestart, onGoDashboard }) {
   const [activeTab, setActiveTab] = useState("overview"); // "overview" | "questions" | "delivery" | "plan"
@@ -865,10 +865,7 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
       <div className={styles.srOnly} role="status" aria-live="polite">{liveMsg}</div>
 
       <nav className={styles.nav} aria-label="Report navigation">
-        <button className={styles.brand} onClick={onGoDashboard} aria-label="PrepSim — back to dashboard">
-          <svg width="28" height="30" viewBox="0 0 30 32" fill="none" aria-hidden="true"><path d="M3 6 15 0l12 6v14l-12 7V14l12-8M3 6v20l12 6v-5M3 6l12 8" stroke="currentColor" strokeWidth="2" /></svg>
-          PrepSim<sup>AI</sup>
-        </button>
+        <Brand as="button" type="button" onClick={onGoDashboard} aria-label="PrepSim AI — back to dashboard" />
         <span className={styles.navCrumb}><button onClick={onGoDashboard}>Dashboard</button> / <span aria-current="page">Session report</span></span>
       </nav>
 
@@ -1476,7 +1473,6 @@ export default function Results({ resultsData, onRestart, onGoDashboard }) {
           <span>PrepSim / Your session report</span>
           <p>Progress is a practice. Keep showing up.</p>
           <span>AI feedback is guidance, not an official grade.</span>
-          <LegalLinks />
         </div>
       </div>
     </section>

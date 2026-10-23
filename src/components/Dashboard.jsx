@@ -1,4 +1,5 @@
 "use client";
+import Brand from "./Brand";
 
 import { useState } from "react";
 import Image from "next/image";
@@ -40,7 +41,7 @@ export default function Dashboard({ userName, sessions, onStartNewViva, pausedSe
   const pausedIndex = Number.isInteger(pausedSession?.currentQuestionIndex) && pausedSession.currentQuestionIndex >= 0 ? pausedSession.currentQuestionIndex + 1 : null;
   return (
     <section className={styles.dashboard} aria-label="Practice dashboard">
-      <nav className={styles.nav} aria-label="Dashboard navigation"><a className={styles.brand} href="#dashboard-overview"><svg width="28" height="30" viewBox="0 0 30 32" fill="none" aria-hidden="true"><path d="M3 6 15 0l12 6v14l-12 7V14l12-8M3 6v20l12 6v-5M3 6l12 8" stroke="currentColor" strokeWidth="2"/></svg>PrepSim<sup>AI</sup></a><div className={styles.navLinks}><a href="#dashboard-overview">Your atlas</a><a href="#practice-history">Session journal</a></div><div className={styles.account}><span className={styles.avatar}>{name.charAt(0).toUpperCase()}</span><span>{isGuest ? "Guest space" : name}</span><button onClick={onLogout}>Sign out <span>↗</span></button></div></nav>
+      <nav className={styles.nav} aria-label="Dashboard navigation"><Brand as="a" href="#dashboard-overview" aria-label="PrepSim AI — dashboard overview" /><div className={styles.navLinks}><a href="#dashboard-overview">Your atlas</a><a href="#practice-history">Session journal</a></div><div className={styles.account}><span className={styles.avatar}>{name.charAt(0).toUpperCase()}</span><span>{isGuest ? "Guest space" : name}</span><button onClick={onLogout}>Sign out <span>↗</span></button></div></nav>
       <div className={styles.content} id="dashboard-overview">
         <div className={styles.heading}><div><span className={styles.eyebrow}>YOUR CONFIDENCE ATLAS / PERSONAL EDITION</span><h1>A little further, <em>{name}.</em></h1><p>{data.ordered.length ? "Every conversation gives you something to build on. Here’s your next step." : "Your story starts with one conversation. Let’s make a little room for it."}</p></div><span className={styles.storageBadge}><i />{isGuest ? "Temporary guest history" : "Account practice history"}</span></div>
 

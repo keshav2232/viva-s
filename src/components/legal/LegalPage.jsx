@@ -2,10 +2,7 @@ import Link from "next/link";
 import { SITE, isLegalConfigured } from "@/config/site";
 import styles from "./LegalPage.module.css";
 import PrivacyMobileNav from "./PrivacyMobileNav";
-
-function Mark() {
-  return <svg width="26" height="28" viewBox="0 0 30 32" fill="none" aria-hidden="true"><path d="M3 6 15 0l12 6v14l-12 7V14l12-8M3 6v20l12 6v-5M3 6l12 8" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" /></svg>;
-}
+import Brand from "../Brand";
 
 const LINKS = [["/privacy", "Privacy"], ["/terms", "Terms"], ["/contact", "Contact"]];
 
@@ -13,9 +10,9 @@ const LINKS = [["/privacy", "Privacy"], ["/terms", "Terms"], ["/contact", "Conta
 export function LegalNav({ current, title, sections = [] }) {
   return (
     <>
-    {title && <PrivacyMobileNav name={SITE.name} logo={<Mark />} current={current} title={title} sections={sections} />}
+    {title && <PrivacyMobileNav name={SITE.name} current={current} title={title} sections={sections} />}
     <header className={styles.nav} data-mobile-menu={title ? "true" : undefined}>
-      <Link className={styles.brand} href="/"><Mark />{SITE.name}</Link>
+      <Brand as={Link} href="/" aria-label="PrepSim AI home" />
       <nav aria-label="Legal and support">
         {LINKS.map(([href, label]) => (
           <Link key={href} href={href} aria-current={current === href ? "page" : undefined}>{label}</Link>

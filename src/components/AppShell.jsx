@@ -1,4 +1,5 @@
 "use client";
+import Brand from "./Brand";
 
 import React, { useState, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
@@ -510,8 +511,7 @@ export default function AppShell() {
     return (
       <div className={shell.loader} role="status" aria-live="polite">
         {pageTitle}
-        <svg width="40" height="43" viewBox="0 0 30 32" fill="none" aria-hidden="true"><path d="M3 6 15 0l12 6v14l-12 7V14l12-8M3 6v20l12 6v-5M3 6l12 8" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" /></svg>
-        <strong>PrepSim</strong>
+        <Brand />
         <span>Getting your practice room ready…</span>
         <i aria-hidden="true" />
       </div>

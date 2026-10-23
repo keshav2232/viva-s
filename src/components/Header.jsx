@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Brand from "./Brand";
 
 export default function Header({ userName, onNavigate, onLogout }) {
   const getInitials = (name) => {
@@ -10,14 +11,7 @@ export default function Header({ userName, onNavigate, onLogout }) {
   return (
     <header id="app-header">
       <nav className="nav-container">
-        <button className="logo-wrapper" id="nav-logo" aria-label="PrepSim home — dashboard" onClick={() => onNavigate("dashboard")}>
-          <svg className="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-            <path d="m22 7-10-4-10 4 10 4Z"/>
-            <path d="M6 9.5V14a6 6 0 0 0 12 0V9.5"/>
-          </svg>
-          <span className="logo-text">PrepSim</span>
-        </button>
+        <Brand as="button" type="button" id="nav-logo" aria-label="PrepSim AI home — dashboard" onClick={() => onNavigate("dashboard")} />
         <div className="nav-actions">
           <div className="user-profile" id="user-profile-widget">
             <span className="user-avatar" id="avatar-letters">
