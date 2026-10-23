@@ -46,4 +46,12 @@
 .footer { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; padding: 22px max(24px, calc((100% - 1100px) / 2)); border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
 .footer nav { display: flex; gap: 18px; flex-wrap: wrap; }
 @media (max-width: 820px) { .body { grid-template-columns: 1fr; gap: 24px; } .toc { position: static; } .head h1 { font-size: 34px !important; } .cards { grid-template-columns: 1fr; } }
+@media (max-width: 820px) {
+  /* Let the privacy text shrink independently of the wide, scrollable table. */
+  .page[data-legal-page="/privacy"] { width: 100%; min-width: 0; }
+  .page[data-legal-page="/privacy"] .layout { min-width: 0; }
+  .page[data-legal-page="/privacy"] .body { grid-template-columns: minmax(0, 1fr); }
+  .page[data-legal-page="/privacy"] .content { min-width: 0; width: 100%; overflow-wrap: anywhere; }
+  .page[data-legal-page="/privacy"] .tableWrap { max-width: 100%; }
+}
 @media (prefers-reduced-motion: reduce) { :global(html):has(.page) { scroll-behavior: auto; } }

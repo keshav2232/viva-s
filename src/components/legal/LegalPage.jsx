@@ -39,7 +39,7 @@ export function LegalFooter() {
 export default function LegalPage({ eyebrow, title, intro, current, toc, children }) {
   const missing = !isLegalConfigured() && process.env.NODE_ENV !== "production";
   return (
-    <div className={styles.page}>
+    <div className={styles.page} data-legal-page={current}>
       <a className={styles.skip} href="#legal-content">Skip to content</a>
       <LegalNav current={current} />
 
