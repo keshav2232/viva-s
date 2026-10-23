@@ -126,3 +126,18 @@
 @media (prefers-reduced-motion: reduce) { .page *, .page *::before, .page *::after { animation: none !important; transition: none !important; } :global(html):has(.page) { scroll-behavior: auto; } }
 
 @media (prefers-contrast: more) { .page { --muted: #3c4439; --ink: #151a15; } }
+
+/* Phone layout (640px and below): just the form, with room around it. */
+@media (max-width: 640px) {
+  .story { display: none; }
+  .nav { min-height: 64px; padding: 14px 20px; }
+  .page .layout { padding: 28px 16px 48px !important; gap: 0; }
+  .formSide { max-width: none; }
+  .formCard { padding: 30px 22px 0; border-radius: 18px; }
+  .formCard h2 { font-size: 36px !important; }
+  .formIntro { margin-bottom: 26px; }
+  .fields { gap: 18px; }
+  .submit { min-height: 52px; border-radius: 10px; }
+  .guestSection { margin: 0 -22px; padding: 24px 22px; }
+  .underCard { padding: 24px 6px 0; }
+}

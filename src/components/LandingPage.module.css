@@ -232,3 +232,38 @@
 @media (prefers-reduced-motion: reduce) { .page *, .page *::before, .page *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } :global(html):has(.page) { scroll-behavior: auto; } }
 
 @media (prefers-contrast: more) { .page { --muted: #3c4439; --ink: #151a15; } }
+
+/* Phone layout (640px and below). Laptop and tablet layouts are unchanged. */
+@media (max-width: 640px) {
+  .navCta { display: none; }
+  .hero { padding: 40px 20px 16px; }
+  .heroCopy > .eyebrow, .heroNote, .practicePass, .heroIndex, .orbitFootnote { display: none; }
+  .hero h1 { margin-top: 0; }
+  .heroDescription { font-size: 16px; line-height: 1.7; padding-top: 22px; }
+  .heroActions { flex-direction: column; align-items: stretch; gap: 16px; margin-top: 30px; }
+  .heroActions .primary { justify-content: center; padding: 17px 20px; font-size: 15px; border-radius: 10px; }
+  .heroActions .textLink { justify-content: center; font-size: 15px; }
+  .sceneArea { margin: 36px auto 0; }
+  .disciplineStrip { display: none; }
+  .process, .experience, .faqSection { padding: 72px 20px; }
+  .smallTag { display: none; }
+  .processHeading { margin: 22px 0 44px; gap: 18px; }
+  .processHeading > p { font-size: 16px; line-height: 1.7; }
+  .steps { padding-left: 0; gap: 56px; }
+  .steps::before { display: none; }
+  .step:nth-child(2) { margin-left: 0; }
+  .stepTitle { margin-top: 22px; }
+  .step > p { padding-left: 0; font-size: 16px; line-height: 1.7; }
+  .experience { gap: 40px; }
+  .experienceCopy > p { font-size: 16px; line-height: 1.7; }
+  .demoPanel { transform: none; border-radius: 14px; }
+  .demoToolbar > span:last-child { display: none; }
+  .demoContent { padding: 24px 20px; }
+  .manifesto { margin: 0 20px; padding: 64px 0; }
+  .faqList summary { padding: 22px 0; }
+  .finalCta { margin: 0 12px 28px; padding: 56px 24px; }
+  .footer { flex-direction: column; align-items: flex-start; gap: 16px; padding: 32px 20px; }
+  .footer > span { text-align: left; flex: none; }
+  .footer > div { flex-wrap: wrap; gap: 12px 22px; margin: 0; }
+  .footer > small { margin: 0; }
+}

@@ -160,3 +160,47 @@
 .rowDelete .rowDanger { background: #8f3b26; border-color: #8f3b26; color: #fffdf6; }
 .deleteStatus { min-height: 0; margin: 10px 0 0 !important; font-size: 15px; color: #3e5233; }
 .deleteStatus:empty { display: none; }
+
+/* Phone layout (640px and below). Laptop and tablet layouts are unchanged. */
+@media (max-width: 640px) {
+  .dashboard .eyebrow { display: none; }
+  .nav { padding: 14px 20px; }
+  .content { padding: 28px 20px 36px; }
+  .heading { margin-bottom: 24px; gap: 14px; }
+  .heading h1 { font-size: 32px !important; margin: 0; }
+  .heading p { display: none; }
+  .topGrid { gap: 16px; }
+  .launch { min-height: 0; padding: 26px 20px; border-radius: 18px; }
+  .heroArt { display: none; }
+  .launch h2 { font-size: 28px !important; margin: 0 0 22px; }
+  .launch p { display: none; }
+  .launchButtons { max-width: none; margin-top: 0; gap: 10px; }
+  .launchButtons button { padding: 16px; gap: 14px; border-radius: 12px; }
+  .launchButtons button > span { font-size: 16px; }
+  .launchButtons small { font-size: 13px; margin-top: 4px; }
+  .focus { padding: 24px 20px; border-radius: 18px; }
+  .focus > small { display: none; }
+  .focus h2 { font-size: 21px !important; margin: 0 0 8px; }
+  .focus button { padding-top: 18px; }
+  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 32px 0; padding: 0; border: 0; }
+  .metrics > div, .metrics > div:first-child, .metrics > div:nth-child(3) { padding: 18px 16px; border: 1px solid #e0e4d6; border-radius: 16px; background: #fffef8; }
+  .metrics > div > span { font-size: 12px; letter-spacing: .6px; line-height: 1.5; }
+  .metrics strong { font-size: 32px; margin: 10px 0 0; }
+  .metrics p { display: none; }
+  .metrics .mixValue { font-size: 24px; min-height: 0; }
+  .middleGrid { gap: 16px; margin-bottom: 16px; }
+  .progress, .areas, .journal { padding: 24px 20px; border-radius: 18px; }
+  .sectionTitle h2, .areas h2 { margin-top: 0; }
+  .areaEmpty img { display: none; }
+  .areaEmpty { padding: 6px 0 14px; }
+  .filters { flex-direction: column; align-items: stretch; gap: 12px; margin-top: 18px; padding-bottom: 18px; }
+  .filters > div { flex-wrap: wrap; }
+  .session { gap: 8px 12px; padding: 18px 0; }
+  .sessionNumber { display: none; }
+  .sessionInfo { flex-basis: 100%; }
+  .sessionState { margin-left: 0; }
+  .session > button { padding-left: 0; min-width: 0; }
+  .resume { padding: 20px; border-radius: 18px; }
+  .resumeActions { align-items: stretch; }
+  .footer { display: none; }
+}

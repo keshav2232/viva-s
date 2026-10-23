@@ -109,3 +109,59 @@
 @media (prefers-contrast: more) { .setup { --text-secondary: #3c4439; --text-muted: #3c4439; --text-primary: #151a15; } }
 .setup :global(.attribute-tag.strict) { color:#874a31; }
 @media(max-height:700px) { .setup .sidebar { position: static; } }
+
+/* Phone layout (640px and below). Laptop and tablet layouts are unchanged. */
+@media (max-width: 640px) {
+  .setup :global(.navigation-breadcrumbs), .heading > .eyebrow, .heading p, .sidebar, .note { display: none; }
+  .nav { padding: 14px 20px; }
+  .heading { margin: 28px 20px 18px; }
+  .heading h1 { font-size: 30px !important; letter-spacing: -1px; }
+  .workspace { margin: 0 20px 0; gap: 0; }
+  /* Progress: the "Step 1 of 3" line plus a slim bar per step */
+  .announcer { font-size: 14px; font-weight: 600; color: #4e5e42; }
+  .steps { gap: 6px; margin: 8px 0 30px; }
+  .steps button, .steps button:disabled:not([aria-current]), .steps button[aria-current="step"] { display: block; position: relative; height: 24px; min-height: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+  .steps button::after { content: ""; position: absolute; left: 0; right: 0; top: 9px; height: 6px; border-radius: 99px; background: #dfe5d4; }
+  .steps button:not(:disabled)::after { background: #a9bb94; }
+  .steps button[aria-current="step"]::after { background: #526a43; }
+  .steps button > span, .steps strong, .steps small { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  /* Steps sit on the page, not inside another card */
+  .setup :global(.setup-step-view) { padding: 0; background: transparent; border: 0; border-radius: 0; box-shadow: none; }
+  .setup :global(.setup-step-view) h2 { font-size: 24px !important; }
+  .setup :global(.setup-step-view) p { font-size: 15px; }
+  .setup :global(.goal-selector-toggle) button { min-width: 0; flex: 1; }
+  .setup :global(.form-group) { margin-top: 28px !important; }
+  /* Material: one option per row */
+  .setup :global(.source-selection-grid) { grid-template-columns: 1fr !important; gap: 10px !important; margin: 20px 0 8px !important; }
+  .setup :global(.source-selection-grid) :global(.source-card) { padding: 16px 18px !important; border-radius: 14px !important; }
+  .setup :global(.source-selection-grid) :global(.source-card) h3 { font-size: 16px !important; }
+  .setup :global(.source-selection-grid) :global(.source-card) p { font-size: 14px !important; line-height: 1.5 !important; }
+  .setup :global(.upload-zone) { min-height: 130px; padding: 22px 16px; border-radius: 14px; }
+  .setup :global(.form-input) { border-radius: 10px; }
+  /* Durations: an even grid instead of ragged pills */
+  .setup :global(.duration-pills-row) { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .setup :global(.duration-pills-row) > button { width: 100%; padding: 10px 6px; justify-content: center; text-align: center; border-radius: 10px; }
+  .setup [role="switch"] { border-radius: 14px !important; }
+  /* Examiners: a clean list (radio, name, one-line description) */
+  .setup :global(.personality-grid) { grid-template-columns: 1fr !important; gap: 10px !important; }
+  .setup :global(.personality-grid) :global(.personality-card) { display: grid !important; grid-template-columns: 22px minmax(0, 1fr); gap: 4px 14px !important; align-items: center !important; justify-content: stretch !important; text-align: left !important; padding: 16px 18px !important; min-height: 0 !important; border-radius: 14px !important; transform: none !important; backdrop-filter: none !important; }
+  .setup :global(.personality-grid) :global(.personality-card) .examinerRadio { grid-column: 1; grid-row: 1; margin: 0; }
+  .setup :global(.personality-grid) :global(.personality-card) :global(.personality-name) { grid-column: 2; grid-row: 1; flex-direction: row !important; justify-content: flex-start !important; align-items: center !important; text-align: left !important; gap: 8px !important; font-size: 16px !important; font-weight: 650 !important; }
+  .setup :global(.personality-grid) :global(.personality-card) :global(.personality-name) svg { width: 20px !important; height: 20px !important; flex-shrink: 0; }
+  .setup :global(.personality-grid) :global(.personality-card) :global(.personality-desc) { display: block !important; grid-column: 2; font-size: 14px !important; line-height: 1.5 !important; }
+  .setup :global(.personality-grid) :global(.personality-card) :global(.personality-attributes),
+  .setup :global(.personality-grid) :global(.info-btn-mobile),
+  .setup :global(.personality-grid) :global(.personality-details-overlay) { display: none !important; }
+  .setup :global(.examiner-preview-card) { padding: 18px !important; border-radius: 14px !important; }
+  /* Review step */
+  .setup :global(.preview-summary-card) { padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; backdrop-filter: none !important; }
+  .setup :global(.preview-summary-card) > div:first-child { flex-direction: column !important; align-items: stretch !important; gap: 14px; }
+  .setup :global(.preview-summary-card) > div:first-child > div:last-child { display: flex; width: 100%; }
+  .setup :global(.preview-summary-card) > div:first-child > div:last-child > button { flex: 1; justify-content: center; }
+  .setup :global(.preview-grid) { grid-template-columns: 1fr !important; gap: 10px !important; }
+  .setup :global(.preview-grid):has(> :global(.preview-item)) { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .setup :global(.preview-item) { text-align: left !important; align-items: flex-start !important; }
+  /* Back / Next stay within thumb reach */
+  .setup :global(.flow-nav-buttons) { position: sticky; bottom: 0; z-index: 30; margin: 32px -20px 0; padding: 12px 20px calc(12px + env(safe-area-inset-bottom)); background: #f5f3ec; border-top: 1px solid #dfe4d6; box-shadow: 0 -10px 24px #34422c10; flex-wrap: nowrap; }
+  .setup :global(.flow-nav-buttons) > button { flex: 1; min-height: 50px; justify-content: center; border-radius: 10px; }
+}

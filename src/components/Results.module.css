@@ -278,3 +278,19 @@ details.dataTable summary { cursor: pointer; font-weight: 600; min-height: 32px;
 @media print { .expectedWrap[hidden] { display: block !important; } }
 .navCrumb button { background: transparent; border: 0; color: inherit; min-height: 44px; cursor: pointer; text-decoration: underline; text-underline-offset: 4px; }
 .navCrumb { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+/* Phone layout (640px and below). Laptop and tablet layouts are unchanged. */
+@media (max-width: 640px) {
+  .nav { padding: 14px 20px; }
+  .content { padding: 28px 20px 40px; }
+  .heading { gap: 22px; }
+  .heading p { display: none; }
+  .actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; width: 100%; }
+  .actions .btn { width: 100%; min-height: 46px; justify-content: center; border-radius: 10px; }
+  .actions .btnPrimary { grid-column: 1 / -1; min-height: 52px; }
+  .actions .btn:last-child { display: none; }
+  .card { padding: 24px 20px; border-radius: 18px; }
+  .tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; overflow: visible; border-bottom: 0; margin-bottom: 28px; }
+  .tab { justify-content: center; margin: 0; padding: 12px 8px; border: 1px solid #d6dfca; border-radius: 10px; white-space: normal; text-align: center; }
+  .tab[aria-selected="true"] { border-color: #70885b; box-shadow: inset 0 -3px var(--rust); }
+}

@@ -6497,3 +6497,12 @@ nav a[aria-current="location"] { text-decoration: underline; text-underline-offs
 .legal-links + .navigation-top {
   margin-left: 18px;
 }
+
+/* Phone layout for the shared app footer (640px and below). */
+@media (max-width: 640px) {
+  .app-footer { padding: 28px 20px !important; }
+  .app-footer > p { font-size: 13px; line-height: 1.6; }
+  .legal-links { flex-wrap: wrap; justify-content: center; }
+  .legal-links + .navigation-top { display: block; margin: 4px auto 0; }
+  body:has(.active-viva-layout) .app-footer { display: none; }
+}

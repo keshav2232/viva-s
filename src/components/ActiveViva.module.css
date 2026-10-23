@@ -16,3 +16,29 @@
 
 @media (prefers-contrast: more) { .room { --text-secondary: #3c4439; --text-muted: #3c4439; --text-primary: #151a15; } }
 .room :global(.viva-nudge-note) { margin:0; padding:12px 14px; background:#f3f5eb; border-left:3px solid #7a9163; border-radius:4px; font-size:15px; line-height:1.6; color:#34422f; text-align:left; }
+
+/* Phone layout (640px and below): timer on top, question first, actions in a bar at the bottom. */
+@media (max-width: 640px) {
+  .room { padding: 12px 16px 120px; border-radius: 0; transform: none !important; }
+  .roomHeader, .brief, .bottomNote, .examinerPlate { display: none; }
+  .roomGrid { display: block; }
+  .room :global(.active-viva-layout) { gap: 14px; }
+  .room :global(.viva-header-bar) { position: sticky; top: 0; z-index: 20; padding: 10px 14px; flex-wrap: nowrap; border-radius: 12px; box-shadow: 0 6px 16px #34422c14; }
+  .room :global(.viva-topic-badge) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .room :global(.viva-question-card) { order: 1; padding: 22px 20px; border-radius: 14px; }
+  .room :global(.viva-question-content) { font-size: 19px; line-height: 1.6; }
+  .room :global(.examiner-stage) { order: 2; display: grid !important; grid-template-columns: 72px minmax(0, 1fr); gap: 8px 14px; padding: 16px; border-radius: 14px; align-items: center; }
+  .room :global(.examiner-avatar-box) { grid-column: 1; grid-row: 1 / 3; width: 72px !important; height: 72px !important; margin: 0 !important; }
+  .room :global(.examiner-status-tag) { grid-column: 2; grid-row: 1; justify-self: start; font-size: 13px; }
+  .room :global(.waveform-container) { grid-column: 2; grid-row: 2; justify-self: start; }
+  .room :global(.microphone-box) { grid-column: 1 / -1; grid-row: 3; justify-self: stretch; }
+  .room :global(.mic-subtext) { font-size: 14px; margin: 0; }
+  .room :global(.transcript-stage-card) { grid-column: 1 / -1; grid-row: 4; min-height: 120px; padding: 16px; border-radius: 12px; }
+  .room :global(.transcript-label) { position: static !important; display: block; }
+  .room :global(.transcript-text) { margin-top: 10px; font-size: 16px; line-height: 1.7; }
+  /* Pause / End / Submit: a bar fixed to the bottom of the screen */
+  .room :global(.viva-card-controls) { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; display: flex; flex-direction: row !important; flex-wrap: nowrap; align-items: center; gap: 8px; margin: 0; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: #fffdf7; border-top: 1px solid #d8dfce; box-shadow: 0 -10px 24px #34422c14; }
+  .room :global(.viva-card-controls) > div { flex: 0 0 auto !important; width: auto !important; min-width: 0 !important; gap: 6px !important; flex-wrap: nowrap !important; }
+  .room :global(.viva-card-controls) > div > button { flex: none !important; width: auto !important; min-width: 0 !important; min-height: 48px; padding: 8px !important; font-size: 13px !important; white-space: nowrap; }
+  .room :global(.viva-card-controls) > button { flex: 1 1 auto !important; width: auto !important; min-width: 0 !important; min-height: 48px; padding: 8px 12px !important; font-size: 14px !important; white-space: nowrap; border-radius: 10px; }
+}
